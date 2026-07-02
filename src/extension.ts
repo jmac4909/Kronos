@@ -5745,12 +5745,19 @@ function refreshAfterDispatch(state: KronosState, projectName?: string, ticketKe
             text: buildRunCompletionEvidenceText(run, ticket),
           });
           addTicketEvidenceCheck(resolvedTicketKey, buildRunCompletionEvidenceCheck(run, ticket));
-          state.reloadAndNotify();
-          ticket = state.state?.tickets[resolvedTicketKey];
         } catch (e: unknown) {
           vscode.window.showWarningMessage(unknownErrorMessage(e, 'Failed to add run completion evidence.'));
         }
       }
+      state.reloadAndNotify();
+      const reloadedTicket = resolvePostRunTicket({
+        tickets: state.state?.tickets,
+        ticketKey: resolvedTicketKey,
+        projectName,
+        run,
+      });
+      resolvedTicketKey = reloadedTicket.ticketKey || resolvedTicketKey;
+      ticket = reloadedTicket.ticket;
       run.readiness = evaluatePostRunReadiness({ run, ticketKey: resolvedTicketKey, ticket });
       run.failureKind = run.readiness.failureKind;
       if (run.status === 'completed' && run.readiness.status === 'ready') {
