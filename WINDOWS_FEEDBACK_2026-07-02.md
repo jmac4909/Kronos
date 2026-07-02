@@ -32,5 +32,6 @@ Context: Windows 11 manual testing on VS Code 1.127.0.
 - Feature 7 is implemented with shared persisted-run progress summaries shown in Run Center and active Sessions tree rows.
 - Feature 8 is implemented with a review-ready completion toast that can open the review/MR diff or Run Center.
 - Features 9 and 11 are implemented with an in-memory Review tree badge count plus `NEW` highlighting for review items that appeared since the Review view was last opened.
+- Feature 10 is implemented with an aggregate Kronos attention badge on the primary Projects tree view, using the VS Code `TreeView.badge` API exposed for activity-bar views.
 - Feature 12 is implemented with Run Center polling while active persisted runs exist plus refresh buttons on Run Center, Evidence Gate, Human Review Inbox, Dashboard, and Aging Report.
 - Remaining feature suggestions are part of the cleanup goal backlog.

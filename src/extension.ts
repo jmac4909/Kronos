@@ -48,6 +48,7 @@ import { buildCombinedVerificationPlan, buildCombinedVerificationPromptVars } fr
 import { primaryChangedFilePath } from './services/changedFiles';
 import { buildSonarReport, type SonarIssue } from './services/sonarReportView';
 import { buildAgingReportHtml } from './services/agingReportView';
+import { computeAttentionBadge } from './services/attentionBadge';
 import { buildNextActionContext, buildNextActionStartDecision, skillForAction } from './services/nextActionContext';
 import { createWorkspaceDiffArtifact, firstRemoteBranchMatching, originProjectPath } from './services/gitWorkspace';
 import { signalProcessTree, stopProcessTree } from './services/processTree';
@@ -58,6 +59,9 @@ import { unknownErrorMessage } from './services/errorUtils';
 import { activeRunSummary, isActiveRun } from './services/runStatus';
 
 let statusBarItem: vscode.StatusBarItem;
+interface BadgeTarget {
+  badge?: vscode.ViewBadge | undefined;
+}
 const REQUIRED_PROMPTS = [
   'implement-system',
   'verify-local',
@@ -861,6 +865,20 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   // Tree views with auto-refresh on focus
+  let attentionBadgeTarget: BadgeTarget | undefined;
+  const updateAttentionBadge = () => {
+    if (!attentionBadgeTarget) { return; }
+    const summary = computeAttentionBadge({
+      state: state.state,
+      queue: state.queue,
+      runs: listRuns(),
+      newReviewItems: reviewTree.getNewReviewCount(),
+      agingThresholds: agingThresholdsFromConfig(),
+    });
+    attentionBadgeTarget.badge = summary.count > 0
+      ? { value: summary.count, tooltip: summary.tooltip }
+      : undefined;
+  };
   for (const [id, provider] of [
     ['kronosProjects', projectTree],
     ['kronosTickets', ticketTree],
@@ -868,6 +886,9 @@ export function activate(context: vscode.ExtensionContext) {
     ['kronosReview', reviewTree],
   ] as const) {
     const view = vscode.window.createTreeView(id, { treeDataProvider: provider });
+    if (id === 'kronosProjects') {
+      attentionBadgeTarget = view;
+    }
     const updateReviewBadge = () => {
       if (id !== 'kronosReview') { return; }
       const count = reviewTree.getNewReviewCount();
@@ -892,6 +913,12 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(view);
   }
+  updateAttentionBadge();
+  context.subscriptions.push(
+    state.onDidChange(updateAttentionBadge),
+    state.onDidSessionChange(updateAttentionBadge),
+    reviewTree.onDidChangeNewReviewCount(updateAttentionBadge),
+  );
 
   const config = vscode.workspace.getConfiguration('kronos');
   const sessionPollMs = config.get<number>('sessionPollIntervalMs', 5000);

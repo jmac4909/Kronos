@@ -59,6 +59,7 @@ const processTree = require('../out/services/processTree.js');
 const webviewSecurity = require('../out/services/webviewSecurity.js');
 const runStatus = require('../out/services/runStatus.js');
 const runProgress = require('../out/services/runProgress.js');
+const attentionBadge = require('../out/services/attentionBadge.js');
 const cliProbes = require('../out/services/cliProbes.js');
 const errorUtils = require('../out/services/errorUtils.js');
 const combinedVerification = require('../out/services/combinedVerification.js');
@@ -3127,6 +3128,62 @@ test('run progress helper summarizes active run activity', () => {
   }
 });
 
+test('attention badge aggregates review, aging, and paused-run signals', () => {
+  const summary = attentionBadge.computeAttentionBadge({
+    state: baseState({
+      'K-1': ticket({
+        next_action: 'blocked',
+        last_action: 'Waiting on product',
+        last_action_at: '2026-06-28T00:00:00.000Z',
+        evidence: {
+          notes: [{ at: '2026-06-28T00:00:00.000Z', kind: 'note', text: 'Blocked by dependency' }],
+        },
+      }),
+    }),
+    runs: [
+      { id: 'run-1', status: 'paused' },
+      { id: 'run-2', status: 'running' },
+    ],
+    newReviewItems: 2,
+    now: new Date('2026-07-02T00:00:00.000Z'),
+    agingThresholds: { blockedDays: 2 },
+  });
+
+  assert.equal(summary.humanReviewItems, 1);
+  assert.equal(summary.evidenceGateFailures, 0);
+  assert.equal(summary.evidenceGateWarnings, 0);
+  assert.equal(summary.staleCritical, 1);
+  assert.equal(summary.staleWarning, 0);
+  assert.equal(summary.pausedRuns, 1);
+  assert.equal(summary.newReviewItems, 2);
+  assert.equal(summary.count, 5);
+  assert.match(summary.tooltip, /Kronos: 5 items need attention/);
+  assert.match(summary.tooltip, /2 new review items/);
+  assert.match(summary.tooltip, /1 paused run/);
+  assert.equal(attentionBadge.computeAttentionBadge({ state: baseState({}) }).count, 0);
+  assert.equal(attentionBadge.attentionBadgeCount({
+    humanReviewItems: 1,
+    evidenceGateFailures: -1,
+    evidenceGateWarnings: Number.NaN,
+    staleCritical: 1.8,
+    staleWarning: 0,
+    newReviewItems: 0,
+    pausedRuns: 1,
+  }), 3);
+
+  const source = readSourceFixture('src', 'services', 'attentionBadge.ts');
+  for (const marker of [
+    'export function computeAttentionBadge',
+    'export function attentionBadgeCount',
+    'buildHumanReviewInbox',
+    'evaluateEvidenceGates',
+    'analyzeAging',
+    'runStatus(run)',
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+});
+
 test('collision detector flags active runs, duplicate queue work, and open MRs', () => {
   const tickets = {
     'K-1': ticket({ projects: ['app'], summary: 'Fix checkout retry routing', labels: ['checkout'] }),
@@ -4412,6 +4469,11 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'view.badge = count > 0',
     'reviewTree.onDidChangeNewReviewCount(updateReviewBadge)',
     'reviewTree.markVisibleReviewItemsSeen()',
+    "import { computeAttentionBadge } from './services/attentionBadge'",
+    'const updateAttentionBadge = () =>',
+    'newReviewItems: reviewTree.getNewReviewCount()',
+    'attentionBadgeTarget.badge = summary.count > 0',
+    'reviewTree.onDidChangeNewReviewCount(updateAttentionBadge)',
     "import { activeRunSummary, isActiveRun } from './services/runStatus'",
     'const activeRuns = listRuns().filter(isActiveRun)',
     "statusBarItem.command = 'kronos.runCenter'",

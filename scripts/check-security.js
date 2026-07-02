@@ -41,6 +41,7 @@ const evidenceGatePolicy = readSource('src/services/evidenceGatePolicy.ts');
 const collisionDetector = readSource('src/services/collisionDetector.ts');
 const runStatus = readSource('src/services/runStatus.ts');
 const runProgress = readSource('src/services/runProgress.ts');
+const attentionBadge = readSource('src/services/attentionBadge.ts');
 const queuePlanner = readSource('src/services/queuePlanner.ts');
 const agentQualityScore = readSource('src/services/agentQualityScore.ts');
 const integrationManifest = readSource('src/services/integrationManifest.ts');
@@ -339,6 +340,11 @@ for (const marker of [
   'view.badge = count > 0',
   'reviewTree.onDidChangeNewReviewCount(updateReviewBadge)',
   'reviewTree.markVisibleReviewItemsSeen()',
+  "import { computeAttentionBadge } from './services/attentionBadge'",
+  'const updateAttentionBadge = () =>',
+  'newReviewItems: reviewTree.getNewReviewCount()',
+  'attentionBadgeTarget.badge = summary.count > 0',
+  'reviewTree.onDidChangeNewReviewCount(updateAttentionBadge)',
   'kronos.collisionReport',
   'openCollisionReportPanel',
   'loadMrFileHints',
@@ -1498,6 +1504,19 @@ for (const marker of [
 ]) {
   if (!runProgress.includes(marker)) {
     fail(`Missing run progress marker: ${marker}`);
+  }
+}
+
+for (const marker of [
+  'export function computeAttentionBadge',
+  'export function attentionBadgeCount',
+  'buildHumanReviewInbox',
+  'evaluateEvidenceGates',
+  'analyzeAging',
+  'runStatus(run)',
+]) {
+  if (!attentionBadge.includes(marker)) {
+    fail(`Missing attention badge marker: ${marker}`);
   }
 }
 
