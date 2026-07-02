@@ -1545,6 +1545,8 @@ for (const marker of [
 
 for (const marker of [
   'export function computeTrendMetrics',
+  'runs: unknown[]',
+  'type RunMetricRecord = Record<string, unknown>',
   'SUCCESS_RUN_STATUSES',
   'FINISHED_RUN_STATUSES',
   'Rework rate',
@@ -1563,6 +1565,14 @@ for (const marker of [
 ]) {
   if (!trendMetrics.includes(marker)) {
     fail(`Missing trend metrics marker: ${marker}`);
+  }
+}
+for (const forbidden of [
+  'runs: any[]',
+  'Record<string, any>',
+]) {
+  if (trendMetrics.includes(forbidden)) {
+    fail(`Trend metrics must normalize raw run payloads instead of using ${forbidden}.`);
   }
 }
 

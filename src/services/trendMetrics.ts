@@ -2,7 +2,7 @@ import { Ticket } from '../state/types';
 import { evidenceChecks, evidenceEnvironmentResults, evidenceString } from './evidenceData';
 
 export interface TrendMetricsInput {
-  runs: any[];
+  runs: unknown[];
   tickets: Record<string, Ticket>;
   now?: Date;
   windowDays?: number;
@@ -26,7 +26,7 @@ export interface TrendMetricsReport {
 
 const SUCCESS_RUN_STATUSES = new Set(['completed', 'waiting_for_review']);
 const FINISHED_RUN_STATUSES = new Set(['completed', 'waiting_for_review', 'failed', 'cancelled', 'needs_human']);
-type RunMetricRecord = Record<string, any>;
+type RunMetricRecord = Record<string, unknown>;
 
 export function computeTrendMetrics(input: TrendMetricsInput): TrendMetricsReport {
   const now = input.now || new Date();

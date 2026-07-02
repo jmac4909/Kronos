@@ -4557,6 +4557,22 @@ test('trend metrics report rework, build pass, verification pass, and cycle time
   assert.ok(report.metrics.some(metric => metric.label === 'Build pass rate' && metric.value === '50%' && metric.status === 'bad'));
   assert.ok(report.metrics.some(metric => metric.label === 'Verification pass rate' && metric.value === '50%' && metric.status === 'bad'));
   assert.ok(report.metrics.some(metric => metric.label === 'Average cycle time' && metric.value !== 'n/a'));
+
+  const source = readSourceFixture('src', 'services', 'trendMetrics.ts');
+  for (const marker of [
+    'runs: unknown[]',
+    'type RunMetricRecord = Record<string, unknown>',
+    'const rawRuns = Array.isArray(input.runs) ? input.runs : []',
+    '.filter(isRecord)',
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    'runs: any[]',
+    'Record<string, any>',
+  ]) {
+    assert.equal(source.includes(marker), false, marker);
+  }
 });
 
 test('dashboard worklist builds command-center lanes from review, run, gate, and aging signals', () => {
