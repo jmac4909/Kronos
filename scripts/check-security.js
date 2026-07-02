@@ -378,6 +378,10 @@ for (const marker of [
   'kronos.restoreBackup',
   'kronos.resolveConflicts',
   'kronos.verifyCombined',
+  "unknownErrorMessage(e, 'Failed to fetch SonarQube report.')",
+  "unknownErrorMessage(e, 'Failed to update scan dirs.')",
+  "unknownErrorMessage(e, 'Failed to restore backup.')",
+  "unknownErrorMessage(e, 'Failed to snapshot integration manifest.')",
   "from './services/stateStore'",
   "from './services/integrationAdapters'",
   "from './services/projectMutations'",
@@ -459,6 +463,15 @@ for (const forbidden of [
 ]) {
   if (runActionSource.includes(forbidden)) {
     fail(`Run action helpers must normalize unknown errors instead of using ${forbidden}.`);
+  }
+}
+
+for (const forbidden of [
+  'catch (e: any)',
+  'e?.message',
+]) {
+  if (extension.includes(forbidden)) {
+    fail(`Extension command handlers must normalize unknown errors instead of using ${forbidden}.`);
   }
 }
 

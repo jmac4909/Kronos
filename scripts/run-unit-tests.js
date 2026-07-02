@@ -4357,6 +4357,24 @@ test('extension MR and ticket link handlers normalize unknown errors', () => {
   }
 });
 
+test('extension command handlers normalize remaining unknown errors', () => {
+  const source = readSourceFixture('src', 'extension.ts');
+  for (const marker of [
+    "unknownErrorMessage(e, 'Failed to fetch SonarQube report.')",
+    "unknownErrorMessage(e, 'Failed to update scan dirs.')",
+    "unknownErrorMessage(e, 'Failed to restore backup.')",
+    "unknownErrorMessage(e, 'Failed to snapshot integration manifest.')",
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    'catch (e: any)',
+    'e?.message',
+  ]) {
+    assert.equal(source.includes(marker), false, marker);
+  }
+});
+
 test('ticket detail rendering uses typed tickets and evidence records', () => {
   const extensionSource = readSourceFixture('src', 'extension.ts');
   const evidenceData = readSourceFixture('src', 'services', 'evidenceData.ts');

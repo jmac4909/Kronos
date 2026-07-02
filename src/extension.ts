@@ -2122,8 +2122,8 @@ export function activate(context: vscode.ExtensionContext) {
             openExternalHttpUrl(report.dashboardUrl);
           }
         });
-      } catch (e: any) {
-        vscode.window.showErrorMessage(`Failed to fetch SonarQube report: ${e.message}`);
+      } catch (e: unknown) {
+        vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to fetch SonarQube report.'));
       }
     }),
 
@@ -3181,8 +3181,8 @@ async function runSettingsMenu(state: KronosState): Promise<void> {
         const result = setScanDirs(newDirs);
         state.reloadAndNotify();
         vscode.window.showInformationMessage(`Scan dirs updated: ${result.scanDirs.join(', ')}`);
-      } catch (e: any) {
-        vscode.window.showErrorMessage(e?.message || 'Failed to update scan dirs.');
+      } catch (e: unknown) {
+        vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to update scan dirs.'));
       }
     }
   } else if (pick.label.includes('Auth Check')) {
@@ -3722,8 +3722,8 @@ async function pickAndRestoreBackup(state: KronosState, backups = listBackups(),
     restoreBackup(picked.backup.filePath);
     state.reloadAndNotify();
     vscode.window.showInformationMessage(`Restored ${picked.backup.targetName} from backup.`);
-  } catch (e: any) {
-    vscode.window.showErrorMessage(e?.message || 'Failed to restore backup.');
+  } catch (e: unknown) {
+    vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to restore backup.'));
   }
 }
 
@@ -4972,8 +4972,8 @@ async function snapshotIntegrationManifest(): Promise<void> {
     } else if (action === 'Run Doctor') {
       vscode.commands.executeCommand('kronos.doctor');
     }
-  } catch (e: any) {
-    vscode.window.showErrorMessage(e?.message || 'Failed to snapshot integration manifest.');
+  } catch (e: unknown) {
+    vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to snapshot integration manifest.'));
   }
 }
 
