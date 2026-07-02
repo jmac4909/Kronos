@@ -299,6 +299,12 @@ for (const marker of [
   "request.command === 'refreshPanel'",
   'function humanReviewActionButtons',
   "actionButton('startTicket', 'Start'",
+  "actionButton('evidenceGate', 'Gate'",
+  "actionButton('runCenter', 'Open Run Center'",
+  "actionButton('recoveryCenter', 'Recovery'",
+  "actionButton('doctor', 'Open Doctor'",
+  'await executeOperatorCommandAction(command, ticketKey)',
+  "command === 'runCenter' || command === 'recoveryCenter' || command === 'doctor' || command === 'queuePlanner'",
   'kronos.evidenceGate',
   'openEvidenceGatePanel',
   'const EVIDENCE_GATE_MESSAGE_COMMANDS = new Set',
@@ -491,6 +497,16 @@ if (extension.includes(".filter(([_, t]) => t.next_action === 'await_review' && 
 }
 if (extension.includes('mr: ticket.mr!')) {
   fail('Review branch helper should not need non-null assertions.');
+}
+for (const forbidden of [
+  "actionButton('openEvidenceGate'",
+  "actionButton('openRunCenter'",
+  "actionButton('openRecoveryCenter'",
+  "actionButton('openDoctor'",
+]) {
+  if (extension.includes(forbidden)) {
+    fail(`Human review actions should use canonical operator commands, not ${forbidden}.`);
+  }
 }
 for (const forbidden of [
   'catch (e: any)',

@@ -166,10 +166,10 @@ const HUMAN_REVIEW_MESSAGE_COMMANDS = new Set([
   'startTicket',
   'addToQueue',
   'viewTicket',
-  'openEvidenceGate',
-  'openRunCenter',
-  'openRecoveryCenter',
-  'openDoctor',
+  'evidenceGate',
+  'runCenter',
+  'recoveryCenter',
+  'doctor',
   'queuePlanner',
 ]);
 const DASHBOARD_MESSAGE_COMMANDS = new Set([
@@ -3987,7 +3987,7 @@ function humanReviewActionButtons(item: HumanReviewInbox['items'][number], state
     } else {
       buttons.push(actionButton('addEvidence', 'Add Evidence', { ticket: item.ticketKey, primary: true }));
     }
-    buttons.push(actionButton('openEvidenceGate', 'Gate', { ticket: item.ticketKey }));
+    buttons.push(actionButton('evidenceGate', 'Gate', { ticket: item.ticketKey }));
   } else if (item.kind === 'ticket' && item.ticketKey) {
     if (hasLinkedProject && ticket?.next_action !== 'done') {
       buttons.push(actionButton('startTicket', 'Start', { ticket: item.ticketKey, primary: item.severity === 'critical' }));
@@ -3995,12 +3995,12 @@ function humanReviewActionButtons(item: HumanReviewInbox['items'][number], state
     }
     buttons.push(actionButton('viewTicket', item.title.includes('blocked') || !hasLinkedProject ? 'Fix' : 'View', { ticket: item.ticketKey, primary: !hasLinkedProject }));
   } else if (item.kind === 'run') {
-    buttons.push(actionButton('openRunCenter', 'Open Run Center', { primary: item.severity === 'critical' }));
-    buttons.push(actionButton('openRecoveryCenter', 'Recovery'));
+    buttons.push(actionButton('runCenter', 'Open Run Center', { primary: item.severity === 'critical' }));
+    buttons.push(actionButton('recoveryCenter', 'Recovery'));
   } else if (item.kind === 'integration') {
-    buttons.push(actionButton('openDoctor', 'Open Doctor', { primary: item.severity === 'critical' }));
+    buttons.push(actionButton('doctor', 'Open Doctor', { primary: item.severity === 'critical' }));
   } else if (item.kind === 'worktree') {
-    buttons.push(actionButton('openRecoveryCenter', 'Review Worktree', { primary: item.severity === 'critical' }));
+    buttons.push(actionButton('recoveryCenter', 'Review Worktree', { primary: item.severity === 'critical' }));
     if (item.ticketKey) {
       buttons.push(actionButton('viewTicket', 'View Ticket', { ticket: item.ticketKey }));
     }
@@ -4036,16 +4036,10 @@ async function executeHumanReviewAction(state: KronosState, command: string, tic
     await vscode.commands.executeCommand('kronos.addToQueue', { ticketKey });
   } else if (command === 'viewTicket' && ticketKey) {
     await vscode.commands.executeCommand('kronos.viewTicket', { ticketKey });
-  } else if (command === 'openEvidenceGate' && ticketKey) {
-    await vscode.commands.executeCommand('kronos.evidenceGate', { ticketKey });
-  } else if (command === 'openRunCenter') {
-    await vscode.commands.executeCommand('kronos.runCenter');
-  } else if (command === 'openRecoveryCenter') {
-    await vscode.commands.executeCommand('kronos.recoveryCenter');
-  } else if (command === 'openDoctor') {
-    await vscode.commands.executeCommand('kronos.doctor');
-  } else if (command === 'queuePlanner') {
-    await vscode.commands.executeCommand('kronos.queuePlanner');
+  } else if (command === 'evidenceGate' && ticketKey) {
+    await executeOperatorCommandAction(command, ticketKey);
+  } else if (command === 'runCenter' || command === 'recoveryCenter' || command === 'doctor' || command === 'queuePlanner') {
+    await executeOperatorCommandAction(command);
   } else {
     vscode.window.showWarningMessage('Ignored Kronos human review action without a valid target.');
   }

@@ -4551,6 +4551,12 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'function humanReviewActionButtons',
     "actionButton('extractAcceptanceCriteria', 'Extract AC'",
     "actionButton('startTicket', 'Start'",
+    "actionButton('evidenceGate', 'Gate'",
+    "actionButton('runCenter', 'Open Run Center'",
+    "actionButton('recoveryCenter', 'Recovery'",
+    "actionButton('doctor', 'Open Doctor'",
+    'await executeOperatorCommandAction(command, ticketKey)',
+    "command === 'runCenter' || command === 'recoveryCenter' || command === 'doctor' || command === 'queuePlanner'",
     'function evidenceGateActionButtons',
     "actionButton('addEvidence', 'Add Evidence'",
     "actionButton(isMissingExtraction ? 'extractAcceptanceCriteria' : 'updateAcceptanceCriteria'",
@@ -4669,6 +4675,14 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'review branch commands should share the open-MR review candidate helper',
   );
   assert.equal(source.includes('mr: ticket.mr!'), false, 'review branch helper should not need non-null assertions');
+  for (const forbidden of [
+    "actionButton('openEvidenceGate'",
+    "actionButton('openRunCenter'",
+    "actionButton('openRecoveryCenter'",
+    "actionButton('openDoctor'",
+  ]) {
+    assert.equal(source.includes(forbidden), false, forbidden);
+  }
   for (const marker of [
     'catch (e: any)',
     'e?.message',
