@@ -5371,6 +5371,8 @@ test('extension run recovery helpers use typed run records', () => {
   for (const marker of [
     "import { unknownErrorCode, unknownErrorMessage } from './services/errorUtils'",
     "import type { DiscoveredProject, MergeRequestChangedFile, QueueItem, Ticket } from './state/types'",
+    'function openExternalHttpUrl(url: string): void',
+    "console.warn(unknownErrorMessage(e, 'Invalid external URL.'))",
     'type KronosRun',
     'function planToQueueItem(state: KronosState, plan: PlannedAction): QueueItem',
     'function refreshAfterDispatch(state: KronosState, projectName?: string, ticketKey?: string): (code: number, run: KronosRun) => Promise<void>',

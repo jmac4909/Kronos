@@ -237,6 +237,7 @@ for (const marker of [
   'const request = normalizeBoardMessage(msg)',
   'const command = normalizeWebviewCommand(msg, sonarCommands)',
   'function openExternalHttpUrl',
+  "console.warn(unknownErrorMessage(e, 'Invalid external URL.'))",
   "from './services/webviewHtml'",
   'kronos.openExternalUrl',
   'async function confirmSafetyGate',

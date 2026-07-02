@@ -120,7 +120,8 @@ function openExternalHttpUrl(url: string): void {
       return;
     }
     vscode.env.openExternal(parsed);
-  } catch {
+  } catch (e: unknown) {
+    console.warn(unknownErrorMessage(e, 'Invalid external URL.'));
     vscode.window.showWarningMessage('Refusing to open invalid URL.');
   }
 }
