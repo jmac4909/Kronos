@@ -1965,7 +1965,9 @@ export function activate(context: vscode.ExtensionContext) {
               if (updates.length > 0) {
                 state.reloadAndNotify();
               }
-            } catch {}
+            } catch (e: unknown) {
+              vscode.window.showWarningMessage(unknownErrorMessage(e, 'Could not update Kronos project integration config.'));
+            }
 
             const setupPrompt = `Set up project ${projectName} at ${projectPath}. Do these things:
 

@@ -299,6 +299,7 @@ for (const marker of [
   'unknownErrorMessage(e, `Failed to remove ${name}.`)',
   "unknownErrorMessage(e, 'Could not resolve GitLab project ID.')",
   "unknownErrorMessage(e, 'Could not resolve SonarQube project key.')",
+  "unknownErrorMessage(e, 'Could not update Kronos project integration config.')",
   "unknownErrorMessage(e, 'Failed to preview merge request link.')",
   "unknownErrorMessage(e, 'Failed to link merge request to ticket.')",
   "unknownErrorMessage(e, 'Failed to update ticket project links.')",

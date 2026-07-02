@@ -4907,6 +4907,7 @@ test('extension publish and project command handlers normalize unknown errors', 
     'unknownErrorMessage(e, `Failed to remove ${name}.`)',
     "unknownErrorMessage(e, 'Could not resolve GitLab project ID.')",
     "unknownErrorMessage(e, 'Could not resolve SonarQube project key.')",
+    "unknownErrorMessage(e, 'Could not update Kronos project integration config.')",
   ]) {
     assert.ok(commandSource.includes(marker), marker);
   }
