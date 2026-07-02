@@ -756,13 +756,35 @@ export async function dispatchClaudeSession(
   });
   updateRun(run, { cwd, worktreePath: worktreePath || undefined, permissions, branch });
 
-  const proc = spawn(CLAUDE_PATH, claudeArgs, {
-    cwd,
-    env: { ...process.env },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-    detached: process.platform !== 'win32',
-  });
+  let proc: ClaudeProcess;
+  try {
+    proc = spawn(CLAUDE_PATH, claudeArgs, {
+      cwd,
+      env: { ...process.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      detached: process.platform !== 'win32',
+    }) as ClaudeProcess;
+  } catch (e: unknown) {
+    const failureDetail = unknownErrorMessage(e, 'Failed to launch Claude CLI.');
+    const failureReason = failureDetail.startsWith('Failed to launch Claude CLI')
+      ? failureDetail
+      : `Failed to launch Claude CLI: ${failureDetail}`;
+    const event = { type: 'error' as const, label: 'Failed to launch Claude CLI', detail: failureDetail, timestamp: new Date() };
+    events.push(event);
+    addRunEvent(run, event);
+    updateRun(run, {
+      status: 'failed',
+      endedAt: new Date().toISOString(),
+      exitCode: 1,
+      failureReason,
+      failureKind: classifyRunFailure({ ...run, status: 'failed', failureReason, events: run.events }),
+    });
+    panel.webview.html = withWebviewCsp(buildProgressHtml(projectName, skill, ticket || '', events));
+    saveSession(projectName, skill, ticket || '', events);
+    await runCompletionCallback(opts, 1, run, { projectName, skill, ticket: ticket || '', events, panel });
+    return;
+  }
   updateRun(run, { status: 'running', cwd, processPid: proc.pid });
 
   let buffer = '';
@@ -920,6 +942,11 @@ interface ProgressEvent {
   detail: string;
   timestamp: Date;
 }
+
+type ClaudeProcess = ReturnType<typeof spawn> & {
+  stdout: NodeJS.ReadableStream;
+  stderr: NodeJS.ReadableStream;
+};
 
 function toValidDate(value: unknown): Date | null {
   if (value instanceof Date) {

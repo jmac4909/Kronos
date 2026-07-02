@@ -2803,6 +2803,11 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "vscode.window.showWarningMessage('Git worktree setup failed; run marked failed before launch.')",
     "label: 'Git worktree setup failed'",
     "failureKind: 'git'",
+    'type ClaudeProcess = ReturnType<typeof spawn>',
+    'let proc: ClaudeProcess',
+    '}) as ClaudeProcess',
+    "const failureDetail = unknownErrorMessage(e, 'Failed to launch Claude CLI.')",
+    "label: 'Failed to launch Claude CLI'",
     "from '../services/sessionStore'",
     "type PostRunReadiness",
     'readiness?: PostRunReadiness',
@@ -2985,7 +2990,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     'default permissions should be persisted before auth preflight',
   );
   assert.ok(
-    source.indexOf('const permissions = buildRunPermissionMetadata(addDirs)') < source.indexOf('const proc = spawn(CLAUDE_PATH'),
+    source.indexOf('const permissions = buildRunPermissionMetadata(addDirs)') < source.indexOf('proc = spawn(CLAUDE_PATH'),
     'final permissions should be persisted before process launch',
   );
 });
