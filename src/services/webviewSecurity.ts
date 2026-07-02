@@ -114,5 +114,16 @@ export function withWebviewCsp(html: string, options: WebviewCspOptions = {}): s
   if (/<head[^>]*>/i.test(html)) {
     return html.replace(/<head[^>]*>/i, match => `${match}\n${meta}`);
   }
-  return html.replace(/<html[^>]*>/i, match => `${match}<head>\n${meta}\n</head>`);
+  if (/<html[^>]*>/i.test(html)) {
+    return html.replace(/<html[^>]*>/i, match => `${match}<head>\n${meta}\n</head>`);
+  }
+  return wrapWebviewHtmlWithCsp(html, meta);
+}
+
+function wrapWebviewHtmlWithCsp(html: string, meta: string): string {
+  const body = html.replace(/^\s*<!doctype[^>]*>\s*/i, '');
+  if (/<body[^>]*>/i.test(body)) {
+    return `<!DOCTYPE html><html><head>\n${meta}\n</head>${body}</html>`;
+  }
+  return `<!DOCTYPE html><html><head>\n${meta}\n</head><body>${body}</body></html>`;
 }

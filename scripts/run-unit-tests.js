@@ -1669,6 +1669,11 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
     nonce: 'abc123',
     cspSource: 'vscode-resource:',
   });
+  const bodyOnly = webviewSecurity.withWebviewCsp('<body><button>ok</button></body>');
+  assert.match(bodyOnly, /^<!DOCTYPE html><html><head>\n<meta http-equiv="Content-Security-Policy"/);
+  assert.match(bodyOnly, /<\/head><body><button>ok<\/button><\/body><\/html>$/);
+  const fragment = webviewSecurity.withWebviewCsp('<main>ok</main>');
+  assert.match(fragment, /<body><main>ok<\/main><\/body><\/html>$/);
 
   const nonce = webviewSecurity.createWebviewNonce();
   assert.match(nonce, /^[a-f0-9]{32}$/);
