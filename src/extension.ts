@@ -5659,21 +5659,30 @@ function sanitizeBranchName(branch: string): string {
   return sanitizeProfileBranch(branch) || 'develop';
 }
 
-function resolveProjectName(state: KronosState, item: any): string | undefined {
-  if (item?.projectName) { return item.projectName; }
-  if (item?.ticket?.projects?.length) { return item.ticket.projects[0]; }
-  if (item?.ticketKey && state.state) {
-    const t = state.state.tickets[item.ticketKey];
+function resolveProjectName(state: KronosState, item: unknown): string | undefined {
+  const record = recordFromUnknown(item);
+  const projectName = record.projectName;
+  if (typeof projectName === 'string' && projectName.trim()) { return projectName; }
+  const ticket = recordFromUnknown(record.ticket);
+  const ticketProjects = ticket.projects;
+  if (Array.isArray(ticketProjects) && typeof ticketProjects[0] === 'string' && ticketProjects[0].trim()) {
+    return ticketProjects[0];
+  }
+  const ticketKey = record.ticketKey;
+  if (typeof ticketKey === 'string' && state.state) {
+    const t = state.state.tickets[ticketKey];
     if (t?.projects?.length) { return t.projects[0]; }
   }
   return undefined;
 }
 
-function resolveTicketKey(item: any): string | undefined {
+function resolveTicketKey(item: unknown): string | undefined {
   if (typeof item === 'string') { return item; }
-  if (typeof item?.ticketKey === 'string') { return item.ticketKey; }
-  if (typeof item?.item?.ticket === 'string') { return item.item.ticket; }
-  if (typeof item?.ticket === 'string') { return item.ticket; }
+  const record = recordFromUnknown(item);
+  if (typeof record.ticketKey === 'string') { return record.ticketKey; }
+  const nestedItem = recordFromUnknown(record.item);
+  if (typeof nestedItem.ticket === 'string') { return nestedItem.ticket; }
+  if (typeof record.ticket === 'string') { return record.ticket; }
   return undefined;
 }
 
