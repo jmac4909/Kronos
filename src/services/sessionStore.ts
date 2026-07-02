@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { safeFileStem } from './fileNames';
 import { KRONOS_DIR } from './stateStore';
+import { unknownErrorMessage } from './errorUtils';
 
 const SESSIONS_DIR = path.join(KRONOS_DIR, 'sessions');
 const STATS_FILE = path.join(KRONOS_DIR, 'stats.json');
@@ -148,8 +149,8 @@ function readSavedSessionFileResult(filePath: string): { session?: SavedSession;
         events: normalizeSavedSessionEvents(parsed.events),
       } as SavedSession,
     };
-  } catch (e: any) {
-    return { issue: invalidSessionIssue('invalid_saved_session', filePath, e?.message || 'Unable to parse saved session JSON.') };
+  } catch (e: unknown) {
+    return { issue: invalidSessionIssue('invalid_saved_session', filePath, unknownErrorMessage(e, 'Unable to parse saved session JSON.')) };
   }
 }
 
@@ -179,8 +180,8 @@ function readAggregateStatsResult(): { stats?: AggregateStats; issue?: SessionSt
         ...(typeof lastUpdated === 'string' ? { lastUpdated } : {}),
       },
     };
-  } catch (e: any) {
-    return { issue: invalidSessionIssue('invalid_session_stats', STATS_FILE, e?.message || 'Unable to parse stats.json.') };
+  } catch (e: unknown) {
+    return { issue: invalidSessionIssue('invalid_session_stats', STATS_FILE, unknownErrorMessage(e, 'Unable to parse stats.json.')) };
   }
 }
 

@@ -2479,14 +2479,19 @@ test('dispatcher lists saved sessions newest first by startedAt', () => {
     stats: {},
   }));
   fs.mkdirSync(path.join(sessionsDir, 'folder.json'));
+  const malformedSessionPath = path.join(sessionsDir, 'bad-json.json');
+  fs.writeFileSync(malformedSessionPath, '{ bad json');
 
   const sessions = sessionStore.listSavedSessions();
+  const issues = sessionStore.listSessionStoreIssues();
 
   assert.deepEqual(sessions.map(session => session.id), ['aaa-new', 'zzz-old']);
   assert.deepEqual(sessions[0].events, [
     { type: 'done', label: 'Complete', detail: 'ok', timestamp: '2026-07-01T12:01:00.000Z' },
     { type: 'unknown', label: '', detail: '', timestamp: '' },
   ]);
+  assert.ok(issues.some(issue => issue.kind === 'invalid_saved_session' && issue.filePath === malformedSessionPath));
+  assert.ok(issues.some(issue => issue.kind === 'invalid_saved_session' && /Unexpected token|Expected property name/.test(issue.detail)));
   assert.deepEqual(sessionStore.normalizeSavedSessionEvents({ bad: true }), []);
 });
 
@@ -2551,6 +2556,26 @@ test('session store normalizes aggregate stats rows for rendering', () => {
   fs.writeFileSync(statsPath, JSON.stringify({ sessions: 'bad' }));
   assert.deepEqual(sessionStore.getAggregateStats(), { sessions: [] });
   assert.ok(sessionStore.listSessionStoreIssues().some(issue => issue.kind === 'invalid_session_stats'));
+
+  fs.writeFileSync(statsPath, '{ bad stats');
+  assert.deepEqual(sessionStore.getAggregateStats(), { sessions: [] });
+  assert.ok(sessionStore.listSessionStoreIssues().some(issue => issue.kind === 'invalid_session_stats' && /Unexpected token|Expected property name/.test(issue.detail)));
+
+  const source = readSourceFixture('src', 'services', 'sessionStore.ts');
+  for (const marker of [
+    "import { unknownErrorMessage } from './errorUtils'",
+    'catch (e: unknown)',
+    "unknownErrorMessage(e, 'Unable to parse saved session JSON.')",
+    "unknownErrorMessage(e, 'Unable to parse stats.json.')",
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    'catch (e: any)',
+    'e?.message',
+  ]) {
+    assert.equal(source.includes(marker), false, marker);
+  }
 });
 
 test('run recovery builds resume prompts from saved prompt and log tail', () => {
