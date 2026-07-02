@@ -55,6 +55,7 @@ import { createWebviewNonce, webviewVsCodeApiScript, withWebviewCsp } from './se
 import { escapeAttr, escapeClass, escapeHtml, kronosWebviewBaseCss, safeHttpHref } from './services/webviewHtml';
 import { kronosTerminalOptions } from './services/terminalProfiles';
 import { unknownErrorMessage } from './services/errorUtils';
+import { activeRunSummary, isActiveRun } from './services/runStatus';
 
 let statusBarItem: vscode.StatusBarItem;
 const REQUIRED_PROMPTS = [
@@ -5539,15 +5540,25 @@ function updateStatusBar(state: KronosState): void {
   if (state.loadIssues.length > 0) {
     statusBarItem.text = state.state ? '$(warning) Kronos: state warnings' : '$(error) Kronos: state error';
     statusBarItem.tooltip = state.loadIssues.map(issue => `${issue.target}: ${issue.detail}`).join('\n');
+    statusBarItem.command = 'kronos.openDashboard';
     return;
   }
   if (!state.state) {
     statusBarItem.text = '$(clock) Kronos';
+    statusBarItem.tooltip = 'Kronos state is not loaded.';
+    statusBarItem.command = 'kronos.openDashboard';
     return;
   }
   const projects = state.state.projects;
   const count = Object.keys(projects).length;
   const sessions = state.sessions.length;
+  const activeRuns = listRuns().filter(isActiveRun);
+  if (activeRuns.length > 0) {
+    statusBarItem.text = `$(sync~spin) Kronos: ${activeRuns.length} running`;
+    statusBarItem.tooltip = `Kronos active runs: ${activeRunSummary(activeRuns) || `${activeRuns.length} running`}`;
+    statusBarItem.command = 'kronos.runCenter';
+    return;
+  }
   const greens = Object.values(projects).filter(p => p.health === 'green').length;
   const reds = Object.values(projects).filter(p => p.health === 'red').length;
   const yellows = Object.values(projects).filter(p => p.health === 'yellow').length;
@@ -5559,6 +5570,7 @@ function updateStatusBar(state: KronosState): void {
 
   statusBarItem.text = `$(clock) Kronos: ${sessions} sessions |${health || ` ${count} projects`}`;
   statusBarItem.tooltip = `Kronos — ${count} projects tracked, ${sessions} active sessions`;
+  statusBarItem.command = 'kronos.openDashboard';
 }
 
 function dashboardBriefRecord(brief: unknown): Record<string, unknown> {
@@ -5602,7 +5614,7 @@ function buildDashboardHtml(state: KronosState, brief: unknown, nonce?: string):
 
   const allTickets = state.state?.tickets || {};
   const runs = listRuns();
-  const activeRuns = runs.filter(r => r.status === 'running' || r.status === 'preflight' || r.status === 'paused').length;
+  const activeRuns = runs.filter(isActiveRun).length;
   const failedRuns = runs.filter(r => r.status === 'failed' || r.status === 'cancelled').length;
   const needsHumanRuns = runs.filter(r => r.status === 'needs_human').length;
   const waitingForReviewRuns = runs.filter(r => r.status === 'waiting_for_review').length;

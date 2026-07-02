@@ -1,6 +1,7 @@
 import { Ticket } from '../state/types';
 import { RunRecord } from './runStore';
 import { evaluateEvidenceGates } from './evidenceGate';
+import { isActiveRun } from './runStatus';
 
 export interface QualityComponent {
   label: string;
@@ -36,7 +37,7 @@ export function computeAgentQualityScore(input: {
   const failedRuns = runs.filter(run => runString(run, 'status') === 'failed' || runString(run, 'status') === 'cancelled').length;
   const needsHumanRuns = runs.filter(run => runString(run, 'status') === 'needs_human').length;
   const retryRuns = runs.filter(hasRetryMetadata).length;
-  const activeRuns = runs.filter(run => ['running', 'preflight', 'paused'].includes(runString(run, 'status'))).length;
+  const activeRuns = runs.filter(isActiveRun).length;
 
   const gates = evaluateEvidenceGates(tickets);
   const reviewRelevantGates = gates.filter(gate => {

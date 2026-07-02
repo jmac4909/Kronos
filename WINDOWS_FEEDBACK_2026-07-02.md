@@ -27,4 +27,6 @@ Context: Windows 11 manual testing on VS Code 1.127.0.
 - Bug 2 is fixed by failing and completing the persisted run when managed worktree setup fails before launch.
 - Bug 3 has script-acquisition hardening plus webview boot/error diagnostics in `webviewSecurity`; it still needs confirmation in VS Code 1.127.0 extension host DevTools on Windows 11.
 - Bug 4 is fixed by adding a basic completion evidence note when an implement run reaches `await_review` with no evidence notes, before post-run queue removal.
+- Feature 5 is implemented with active persisted runs in the Sessions tree using a `sync~spin` icon.
+- Feature 6 is implemented with a status bar `Kronos: N running` indicator that opens Run Center.
 - Remaining feature suggestions are part of the cleanup goal backlog.

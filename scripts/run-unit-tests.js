@@ -57,6 +57,7 @@ const nextActionContext = require('../out/services/nextActionContext.js');
 const gitWorkspace = require('../out/services/gitWorkspace.js');
 const processTree = require('../out/services/processTree.js');
 const webviewSecurity = require('../out/services/webviewSecurity.js');
+const runStatus = require('../out/services/runStatus.js');
 const cliProbes = require('../out/services/cliProbes.js');
 const errorUtils = require('../out/services/errorUtils.js');
 const combinedVerification = require('../out/services/combinedVerification.js');
@@ -3052,6 +3053,33 @@ test('ticket timeline combines queue, runs, evidence, MR, build, and ticket even
   assert.equal(source.includes('type TimelineRunRecord = TimelineRun & Record<string, any>'), false);
 });
 
+test('run status helper centralizes active persisted run semantics', () => {
+  assert.equal(runStatus.isActiveRunStatus('running'), true);
+  assert.equal(runStatus.isActiveRunStatus('preflight'), true);
+  assert.equal(runStatus.isActiveRunStatus('paused'), true);
+  assert.equal(runStatus.isActiveRunStatus('completed'), false);
+  assert.equal(runStatus.isActiveRun({ status: 'running' }), true);
+  assert.equal(runStatus.isActiveRun({ status: 'waiting_for_review' }), false);
+  assert.equal(runStatus.activeRunSummary([
+    { status: 'running' },
+    { status: 'running' },
+    { status: 'preflight' },
+    { status: 'paused' },
+    { status: 'completed' },
+  ]), '2 running, 1 preflight, 1 paused');
+
+  const source = readSourceFixture('src', 'services', 'runStatus.ts');
+  for (const marker of [
+    "ACTIVE_RUN_STATUSES = new Set(['preflight', 'running', 'paused'])",
+    'export function isActiveRunStatus',
+    'export function isActiveRun',
+    'export function activeRunSummary',
+    "['running', 'preflight', 'paused']",
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+});
+
 test('collision detector flags active runs, duplicate queue work, and open MRs', () => {
   const tickets = {
     'K-1': ticket({ projects: ['app'], summary: 'Fix checkout retry routing', labels: ['checkout'] }),
@@ -4329,6 +4357,11 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'function executeRunCenterAction',
     'function executeTicketDetailAction',
     'function openTicketExternalUrl',
+    "import { activeRunSummary, isActiveRun } from './services/runStatus'",
+    'const activeRuns = listRuns().filter(isActiveRun)',
+    "statusBarItem.command = 'kronos.runCenter'",
+    "statusBarItem.command = 'kronos.openDashboard'",
+    '$(sync~spin) Kronos: ${activeRuns.length} running',
     'shouldRecordRunCompletionEvidence({ run, ticket })',
     'addTicketEvidenceNote(ticketKey, {',
     "kind: 'note'",
@@ -4618,6 +4651,7 @@ test('merge request diff rendering uses normalized adapter results', () => {
 test('tree providers share action labels and icons', () => {
   const ticketTree = readSourceFixture('src', 'views', 'TicketTreeProvider.ts');
   const queueTree = readSourceFixture('src', 'views', 'QueueTreeProvider.ts');
+  const sessionTree = readSourceFixture('src', 'views', 'SessionTreeProvider.ts');
   const actionIcons = readSourceFixture('src', 'views', 'actionIcons.ts');
   const actionLabels = readSourceFixture('src', 'services', 'actionLabels.ts');
   const queuePlanner = readSourceFixture('src', 'services', 'queuePlanner.ts');
@@ -4640,6 +4674,15 @@ test('tree providers share action labels and icons', () => {
 
   assert.ok(actionIcons.includes("case 'in_progress': return { id: 'tools'"), 'shared icons should use the valid tools codicon');
   assert.equal(actionIcons.includes("'wrench'"), false, 'shared action icons should not use the invalid wrench codicon');
+  for (const marker of [
+    "import { KronosRun, listRuns } from '../runners/sessionDispatcher'",
+    "import { isActiveRun } from '../services/runStatus'",
+    'const activeRuns = listRuns().filter(isActiveRun)',
+    "new vscode.ThemeIcon('sync~spin'",
+    "this.command = { command: 'kronos.runCenter'",
+  ]) {
+    assert.ok(sessionTree.includes(marker), marker);
+  }
   assert.ok(actionLabels.includes('export function actionToLabel'), 'action labels should live outside queue planning');
   assert.ok(queuePlanner.includes("export { actionToLabel } from './actionLabels'"), 'queuePlanner should keep a compatibility re-export');
   assert.equal(ticketTree.includes('function actionToLabel'), false, 'ticket tree should not duplicate action labels');
@@ -4756,6 +4799,8 @@ test('dashboard worklist builds command-center lanes from review, run, gate, and
   assert.equal(lane('stale_items').items[0].ticketKey, 'K-OLD');
 
   const source = readSourceFixture('src', 'services', 'dashboardWorklist.ts');
+  assert.ok(source.includes("import { ACTIVE_RUN_STATUSES } from './runStatus'"));
+  assert.ok(source.includes("const WORKLIST_RUN_STATUSES = new Set(['queued', ...ACTIVE_RUN_STATUSES])"));
   assert.ok(source.includes('type DashboardRunRecord = RunRecord & Record<string, unknown>'));
   assert.equal(source.includes('type DashboardRunRecord = RunRecord & Record<string, any>'), false);
 });
@@ -4798,6 +4843,7 @@ test('agent quality score combines run outcomes, evidence gates, builds, reviews
   assert.match(score.summary, /needs-human run/);
 
   const source = readSourceFixture('src', 'services', 'agentQualityScore.ts');
+  assert.ok(source.includes("import { isActiveRun } from './runStatus'"));
   assert.ok(source.includes('type RunQualityRecord = RunRecord & Record<string, unknown>'));
   assert.equal(source.includes('type RunQualityRecord = RunRecord & Record<string, any>'), false);
 });

@@ -25,6 +25,7 @@ const runStore = readSource('src/services/runStore.ts');
 const fileNames = readSource('src/services/fileNames.ts');
 const sessionStore = readSource('src/services/sessionStore.ts');
 const worktreeRegistry = readSource('src/services/worktreeRegistry.ts');
+const sessionTreeProvider = readSource('src/views/SessionTreeProvider.ts');
 const dispatcher = sources['src/runners/sessionDispatcher.ts'];
 const scriptClient = sources['src/services/scriptClient.ts'];
 const acceptanceCriteria = readSource('src/services/acceptanceCriteria.ts');
@@ -37,6 +38,7 @@ const recoveryCenter = readSource('src/services/recoveryCenter.ts');
 const evidenceGate = readSource('src/services/evidenceGate.ts');
 const evidenceGatePolicy = readSource('src/services/evidenceGatePolicy.ts');
 const collisionDetector = readSource('src/services/collisionDetector.ts');
+const runStatus = readSource('src/services/runStatus.ts');
 const queuePlanner = readSource('src/services/queuePlanner.ts');
 const agentQualityScore = readSource('src/services/agentQualityScore.ts');
 const integrationManifest = readSource('src/services/integrationManifest.ts');
@@ -1041,6 +1043,18 @@ for (const marker of [
 }
 
 for (const marker of [
+  "import { KronosRun, listRuns } from '../runners/sessionDispatcher'",
+  "import { isActiveRun } from '../services/runStatus'",
+  'const activeRuns = listRuns().filter(isActiveRun)',
+  "new vscode.ThemeIcon('sync~spin'",
+  "this.command = { command: 'kronos.runCenter'",
+]) {
+  if (!sessionTreeProvider.includes(marker)) {
+    fail(`Missing session tree active-run marker: ${marker}`);
+  }
+}
+
+for (const marker of [
   'export function createWebviewNonce',
   "toString('hex')",
   'export function webviewVsCodeApiScript',
@@ -1414,8 +1428,21 @@ for (const marker of [
 }
 
 for (const marker of [
-  'recent_file',
   "ACTIVE_RUN_STATUSES = new Set(['preflight', 'running', 'paused'])",
+  'export function isActiveRunStatus',
+  'export function isActiveRun',
+  'export function activeRunSummary',
+  "['running', 'preflight', 'paused']",
+]) {
+  if (!runStatus.includes(marker)) {
+    fail(`Missing run status marker: ${marker}`);
+  }
+}
+
+for (const marker of [
+  'recent_file',
+  "import { isActiveRunStatus } from './runStatus'",
+  'const isActive = isActiveRunStatus(run.status)',
   'ticket_area',
   'mr_file',
   'editedFilesForRun',
@@ -1493,6 +1520,7 @@ for (const marker of [
   'Evidence readiness',
   'Build and review health',
   'Retry discipline',
+  "import { isActiveRun } from './runStatus'",
   'gradeForScore',
   'type RunQualityRecord = RunRecord & Record<string, unknown>',
   'const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunRecord)',
@@ -1678,6 +1706,8 @@ for (const marker of [
   'recent_completed',
   'stale_items',
   'evidenceStatusForRun',
+  "import { ACTIVE_RUN_STATUSES } from './runStatus'",
+  "const WORKLIST_RUN_STATUSES = new Set(['queued', ...ACTIVE_RUN_STATUSES])",
   'type DashboardRunRecord = RunRecord & Record<string, unknown>',
   'const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunRecord)',
   "runString(run, 'status')",
