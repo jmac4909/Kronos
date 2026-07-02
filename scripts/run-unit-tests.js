@@ -3621,6 +3621,45 @@ test('doctor checks centralize command, credential, project config, and reachabi
   assert.equal(loadErrorByName['Session store integrity'].status, 'warn');
   assert.match(loadErrorByName['Session store integrity'].detail, /invalid_saved_session/);
   assert.match(loadErrorByName['Session store integrity'].detail, /invalid_session_stats/);
+
+  const fallbackChecks = doctorChecks.runDoctorChecks({
+    state,
+    queue: null,
+    profile,
+    requiredPrompts: [],
+    dispatchModel: 'claude-opus-4-6',
+    env,
+    commandRunner: (command, args) => {
+      const joined = [command, ...args].join(' ');
+      if (joined === 'python --version') { throw { message: '   ' }; }
+      if (joined === 'claude --version') { throw { message: '   ' }; }
+      if (joined === 'gcloud auth application-default print-access-token') { throw { message: '   ' }; }
+      return commandRunner(command, args);
+    },
+    kronosDir: process.env.KRONOS_DIR,
+  });
+  const fallbackByName = Object.fromEntries(fallbackChecks.map(check => [check.name, check]));
+  assert.equal(fallbackByName.Python.detail, 'python unavailable');
+  assert.equal(fallbackByName['Claude CLI compatible version'].detail, 'claude unavailable');
+  assert.equal(fallbackByName['GCP application default auth'].detail, 'Auth check failed');
+
+  const source = readSourceFixture('src', 'services', 'doctorChecks.ts');
+  for (const marker of [
+    "import { unknownErrorMessage } from './errorUtils'",
+    "unknownErrorMessage(e, 'Could not read prompt directory')",
+    "unknownErrorMessage(e, 'Auth check failed')",
+    "unknownErrorMessage(e, 'Provider reachability checks failed.')",
+    "unknownErrorMessage(e, `${command} unavailable`)",
+    "unknownErrorMessage(e, 'claude unavailable')",
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    'catch (e: any)',
+    'e?.message',
+  ]) {
+    assert.equal(source.includes(marker), false, marker);
+  }
 });
 
 test('doctor checks skip gcloud commands when GOOGLE_APPLICATION_CREDENTIALS is readable', () => {

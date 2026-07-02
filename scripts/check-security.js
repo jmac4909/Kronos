@@ -959,6 +959,12 @@ for (const marker of [
   'readableGoogleApplicationCredentials',
   'Skipped because GOOGLE_APPLICATION_CREDENTIALS',
   'probeProviderReachability',
+  "import { unknownErrorMessage } from './errorUtils'",
+  "unknownErrorMessage(e, 'Could not read prompt directory')",
+  "unknownErrorMessage(e, 'Auth check failed')",
+  "unknownErrorMessage(e, 'Provider reachability checks failed.')",
+  "unknownErrorMessage(e, `${command} unavailable`)",
+  "unknownErrorMessage(e, 'claude unavailable')",
   'Values are not displayed',
   'DoctorCommandRunner',
 ]) {

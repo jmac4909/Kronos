@@ -8,6 +8,7 @@ import { ProviderReachabilityOptions, ProviderReachabilityTarget, probeProviderR
 import { requiredScripts } from './scriptClient';
 import { KRONOS_DIR } from './stateStore';
 import { defaultCliProbeCommandRunner, readableGoogleApplicationCredentials, resolveGcloudCommand } from './cliProbes';
+import { unknownErrorMessage } from './errorUtils';
 
 export interface DoctorCheck {
   name: string;
@@ -78,8 +79,8 @@ export function runDoctorChecks(input: DoctorChecksInput): DoctorCheck[] {
       missing.length === 0 ? 'pass' : 'warn',
       `${templates.length} template(s), ${missing.length} required missing${missing.length ? `: ${missing.join(', ')}. Run Kronos: Repair Prompt Pack to create starter templates.` : ''}`
     );
-  } catch (e: any) {
-    add('Prompt templates', 'fail', e?.message || 'Could not read prompt directory');
+  } catch (e: unknown) {
+    add('Prompt templates', 'fail', unknownErrorMessage(e, 'Could not read prompt directory'));
   }
 
   commandCheck(checks, commandRunner, 'Python', 'python', ['--version']);
@@ -106,8 +107,8 @@ export function runDoctorChecks(input: DoctorChecksInput): DoctorCheck[] {
     try {
       commandRunner(gcloudCommand, ['auth', 'application-default', 'print-access-token'], { timeoutMs: TOKEN_TIMEOUT_MS });
       add('GCP application default auth', 'pass', 'Token command succeeded');
-    } catch (e: any) {
-      add('GCP application default auth', 'warn', e?.message || 'Auth check failed');
+    } catch (e: unknown) {
+      add('GCP application default auth', 'warn', unknownErrorMessage(e, 'Auth check failed'));
     }
   }
 
@@ -219,11 +220,11 @@ export async function runDoctorReachabilityChecks(input: DoctorChecksInput, opti
       status: result.status,
       detail: result.detail,
     }));
-  } catch (e: any) {
+  } catch (e: unknown) {
     return [{
       name: 'Provider network reachability',
       status: 'fail',
-      detail: e?.message || 'Provider reachability checks failed.',
+      detail: unknownErrorMessage(e, 'Provider reachability checks failed.'),
     }];
   }
 }
@@ -255,8 +256,8 @@ function commandCheck(checks: DoctorCheck[], commandRunner: DoctorCommandRunner,
   try {
     const out = commandRunner(command, args, { timeoutMs: COMMAND_TIMEOUT_MS }).trim();
     checks.push({ name, status: 'pass', detail: out.split('\n')[0] || `${command} available` });
-  } catch (e: any) {
-    checks.push({ name, status: 'fail', detail: e?.message || `${command} unavailable` });
+  } catch (e: unknown) {
+    checks.push({ name, status: 'fail', detail: unknownErrorMessage(e, `${command} unavailable`) });
   }
 }
 
@@ -264,8 +265,8 @@ function claudeVersionCheck(checks: DoctorCheck[], commandRunner: DoctorCommandR
   try {
     const claudeVersion = commandRunner('claude', ['--version'], { timeoutMs: COMMAND_TIMEOUT_MS }).trim().split('\n')[0] || 'claude available';
     checks.push({ name: 'Claude CLI compatible version', status: /\d/.test(claudeVersion) ? 'pass' : 'warn', detail: claudeVersion });
-  } catch (e: any) {
-    checks.push({ name: 'Claude CLI compatible version', status: 'fail', detail: e?.message || 'claude unavailable' });
+  } catch (e: unknown) {
+    checks.push({ name: 'Claude CLI compatible version', status: 'fail', detail: unknownErrorMessage(e, 'claude unavailable') });
   }
 }
 
