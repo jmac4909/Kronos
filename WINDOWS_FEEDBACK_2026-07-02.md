@@ -46,7 +46,7 @@ Context: Windows 11 manual testing on VS Code 1.127.0.
 
 - Bug 1 is fixed in the unit-test command mocks for Windows `gcloud.cmd`.
 - Bug 2 is fixed by failing and completing the persisted run when managed worktree setup fails before launch.
-- Bug 3 has script-acquisition hardening plus webview boot/error diagnostics in `webviewSecurity`; it still needs confirmation in VS Code 1.127.0 extension host DevTools on Windows 11.
+- Bug 3 is validated on the Windows EC2 lab with VS Code 1.127.0. Jira Board, Run Center, Evidence Gate, and Human Review Inbox opened as webviews, and a Human Review Inbox button click opened Kronos Doctor, proving the webview script and `postMessage` path executed on Windows.
 - Bug 4 is fixed by adding a basic completion evidence note when an implement run reaches `await_review` with no evidence notes, before post-run queue removal.
 - Feature 5 is implemented with active persisted runs in the Sessions tree using a `sync~spin` icon.
 - Feature 6 is implemented with a status bar `Kronos: N running` indicator that opens Run Center.
@@ -62,4 +62,4 @@ Context: Windows 11 manual testing on VS Code 1.127.0.
 - Round 2 bug 3 is handled by ignoring generated `.claude/` entries during managed worktree cleanliness checks.
 - Round 2 bug 4 is handled by reloading state after dispatch before resolving the ticket and evaluating post-run readiness.
 - Round 2 features 5-13 are implemented through Work Queue active metrics, Run Center sorting and bulk archive, review notifications and timed spin, concrete attention summaries, webview refresh actions, review MR polling, deploy-monitor handoff, and completion toasts.
-- Remaining manual gate: confirm Bug 3 on VS Code 1.127.0 / Windows 11 with the extension host DevTools console open.
+- Windows validation note: the lab is Windows Server rather than Windows 11, but it is running VS Code 1.127.0 with the packaged `jmacke01.kronos@0.1.0` VSIX. The final smoke artifacts were `01-jira-board.png`, `02-run-center.png`, `03-evidence-gate.png`, `04-human-review-inbox.png`, and `05-human-review-open-doctor-click.png` under `C:\ProgramData\KronosLab\smoke`.
