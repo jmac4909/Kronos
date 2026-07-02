@@ -39,7 +39,7 @@ import { SafetyPlan, assessSafetyGate } from './services/safetyGate';
 import { TrendMetricsReport, computeTrendMetrics } from './services/trendMetrics';
 import { TicketFilter, TicketGroupBy, TICKET_FILTER_PRESETS, describeTicketFilter } from './services/ticketFilters';
 import { buildRunResumePrompt, readRunLogTail } from './services/runRecovery';
-import { addTicketEvidenceCheck, addTicketEvidenceNote, linkMergeRequestToTicket, previewLinkMergeRequestToTicket, recordTicketEnvironmentResult, replaceTicketAcceptanceCriteria, updateTicketAcceptanceCriteria } from './services/ticketMutations';
+import { addTicketEvidenceCheck, addTicketEvidenceNote, linkMergeRequestToTicket, previewLinkMergeRequestToTicket, recordTicketEnvironmentResult, replaceTicketAcceptanceCriteria, updateTicketAcceptanceCriteria, updateTicketMergeRequestStatus } from './services/ticketMutations';
 import { addPlanToQueue as addPlanToQueueState, addTicketToQueue, linkTicketToProject, recordPlanQueueDecision, removeTicketFromQueue as removeTicketFromQueueState, reorderQueueItem, selectNextQueueItem, unlinkTicketFromProject } from './services/queueMutations';
 import { removeProject as removeProjectFromState, setProjectConfigValue, setProjectIntegrationConfig, setScanDirs, writeProjectSetupConfig } from './services/projectMutations';
 import { DoctorCheck, runDoctorChecks as collectDoctorChecks, runDoctorReachabilityChecks as collectDoctorReachabilityChecks } from './services/doctorChecks';
@@ -928,6 +928,7 @@ export function activate(context: vscode.ExtensionContext) {
   const pollSec = config.get<number>('pollIntervalSec', 300);
   const pollTimer = setInterval(throttledRefresh, pollSec * 1000);
   context.subscriptions.push({ dispose: () => clearInterval(pollTimer) });
+  startReviewAutomation(context, state);
 
   // Status bar
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
@@ -1143,10 +1144,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('kronos.deployMonitor', async (item: any) => {
       const projectName = resolveProjectName(state, item);
+      const ticketKey = resolveTicketKey(item);
       const projectPath = getProjectPath(state, projectName);
       if (projectPath) {
-        dispatchClaudeSession(projectPath, 'deploy-monitor', undefined, {
-          onComplete: refreshAfterDispatch(state, projectName),
+        dispatchClaudeSession(projectPath, 'deploy-monitor', ticketKey, {
+          onComplete: refreshAfterDispatch(state, projectName, ticketKey),
           noWorktree: true,
         });
       } else {
@@ -5619,6 +5621,66 @@ function resolveTicketKey(item: any): string | undefined {
   return undefined;
 }
 
+function startReviewAutomation(context: vscode.ExtensionContext, state: KronosState): void {
+  const config = vscode.workspace.getConfiguration('kronos');
+  const fallbackSec = config.get<number>('pollIntervalSec', 300);
+  const pollSec = Math.max(60, config.get<number>('reviewPollIntervalSec', fallbackSec));
+  let running = false;
+  const poll = async () => {
+    if (running) { return; }
+    running = true;
+    try {
+      await pollReviewMergeRequests(state);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(() => { void poll(); }, pollSec * 1000);
+  context.subscriptions.push({ dispose: () => clearInterval(timer) });
+}
+
+async function pollReviewMergeRequests(state: KronosState): Promise<void> {
+  for (const candidate of reviewMergeRequestCandidates(state)) {
+    try {
+      const status = await gitlabAdapter.mergeRequestStatus(state, candidate.ticketKey, { timeout: LIVE_MR_DIFF_TIMEOUT_MS });
+      const update = updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status });
+      if (update.changed) {
+        state.reloadAndNotify();
+      }
+      if (update.mergedNow) {
+        await startDeployMonitorForMergedTicket(state, candidate.ticketKey, update.ticket);
+      }
+    } catch (e: unknown) {
+      console.warn(unknownErrorMessage(e, `Failed to poll MR status for ${candidate.ticketKey}.`));
+    }
+  }
+}
+
+function reviewMergeRequestCandidates(state: KronosState): Array<{ ticketKey: string; ticket: Ticket }> {
+  if (!state.state) { return []; }
+  return Object.entries(state.state.tickets || {})
+    .filter((entry): entry is [string, Ticket] => entry[1].next_action === 'await_review' && entry[1].mr?.state === 'opened')
+    .map(([ticketKey, ticket]) => ({ ticketKey, ticket }));
+}
+
+async function startDeployMonitorForMergedTicket(state: KronosState, ticketKey: string, ticket: Ticket): Promise<void> {
+  const projectName = ticket.projects?.[0];
+  const projectPath = getProjectPath(state, projectName);
+  if (!projectName || !projectPath || hasActiveDeployMonitorRun(projectName, ticketKey)) { return; }
+  await dispatchClaudeSession(projectPath, 'deploy-monitor', ticketKey, {
+    onComplete: refreshAfterDispatch(state, projectName, ticketKey),
+    noWorktree: true,
+  });
+  void vscode.window.showInformationMessage(`${ticketKey} merged - deploy monitor started.`);
+}
+
+function hasActiveDeployMonitorRun(projectName: string, ticketKey: string): boolean {
+  return listRuns().some(run => isActiveRun(run)
+    && run.skill === 'deploy-monitor'
+    && run.project === projectName
+    && (!run.ticket || run.ticket === ticketKey));
+}
+
 async function pickProjectFromTickets<T extends { key: string; projects: string[] }>(
   state: KronosState,
   tickets: T[],
@@ -6504,11 +6566,14 @@ function buildTicketHtml(key: string, ticket: Ticket, state: KronosState, nonce?
     const reviewStatus = ticketStringField(mr, 'review_status', 'pending_review');
     const reviewColor = reviewStatus === 'approved' ? '#4caf50' : reviewStatus === 'changes_requested' ? '#f44336' : '#ff9800';
     const mrUrl = safeHttpHref(ticketStringField(mr, 'url'));
+    const commentCount = ticketStringField(mr, 'comment_count');
+    const lastCommentAt = ticketStringField(mr, 'last_comment_at');
     mrHtml = `<div class="section">
       <h3>Merge Request</h3>
       <div class="mr-card">
         <div><strong>MR !${esc(ticketStringField(mr, 'iid', '?'))}</strong> — <span style="color:${reviewColor}">${esc(reviewStatus.replace(/_/g, ' '))}</span></div>
         <div>State: ${esc(ticketStringField(mr, 'state', 'unknown'))}</div>
+        ${commentCount ? `<div>Comments: ${esc(commentCount)}${lastCommentAt ? ` · latest ${esc(formatWebviewDateTime(lastCommentAt))}` : ''}</div>` : ''}
         ${mrUrl ? `<a href="${mrUrl}" class="link">Open in GitLab &rarr;</a>` : ''}
       </div>
     </div>`;

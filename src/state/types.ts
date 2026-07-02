@@ -131,6 +131,8 @@ export interface MergeRequest {
   url: string;
   title?: string;
   author?: string;
+  comment_count?: number;
+  last_comment_at?: string;
   source_branch?: string;
   target_branch?: string;
   sourceBranch?: string;

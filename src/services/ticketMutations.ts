@@ -56,6 +56,20 @@ export interface LinkMergeRequestPreview {
   reviewReady: boolean;
 }
 
+export interface MergeRequestStatusInput {
+  ticketKey: string;
+  status: Partial<MergeRequest>;
+  now?: Date;
+}
+
+export interface MergeRequestStatusUpdate {
+  state: KronosState;
+  ticket: Ticket;
+  changed: boolean;
+  mergedNow: boolean;
+  previousMr: MergeRequest | null;
+}
+
 export function addTicketEvidenceNote(ticketKey: string, input: TicketEvidenceNoteInput): KronosState {
   return mutateState('add-ticket-evidence', state => {
     const ticket = requireTicket(state, ticketKey);
@@ -166,6 +180,40 @@ export function linkMergeRequestToTicket(input: LinkMergeRequestInput): KronosSt
   });
 }
 
+export function updateTicketMergeRequestStatus(input: MergeRequestStatusInput): MergeRequestStatusUpdate {
+  const state = readStateFile();
+  if (!state) {
+    throw new Error('No readable Kronos state found.');
+  }
+  validateStateFileShape(state);
+  const ticket = requireTicket(state, input.ticketKey);
+  if (!ticket.mr) {
+    throw new Error(`${input.ticketKey} has no merge request to update.`);
+  }
+
+  const previousMr = cloneMergeRequest(ticket.mr);
+  let changed = mergeRequestStatus(ticket.mr, input.status);
+  const mergedNow = previousMr.state !== 'merged' && ticket.mr.state === 'merged';
+  if (mergedNow && ticket.next_action === 'await_review') {
+    ticket.next_action = 'deploy_monitor';
+    ticket.last_action = `MR !${ticket.mr.iid} merged; deploy monitor is next.`;
+    ticket.last_action_at = isoNow(input.now);
+    changed = true;
+  }
+
+  validateStateFileShape(state);
+  if (changed) {
+    writeJsonFileAtomic(STATE_FILE, state, 'update-ticket-mr-status');
+  }
+  return {
+    state,
+    ticket: cloneTicket(ticket),
+    changed,
+    mergedNow,
+    previousMr,
+  };
+}
+
 export function previewLinkMergeRequestToTicket(state: KronosState, input: LinkMergeRequestInput): LinkMergeRequestPreview {
   const orphan = state.tickets[input.orphanKey];
   if (!orphan) {
@@ -209,6 +257,10 @@ function cloneTicket(ticket: Ticket): Ticket {
   return JSON.parse(JSON.stringify(ticket));
 }
 
+function cloneMergeRequest(mr: MergeRequest): MergeRequest {
+  return JSON.parse(JSON.stringify(mr));
+}
+
 function requireTicket(state: KronosState, ticketKey: string): Ticket {
   const ticket = state.tickets[ticketKey];
   if (!ticket) {
@@ -222,6 +274,48 @@ function ensureEvidence(ticket: Ticket): TicketEvidence {
     ticket.evidence = {};
   }
   return ticket.evidence;
+}
+
+function mergeRequestStatus(target: MergeRequest, status: Partial<MergeRequest>): boolean {
+  let changed = false;
+  changed = setMergeRequestField(target, 'state', validMergeRequestState(status.state)) || changed;
+  changed = setMergeRequestField(target, 'review_status', validReviewStatus(status.review_status)) || changed;
+  changed = setMergeRequestString(target, 'url', status.url) || changed;
+  changed = setMergeRequestString(target, 'title', status.title) || changed;
+  changed = setMergeRequestString(target, 'author', status.author) || changed;
+  changed = setMergeRequestString(target, 'source_branch', status.source_branch) || changed;
+  changed = setMergeRequestString(target, 'target_branch', status.target_branch) || changed;
+  changed = setMergeRequestString(target, 'sourceBranch', status.sourceBranch) || changed;
+  changed = setMergeRequestString(target, 'targetBranch', status.targetBranch) || changed;
+  changed = setMergeRequestString(target, 'branch', status.branch) || changed;
+  changed = setMergeRequestString(target, 'head_branch', status.head_branch) || changed;
+  changed = setMergeRequestNumber(target, 'comment_count', status.comment_count) || changed;
+  changed = setMergeRequestString(target, 'last_comment_at', status.last_comment_at) || changed;
+  return changed;
+}
+
+function setMergeRequestField<K extends keyof MergeRequest>(target: MergeRequest, key: K, value: MergeRequest[K] | undefined): boolean {
+  if (value === undefined || target[key] === value) { return false; }
+  target[key] = value;
+  return true;
+}
+
+function setMergeRequestString<K extends keyof MergeRequest>(target: MergeRequest, key: K, value: unknown): boolean {
+  const trimmed = optionalTrim(typeof value === 'string' ? value : undefined);
+  return setMergeRequestField(target, key, trimmed as MergeRequest[K] | undefined);
+}
+
+function setMergeRequestNumber<K extends keyof MergeRequest>(target: MergeRequest, key: K, value: unknown): boolean {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) { return false; }
+  return setMergeRequestField(target, key, Math.floor(value) as MergeRequest[K]);
+}
+
+function validMergeRequestState(value: unknown): MergeRequest['state'] | undefined {
+  return value === 'opened' || value === 'merged' || value === 'closed' ? value : undefined;
+}
+
+function validReviewStatus(value: unknown): MergeRequest['review_status'] | undefined {
+  return value === 'pending_review' || value === 'approved' || value === 'changes_requested' ? value : undefined;
 }
 
 function attachMergeRequest(target: Ticket, orphan: Ticket, mr: MergeRequest): void {

@@ -34,4 +34,5 @@ Context: Windows 11 manual testing on VS Code 1.127.0.
 - Features 9 and 11 are implemented with an in-memory Review tree badge count plus `NEW` highlighting for review items that appeared since the Review view was last opened.
 - Feature 10 is implemented with an aggregate Kronos attention badge on the primary Projects tree view, using the VS Code `TreeView.badge` API exposed for activity-bar views.
 - Feature 12 is implemented with Run Center polling while active persisted runs exist plus refresh buttons on Run Center, Evidence Gate, Human Review Inbox, Dashboard, and Aging Report.
-- Remaining feature suggestions are part of the cleanup goal backlog.
+- Feature 13 is implemented with periodic review MR polling. Open review MRs update persisted MR state/review/comment metadata, merged MRs transition the ticket to `deploy_monitor`, and Kronos starts a deploy-monitor run when no deploy monitor is already active for that ticket.
+- Remaining manual gate: confirm Bug 3 on VS Code 1.127.0 / Windows 11 with the extension host DevTools console open.

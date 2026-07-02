@@ -776,6 +776,49 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
     targetTicketKey: 'K-2',
     allowReviewHandoffWithWarnings: true,
   }), /not ready for review handoff/);
+
+  fs.writeFileSync(stateStore.STATE_FILE, JSON.stringify(baseState({
+    'K-5': ticket({
+      projects: ['app'],
+      next_action: 'await_review',
+      mr: { iid: 5, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/mr/5' },
+    }),
+  }), null, 2));
+  const statusUpdate = ticketMutations.updateTicketMergeRequestStatus({
+    ticketKey: 'K-5',
+    status: {
+      state: 'merged',
+      review_status: 'approved',
+      title: 'Fix checkout',
+      source_branch: 'feature/K-5',
+      comment_count: 2,
+      last_comment_at: '2026-07-02T01:00:00.000Z',
+    },
+    now: new Date('2026-07-02T01:05:00.000Z'),
+  });
+  assert.equal(statusUpdate.changed, true);
+  assert.equal(statusUpdate.mergedNow, true);
+  assert.equal(statusUpdate.previousMr.state, 'opened');
+  assert.equal(statusUpdate.ticket.next_action, 'deploy_monitor');
+  assert.equal(statusUpdate.ticket.last_action_at, '2026-07-02T01:05:00.000Z');
+  const updatedMrTicket = JSON.parse(fs.readFileSync(stateStore.STATE_FILE, 'utf8')).tickets['K-5'];
+  assert.equal(updatedMrTicket.mr.state, 'merged');
+  assert.equal(updatedMrTicket.mr.review_status, 'approved');
+  assert.equal(updatedMrTicket.mr.comment_count, 2);
+  assert.equal(updatedMrTicket.next_action, 'deploy_monitor');
+  const noChange = ticketMutations.updateTicketMergeRequestStatus({
+    ticketKey: 'K-5',
+    status: {
+      state: 'merged',
+      review_status: 'approved',
+      title: 'Fix checkout',
+      source_branch: 'feature/K-5',
+      comment_count: 2,
+      last_comment_at: '2026-07-02T01:00:00.000Z',
+    },
+  });
+  assert.equal(noChange.changed, false);
+  assert.equal(noChange.mergedNow, false);
 });
 
 test('queue mutation helpers centralize queue membership and ticket project links', () => {
@@ -3442,7 +3485,21 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
         return '[{"body":"ok"}]';
       }
       if (args[0] === '--mr-diff') {
-        return JSON.stringify({ mr: { title: 'Fix it', iid: 7 }, files: [{ path: 'src/app.ts' }] });
+        return JSON.stringify({
+          mr: {
+            title: 'Fix it',
+            iid: 7,
+            state: 'merged',
+            review_status: 'approved',
+            web_url: 'https://gitlab.example/mr/7',
+            source_branch: 'feature/K-7',
+          },
+          comments: [
+            { id: 1, body: 'approved', created_at: '2026-07-02T01:00:00.000Z', author: { username: 'ada' } },
+            { id: '2', note: 'merged', created_at: '2026-07-02T02:00:00.000Z' },
+          ],
+          files: [{ path: 'src/app.ts' }],
+        });
       }
       if (args[0] === '--mr-branch') {
         return JSON.stringify({ branch: 'feature/K-7' });
@@ -3456,10 +3513,19 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
   assert.equal(diff.mr.title, 'Fix it');
   assert.equal(diff.files[0].path, 'src/app.ts');
   assert.equal(await integrationAdapters.gitlabAdapter.mergeRequestBranch(runner, 'K-7'), 'feature/K-7');
+  const status = await integrationAdapters.gitlabAdapter.mergeRequestStatus(runner, 'K-7');
+  assert.equal(status.state, 'merged');
+  assert.equal(status.review_status, 'approved');
+  assert.equal(status.url, 'https://gitlab.example/mr/7');
+  assert.equal(status.source_branch, 'feature/K-7');
+  assert.equal(status.comment_count, 2);
+  assert.equal(status.last_comment_at, '2026-07-02T02:00:00.000Z');
+  assert.deepEqual(status.comments.map(comment => comment.id), ['1', '2']);
   assert.deepEqual(calls, [
     ['--ticket-comments', 'K-7'],
     ['--mr-diff', 'K-7'],
     ['--mr-branch', 'K-7'],
+    ['--mr-diff', 'K-7'],
   ]);
   assert.deepEqual(integrationAdapters.normalizeJiraComments({
     comments: [
@@ -3477,6 +3543,19 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
     { body: '' },
   ]);
   assert.deepEqual(integrationAdapters.normalizeJiraComments({ comments: 'bad' }), []);
+  assert.deepEqual(integrationAdapters.normalizeMergeRequestStatus({
+    mr: { state: 'open', approved: true, author: { name: 'Ada' }, branch: ' feature/K-8 ' },
+    discussions: [{ notes: [{ body: 'Looks good', created_at: '2026-07-02T03:00:00.000Z' }] }],
+  }), {
+    state: 'opened',
+    review_status: 'approved',
+    author: 'Ada',
+    branch: 'feature/K-8',
+    comment_count: 1,
+    last_comment_at: '2026-07-02T03:00:00.000Z',
+    comments: [{ created: '2026-07-02T03:00:00.000Z', body: 'Looks good' }],
+  });
+  assert.deepEqual(integrationAdapters.normalizeMergeRequestComments(['plain', { body: 42 }]), [{ body: 'plain' }, { body: '' }]);
   await assert.rejects(
     () => integrationAdapters.jiraAdapter.ticketComments({ runScript: async () => 'not json' }, 'K-8'),
     /Invalid JSON from Jira comments/
@@ -4474,6 +4553,12 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'newReviewItems: reviewTree.getNewReviewCount()',
     'attentionBadgeTarget.badge = summary.count > 0',
     'reviewTree.onDidChangeNewReviewCount(updateAttentionBadge)',
+    'startReviewAutomation(context, state)',
+    'function pollReviewMergeRequests',
+    'gitlabAdapter.mergeRequestStatus',
+    'updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status })',
+    'startDeployMonitorForMergedTicket',
+    "dispatchClaudeSession(projectPath, 'deploy-monitor', ticketKey",
     "import { activeRunSummary, isActiveRun } from './services/runStatus'",
     'const activeRuns = listRuns().filter(isActiveRun)',
     "statusBarItem.command = 'kronos.runCenter'",

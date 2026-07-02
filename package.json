@@ -945,6 +945,11 @@
           "default": 5000,
           "description": "How often to poll claude agents for session status (ms)"
         },
+        "kronos.reviewPollIntervalSec": {
+          "type": "number",
+          "default": 300,
+          "description": "How often to poll review merge requests for status changes (seconds)"
+        },
         "kronos.useWorktrees": {
           "type": "boolean",
           "default": false,
