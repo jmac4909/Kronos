@@ -692,6 +692,11 @@ for (const forbidden of [
   'e?.message',
   'panel.webview.onDidReceiveMessage(async (msg: any)',
   'issuesData.map((iss: any)',
+  "vscode.commands.registerCommand('kronos.refreshProject', async (item: any)",
+  "vscode.commands.registerCommand('kronos.implement', async (item: any)",
+  "vscode.commands.registerCommand('kronos.deployMonitor', async (item: any)",
+  "vscode.commands.registerCommand('kronos.verifyFix', async (item: any)",
+  "await startClaudeDispatch(projectPath, 'verify-fix', item?.ticketKey,",
   'item?.sourceBranch ||',
   'function planToQueueItem(state: KronosState, plan: PlannedAction): any',
   'function resolveProjectName(state: KronosState, item: any)',
@@ -701,6 +706,16 @@ for (const forbidden of [
 ]) {
   if (extension.includes(forbidden)) {
     fail(`Extension command handlers must normalize unknown errors instead of using ${forbidden}.`);
+  }
+}
+for (const marker of [
+  "vscode.commands.registerCommand('kronos.refreshProject', async (item: unknown)",
+  "vscode.commands.registerCommand('kronos.implement', async (item: unknown)",
+  "vscode.commands.registerCommand('kronos.deployMonitor', async (item: unknown)",
+  "vscode.commands.registerCommand('kronos.verifyFix', async (item: unknown)",
+]) {
+  if (!extension.includes(marker)) {
+    fail(`Extension dispatch command must keep tree payloads unknown: ${marker}`);
   }
 }
 

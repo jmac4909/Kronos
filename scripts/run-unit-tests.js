@@ -5049,6 +5049,30 @@ test('extension run recovery helpers use typed run records', () => {
   }
 });
 
+test('extension dispatch command handlers normalize tree payloads before use', () => {
+  const source = readSourceFixture('src', 'extension.ts');
+  for (const marker of [
+    "vscode.commands.registerCommand('kronos.refreshProject', async (item: unknown)",
+    "vscode.commands.registerCommand('kronos.implement', async (item: unknown)",
+    "vscode.commands.registerCommand('kronos.deployMonitor', async (item: unknown)",
+    "vscode.commands.registerCommand('kronos.verifyFix', async (item: unknown)",
+    'const projectName = resolveProjectName(state, item);',
+    'const ticketKey = resolveTicketKey(item);',
+    "await startClaudeDispatch(projectPath, 'verify-fix', ticketKey,",
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    "vscode.commands.registerCommand('kronos.refreshProject', async (item: any)",
+    "vscode.commands.registerCommand('kronos.implement', async (item: any)",
+    "vscode.commands.registerCommand('kronos.deployMonitor', async (item: any)",
+    "vscode.commands.registerCommand('kronos.verifyFix', async (item: any)",
+    "await startClaudeDispatch(projectPath, 'verify-fix', item?.ticketKey,",
+  ]) {
+    assert.equal(source.includes(marker), false, marker);
+  }
+});
+
 test('extension evidence command handlers normalize unknown errors', () => {
   const source = readSourceFixture('src', 'extension.ts');
   const evidenceCommandStart = source.indexOf("vscode.commands.registerCommand('kronos.addEvidence'");

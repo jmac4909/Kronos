@@ -1086,9 +1086,10 @@ export function activate(context: vscode.ExtensionContext) {
       openExternalHttpUrl(String(url || ''));
     }),
 
-    vscode.commands.registerCommand('kronos.refreshProject', async (item: any) => {
-      if (item?.projectName) {
-        await state.refresh(item.projectName);
+    vscode.commands.registerCommand('kronos.refreshProject', async (item: unknown) => {
+      const projectName = resolveProjectName(state, item);
+      if (projectName) {
+        await state.refresh(projectName);
         lastRefreshTime = Date.now();
       }
     }),
@@ -1221,8 +1222,8 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
-    vscode.commands.registerCommand('kronos.implement', async (item: any) => {
-      const ticketKey = item?.ticketKey;
+    vscode.commands.registerCommand('kronos.implement', async (item: unknown) => {
+      const ticketKey = resolveTicketKey(item);
       if (!ticketKey || !state.state) { return; }
       const ticket = state.state.tickets[ticketKey];
       if (!ticket) { return; }
@@ -1262,7 +1263,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
-    vscode.commands.registerCommand('kronos.deployMonitor', async (item: any) => {
+    vscode.commands.registerCommand('kronos.deployMonitor', async (item: unknown) => {
       const projectName = resolveProjectName(state, item);
       const ticketKey = resolveTicketKey(item);
       const projectPath = getProjectPath(state, projectName);
@@ -1277,11 +1278,12 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
-    vscode.commands.registerCommand('kronos.verifyFix', async (item: any) => {
+    vscode.commands.registerCommand('kronos.verifyFix', async (item: unknown) => {
       const projectName = resolveProjectName(state, item);
+      const ticketKey = resolveTicketKey(item);
       const projectPath = getProjectPath(state, projectName);
       if (projectPath) {
-        await startClaudeDispatch(projectPath, 'verify-fix', item?.ticketKey, {
+        await startClaudeDispatch(projectPath, 'verify-fix', ticketKey, {
           onComplete: refreshAfterDispatch(state, projectName),
           noWorktree: true,
         });
