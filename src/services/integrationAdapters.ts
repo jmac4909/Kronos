@@ -1,6 +1,7 @@
 import { ScriptRunOptions, runGitlabJson, runPipelineJson } from './scriptClient';
 import { MergeRequestChangedFile } from '../state/types';
 import { normalizeChangedFiles } from './changedFiles';
+import { unknownErrorMessage } from './errorUtils';
 
 export interface KronosScriptRunner {
   runScript(args: string[], options?: ScriptRunOptions): Promise<string>;
@@ -168,11 +169,6 @@ function parseJson(raw: string, label: string): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function unknownErrorMessage(error: unknown, fallback: string): string {
-  const message = error && typeof error === 'object' ? Reflect.get(error, 'message') : undefined;
-  return typeof message === 'string' && message.trim() ? message : fallback;
 }
 
 function stringField(value: unknown): string | undefined {

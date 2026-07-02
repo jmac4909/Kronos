@@ -1,4 +1,5 @@
 import { ScriptRunOptions, runKronosStateScript } from './scriptClient';
+import { unknownErrorMessage } from './errorUtils';
 import { DiscoveredProject } from '../state/types';
 
 export type StateScriptRunner = (args: string[], options?: ScriptRunOptions) => string;
@@ -115,11 +116,6 @@ function parseStateScriptJson(raw: string, label: string): unknown {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function unknownErrorMessage(error: unknown, fallback: string): string {
-  const message = error && typeof error === 'object' ? Reflect.get(error, 'message') : undefined;
-  return typeof message === 'string' && message.trim() ? message : fallback;
 }
 
 function arrayOrEmpty(value: unknown): unknown[] {

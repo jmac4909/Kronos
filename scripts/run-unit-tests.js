@@ -50,6 +50,7 @@ const gitWorkspace = require('../out/services/gitWorkspace.js');
 const processTree = require('../out/services/processTree.js');
 const webviewSecurity = require('../out/services/webviewSecurity.js');
 const cliProbes = require('../out/services/cliProbes.js');
+const errorUtils = require('../out/services/errorUtils.js');
 const combinedVerification = require('../out/services/combinedVerification.js');
 const changedFiles = require('../out/services/changedFiles.js');
 const sonarReportView = require('../out/services/sonarReportView.js');
@@ -1315,16 +1316,35 @@ test('CLI probes normalize failures and invalid Claude agent output', () => {
   const source = readSourceFixture('src', 'services', 'cliProbes.ts');
   for (const marker of [
     'catch (e: unknown)',
-    'function unknownErrorMessage(error: unknown, fallback: string): string',
-    "Reflect.get(error, 'message')",
+    "import { unknownErrorMessage } from './errorUtils'",
+    "unknownErrorMessage(e, 'CLI probe failed')",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
   for (const marker of [
     'catch (e: any)',
     'e?.message',
+    'function unknownErrorMessage(error: unknown',
+    "Reflect.get(error, 'message')",
   ]) {
     assert.equal(source.includes(marker), false, marker);
+  }
+});
+
+test('error utils normalize unknown error shapes', () => {
+  assert.equal(errorUtils.unknownErrorMessage(new Error('broken command'), 'fallback'), 'broken command');
+  assert.equal(errorUtils.unknownErrorMessage('string failure', 'fallback'), 'string failure');
+  assert.equal(errorUtils.unknownErrorMessage({ message: '   ' }, 'fallback'), 'fallback');
+  assert.equal(errorUtils.unknownErrorMessage(null, 'fallback'), 'fallback');
+  assert.equal(errorUtils.unknownErrorField({ stderr: 'stderr failure' }, 'stderr'), 'stderr failure');
+
+  const source = readSourceFixture('src', 'services', 'errorUtils.ts');
+  for (const marker of [
+    'export function unknownErrorMessage(error: unknown, fallback: string): string',
+    'export function unknownErrorField(error: unknown, key: string): unknown',
+    "Reflect.get(error, key)",
+  ]) {
+    assert.ok(source.includes(marker), marker);
   }
 });
 
@@ -2801,8 +2821,8 @@ test('script client keeps raw JSON and process errors unknown by default', () =>
     'export function runPipelineJson<T = unknown>',
     'function parseScriptJson<T = unknown>',
     'function scriptError(scriptName: RequiredScriptName, args: string[], error: unknown)',
-    'function unknownErrorMessage(error: unknown, fallback: string): string',
-    'function errorField(error: unknown, key: string): unknown',
+    "import { unknownErrorField, unknownErrorMessage } from './errorUtils'",
+    "unknownErrorField(error, 'stderr')",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -2812,6 +2832,8 @@ test('script client keeps raw JSON and process errors unknown by default', () =>
     'error: any',
     'e?.message',
     'error?.stderr',
+    'function unknownErrorMessage(error: unknown',
+    'function errorField(error: unknown',
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }
@@ -2907,8 +2929,7 @@ test('state script adapter keeps raw JSON payloads unknown until normalized', ()
     '[key: string]: unknown',
     'function parseStateScriptJson(raw: string, label: string): unknown',
     'function isPlainObject(value: unknown): value is Record<string, unknown>',
-    'function unknownErrorMessage(error: unknown, fallback: string): string',
-    "Reflect.get(error, 'message')",
+    "import { unknownErrorMessage } from './errorUtils'",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -2918,6 +2939,8 @@ test('state script adapter keeps raw JSON payloads unknown until normalized', ()
     'catch (e: any)',
     'e?.message',
     'value is Record<string, any>',
+    'function unknownErrorMessage(error: unknown',
+    "Reflect.get(error, 'message')",
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }
@@ -3023,7 +3046,7 @@ test('integration adapters keep raw provider payloads unknown until normalized',
     'function parseJson(raw: string, label: string): unknown',
     'catch (e: unknown)',
     'function isRecord(value: unknown): value is Record<string, unknown>',
-    'function unknownErrorMessage(error: unknown, fallback: string): string',
+    "import { unknownErrorMessage } from './errorUtils'",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -3034,6 +3057,7 @@ test('integration adapters keep raw provider payloads unknown until normalized',
     'catch (e: any)',
     'e?.message',
     'value is Record<string, any>',
+    'function unknownErrorMessage(error: unknown',
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }
@@ -3211,14 +3235,15 @@ test('provider reachability keeps request and URL errors unknown', () => {
   for (const marker of [
     "unknownErrorMessage(e, 'Reachability check failed.')",
     "unknownErrorMessage(e, 'Invalid provider URL.')",
-    'function unknownErrorMessage(error: unknown, fallback: string): string',
-    "Reflect.get(error, 'message')",
+    "import { unknownErrorMessage } from './errorUtils'",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
   for (const marker of [
     'catch (e: any)',
     'e?.message',
+    'function unknownErrorMessage(error: unknown',
+    "Reflect.get(error, 'message')",
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }

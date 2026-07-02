@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as tls from 'tls';
 import { URL } from 'url';
+import { unknownErrorMessage } from './errorUtils';
 
 export type ProviderReachabilityStatus = 'pass' | 'warn' | 'fail';
 
@@ -115,11 +116,6 @@ function requestUrl(url: URL, timeoutMs: number, method: 'HEAD' | 'GET', options
 function safeUrlLabel(url: URL): string {
   const path = url.pathname && url.pathname !== '/' ? url.pathname : '';
   return `${url.protocol}//${url.host}${path}`;
-}
-
-function unknownErrorMessage(error: unknown, fallback: string): string {
-  const message = error && typeof error === 'object' ? Reflect.get(error, 'message') : undefined;
-  return typeof message === 'string' && message.trim() ? message : fallback;
 }
 
 export function systemCaCertificatesForHttps(): string[] | undefined {

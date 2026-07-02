@@ -1,6 +1,7 @@
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { unknownErrorMessage } from './errorUtils';
 
 export interface CliProbeCommandOptions {
   timeoutMs: number;
@@ -154,14 +155,6 @@ export function runCliProbe(command: string, args: string[], options: CliProbeOp
       error: unknownErrorMessage(e, 'CLI probe failed'),
     };
   }
-}
-
-function unknownErrorMessage(error: unknown, fallback: string): string {
-  if (typeof error === 'string' && error.trim()) {
-    return error;
-  }
-  const message = error && typeof error === 'object' ? Reflect.get(error, 'message') : undefined;
-  return typeof message === 'string' && message.trim() ? message : fallback;
 }
 
 export function readClaudeAgents<T = unknown>(options: CliProbeOptions = {}): T[] {

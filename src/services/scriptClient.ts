@@ -2,6 +2,7 @@ import { execFile, execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { unknownErrorField, unknownErrorMessage } from './errorUtils';
 
 export const SCRIPTS_DIR = process.env.KRONOS_SCRIPTS_DIR || path.join(os.homedir(), '.claude', 'scripts');
 const PYTHON = findPython();
@@ -112,17 +113,8 @@ function parseScriptJson<T = unknown>(scriptName: RequiredScriptName, args: stri
 }
 
 function scriptError(scriptName: RequiredScriptName, args: string[], error: unknown): Error {
-  const stderrValue = errorField(error, 'stderr');
+  const stderrValue = unknownErrorField(error, 'stderr');
   const stderr = stderrValue ? String(stderrValue).trim() : '';
   const message = stderr || unknownErrorMessage(error, 'script failed');
   return new Error(`${scriptName} ${args.join(' ')} failed: ${message}`);
-}
-
-function unknownErrorMessage(error: unknown, fallback: string): string {
-  const message = errorField(error, 'message');
-  return typeof message === 'string' && message.trim() ? message : fallback;
-}
-
-function errorField(error: unknown, key: string): unknown {
-  return error && typeof error === 'object' ? Reflect.get(error, key) : undefined;
 }
