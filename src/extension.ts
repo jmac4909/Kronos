@@ -120,6 +120,22 @@ function openExternalHttpUrl(url: string): void {
   }
 }
 
+function runNotificationCommandAction(
+  selection: Thenable<string | undefined>,
+  actionLabel: string,
+  command: string,
+  failureFallback: string
+): void {
+  void selection.then(action => {
+    if (action !== actionLabel) { return; }
+    void vscode.commands.executeCommand(command).then(undefined, (e: unknown) => {
+      void vscode.window.showWarningMessage(unknownErrorMessage(e, failureFallback));
+    });
+  }, (e: unknown) => {
+    void vscode.window.showWarningMessage(unknownErrorMessage(e, failureFallback));
+  });
+}
+
 const BOARD_MESSAGE_COMMANDS = new Set([
   'link',
   'unlink',
@@ -932,14 +948,12 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBarItem);
   if (state.loadIssues.length > 0) {
     const loaded = state.state ? 'loaded with warnings' : 'could not load state.json';
-    vscode.window.showWarningMessage(
-      `Kronos ${loaded}. Run Doctor for details.`,
-      'Run Doctor'
-    ).then(action => {
-      if (action === 'Run Doctor') {
-        vscode.commands.executeCommand('kronos.doctor');
-      }
-    });
+    runNotificationCommandAction(
+      vscode.window.showWarningMessage(`Kronos ${loaded}. Run Doctor for details.`, 'Run Doctor'),
+      'Run Doctor',
+      'kronos.doctor',
+      'Failed to open Kronos Doctor.'
+    );
   }
 
   // --- Commands ---
@@ -3130,27 +3144,29 @@ export function activate(context: vscode.ExtensionContext) {
 
   // First-run detection
   if (!state.state || Object.keys(state.state.projects).length === 0) {
-    vscode.window.showInformationMessage(
-      'Welcome to Kronos! Run setup to configure auth and scan for projects.',
-      'Run Setup', 'Later'
-    ).then(action => {
-      if (action === 'Run Setup') {
-        vscode.commands.executeCommand('kronos.setup');
-      }
-    });
+    runNotificationCommandAction(
+      vscode.window.showInformationMessage(
+        'Welcome to Kronos! Run setup to configure auth and scan for projects.',
+        'Run Setup', 'Later'
+      ),
+      'Run Setup',
+      'kronos.setup',
+      'Failed to start Kronos setup.'
+    );
   }
 
   // Report stale worktrees from previous sessions without deleting anything automatically.
   const cleanupPreview = cleanupStaleWorktrees({ remove: false });
   if (cleanupPreview.removable > 0 || cleanupPreview.blocked > 0) {
-    vscode.window.showWarningMessage(
-      `Kronos found ${cleanupPreview.results.length} tracked worktree(s): ${cleanupPreview.removable} clean, ${cleanupPreview.blocked} need review.`,
-      'Review Cleanup'
-    ).then(action => {
-      if (action === 'Review Cleanup') {
-        vscode.commands.executeCommand('kronos.cleanupWorktrees');
-      }
-    });
+    runNotificationCommandAction(
+      vscode.window.showWarningMessage(
+        `Kronos found ${cleanupPreview.results.length} tracked worktree(s): ${cleanupPreview.removable} clean, ${cleanupPreview.blocked} need review.`,
+        'Review Cleanup'
+      ),
+      'Review Cleanup',
+      'kronos.cleanupWorktrees',
+      'Failed to open Kronos worktree cleanup.'
+    );
   }
 
   context.subscriptions.push({ dispose: () => { state.dispose(); sessionTree.dispose(); } });
