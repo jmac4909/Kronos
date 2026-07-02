@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { KRONOS_DIR } from './stateStore';
+import { unknownErrorMessage } from './errorUtils';
 
 export const ACTIVE_WORKTREES_FILE = path.join(KRONOS_DIR, 'active-worktrees.json');
 
@@ -33,8 +34,8 @@ export function loadActiveWorktreeRegistry(filePath = ACTIVE_WORKTREES_FILE): Ac
       }
       return { entries };
     }
-  } catch (e: any) {
-    return { entries: [], issue: e?.message || 'Could not parse active-worktrees.json.' };
+  } catch (e: unknown) {
+    return { entries: [], issue: unknownErrorMessage(e, 'Could not parse active-worktrees.json.') };
   }
   return { entries: [] };
 }

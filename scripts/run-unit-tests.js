@@ -1223,6 +1223,25 @@ test('worktree registry refuses to overwrite malformed registry files', () => {
     /needs manual review/,
   );
   assert.equal(fs.readFileSync(registryPath, 'utf8'), malformed);
+
+  fs.writeFileSync(registryPath, '{bad json');
+  const invalidJson = worktreeRegistry.loadActiveWorktreeRegistry(registryPath);
+  assert.match(invalidJson.issue, /Unexpected token|Expected property name/);
+
+  const source = readSourceFixture('src', 'services', 'worktreeRegistry.ts');
+  for (const marker of [
+    "import { unknownErrorMessage } from './errorUtils'",
+    'catch (e: unknown)',
+    "unknownErrorMessage(e, 'Could not parse active-worktrees.json.')",
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    'catch (e: any)',
+    'e?.message',
+  ]) {
+    assert.equal(source.includes(marker), false, marker);
+  }
 });
 
 test('process tree service centralizes stop and pause signaling behavior', () => {
