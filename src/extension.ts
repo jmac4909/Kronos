@@ -5239,10 +5239,17 @@ function openDoctorPanel(state: KronosState): void {
     status: 'warn',
     detail: 'Checking configured provider endpoints...',
   };
-  panel.webview.html = withWebviewCsp(buildDoctorHtml([...checks, pendingCheck], nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  runDoctorReachabilityChecks(state).then(reachabilityChecks => {
-    panel.webview.html = withWebviewCsp(buildDoctorHtml([...checks, ...reachabilityChecks], nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  });
+  const render = (currentChecks: DoctorCheck[]) => {
+    panel.webview.html = withWebviewCsp(buildDoctorHtml(currentChecks, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
+  };
+  render([...checks, pendingCheck]);
+  runDoctorReachabilityChecks(state)
+    .then(reachabilityChecks => render([...checks, ...reachabilityChecks]))
+    .catch((e: unknown) => render([...checks, {
+      name: 'Provider network reachability',
+      status: 'fail',
+      detail: unknownErrorMessage(e, 'Provider reachability checks failed.'),
+    }]));
 }
 
 function doctorChecksInput(state: KronosState) {
