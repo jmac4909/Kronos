@@ -79,10 +79,6 @@ const CODE_COLLISION_ACTIONS = new Set(['implement', 'in_progress', 'fix_build']
 const LIVE_MR_DIFF_LIMIT = 4;
 const LIVE_MR_DIFF_TIMEOUT_MS = 8000;
 
-function createNonce(): string {
-  return createWebviewNonce();
-}
-
 function jsonForScript(value: unknown): string {
   const json = JSON.stringify(value);
   const replacements: Record<string, string> = {
@@ -1331,7 +1327,7 @@ export function activate(context: vscode.ExtensionContext) {
         'kronosJiraBoard', 'Kronos: Jira Board',
         vscode.ViewColumn.One, { enableScripts: true }
       );
-      const nonce = createNonce();
+      const nonce = createWebviewNonce();
       const renderBoard = () => {
         panel.webview.html = withWebviewCsp(buildJiraBoardHtml(state, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
       };
@@ -1447,7 +1443,7 @@ export function activate(context: vscode.ExtensionContext) {
         'kronosTicket', `${ticketKey}: Ticket`,
         vscode.ViewColumn.One, { enableScripts: true }
       );
-      const nonce = createNonce();
+      const nonce = createWebviewNonce();
       const render = () => {
         const freshTicket = state.state?.tickets?.[ticketKey];
         if (!freshTicket) {
@@ -1999,7 +1995,7 @@ export function activate(context: vscode.ExtensionContext) {
           vscode.ViewColumn.One,
           { enableScripts: true }
         );
-        const nonce = createNonce();
+        const nonce = createWebviewNonce();
         const render = async () => {
           const data = await state.morningBrief();
           panel.webview.html = withWebviewCsp(buildDashboardHtml(state, data, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
@@ -2185,7 +2181,7 @@ export function activate(context: vscode.ExtensionContext) {
           sonarAdapter.measures(sonarKey, branch),
           sonarAdapter.issues(sonarKey, branch),
         ]);
-        const nonce = createNonce();
+        const nonce = createWebviewNonce();
         const report = buildSonarReport({
           projectName,
           branch,
@@ -2821,7 +2817,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       const panel = vscode.window.createWebviewPanel('kronosStats', 'Kronos: Session Stats', vscode.ViewColumn.One, { enableScripts: true });
-      const nonce = createNonce();
+      const nonce = createWebviewNonce();
       attachOperatorCommandHandler(panel);
       const esc = escapeHtml;
 
@@ -3285,7 +3281,7 @@ function openPromptManager(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildPromptManagerHtml(globalTemplates, projectOverrides, smokeResults, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -3371,7 +3367,7 @@ function openPromptSmokeTestsPanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildPromptSmokeTestsHtml(results, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -3397,7 +3393,7 @@ function openPromptHistoryPanel(): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildPromptHistoryHtml(snapshots, diff, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -3441,7 +3437,7 @@ function openPromptHistoryDiffPanel(diff: PromptHistoryDiff): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildPromptHistoryHtml(listPromptHistorySnapshots(25), diff, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -3614,7 +3610,7 @@ function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInvento
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   let currentInventory = initialInventory;
   let currentBackups = initialBackups;
   const render = (refresh = false) => {
@@ -3649,7 +3645,7 @@ function openStateAuditLogPanel(): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildStateAuditLogHtml(events, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -3910,7 +3906,7 @@ function openHumanReviewInbox(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   const render = () => {
     const inbox = buildHumanReviewInbox({
       state: state.state,
@@ -4082,7 +4078,7 @@ function openEvidenceGatePanel(
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   const gateTicketKeys = gates.map(gate => gate.ticketKey);
   const render = () => {
     const freshGates = options.refreshAllEvidenceGates
@@ -4134,7 +4130,7 @@ function openEvidenceHandoffPanel(plan: EvidenceHandoffPlan): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildEvidenceHandoffHtml(plan, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -4183,7 +4179,7 @@ function openEvidencePublishPanel(results: Array<EvidencePublishResult | Evidenc
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildEvidencePublishHtml(results, ticketKey, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -4381,7 +4377,7 @@ function openQueuePlannerPanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   let currentPlans: PlannedAction[] = [];
   const render = () => {
     currentPlans = planNextActions(state).slice(0, 50);
@@ -4500,7 +4496,7 @@ function openBacklogTriagePanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   const render = () => {
     const report = buildBacklogTriageReport({ state: state.state, queue: state.queue });
     panel.webview.html = withWebviewCsp(buildBacklogTriageHtml(report, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
@@ -4601,7 +4597,7 @@ function openProjectBatchPlanPanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   let currentPlans: PlannedAction[] = [];
   const render = () => {
     currentPlans = planNextActions(state);
@@ -4662,7 +4658,7 @@ function openReleaseBatchPlanPanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   let currentPlans: PlannedAction[] = [];
   const render = () => {
     currentPlans = planNextActions(state);
@@ -4724,7 +4720,7 @@ async function openCollisionReportPanel(state: KronosState): Promise<void> {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   let plans: PlannedAction[] = [];
   const render = async () => {
     plans = planNextActions(state).slice(0, 25);
@@ -4831,7 +4827,7 @@ function openQueuePlanWindowPanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   let currentPlans: PlannedAction[] = [];
   const render = () => {
     const window = planForMinutes(planNextActions(state), 120);
@@ -4862,7 +4858,7 @@ function openOvernightCandidatesPanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   let currentPlans: PlannedAction[] = [];
   const render = () => {
     currentPlans = overnightCandidatePlans(planNextActions(state), 20);
@@ -4920,7 +4916,7 @@ function openAgentQualityScorePanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildAgentQualityScoreHtml(score, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -4971,7 +4967,7 @@ function openTrendMetricsPanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildTrendMetricsHtml(report, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -5025,7 +5021,7 @@ function openAgingReportPanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   const render = () => {
     const report = analyzeAging({
       tickets: state.state?.tickets || {},
@@ -5067,7 +5063,7 @@ function openIntegrationManifestPanel(): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildIntegrationManifestHtml(status, audit, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -5187,7 +5183,7 @@ function openProfilesPanel(): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildProfilesHtml(active, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel);
 }
@@ -5236,7 +5232,7 @@ function openDoctorPanel(state: KronosState): void {
     vscode.ViewColumn.One,
     { enableScripts: true }
   );
-  const nonce = createNonce();
+  const nonce = createWebviewNonce();
   attachOperatorCommandHandler(panel);
   const pendingCheck: DoctorCheck = {
     name: 'Provider network reachability',

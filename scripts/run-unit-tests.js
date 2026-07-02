@@ -4514,8 +4514,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   const boardHandlerSource = source.slice(boardHandlerStart, boardHandlerEnd);
   for (const marker of [
     "import { createWebviewNonce, webviewScriptCspOptions, webviewVsCodeApiScript, withWebviewCsp } from './services/webviewSecurity'",
-    'function createNonce(): string',
-    'return createWebviewNonce()',
+    'const nonce = createWebviewNonce()',
     'webviewScriptCspOptions(panel.webview.cspSource, nonce)',
     'kronosWebviewBaseCss',
     'class="kronos-shell dashboard-shell"',
@@ -4680,6 +4679,11 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     source.includes("randomBytes(16).toString('base64')"),
     false,
     'webview nonces should use hex helper, not base64',
+  );
+  assert.equal(
+    source.includes('function createNonce('),
+    false,
+    'extension webview nonces should come directly from the shared webview security helper',
   );
   assert.equal(
     source.includes('function webviewScriptCsp('),
