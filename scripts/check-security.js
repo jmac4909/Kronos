@@ -1548,14 +1548,20 @@ for (const marker of [
   'Active run: ${activeRun.id}',
   "new vscode.ThemeIcon('sync~spin'",
   'function activeRunForQueueItem(item: QueueItem, activeRuns: KronosRun[]): KronosRun | undefined',
+  'return activeRuns.find(run => runMatchesQueueItem(run, item));',
+  'function runMatchesQueueItem(run: KronosRun, item: QueueItem): boolean',
   'function runMatchesQueueTicket(run: KronosRun, item: QueueItem): boolean',
   'function runMatchesQueueProject(run: KronosRun, item: QueueItem): boolean',
+  'function runMatchesQueueProjectScope(run: KronosRun, item: QueueItem): boolean',
   'function runMatchesQueueAction(run: KronosRun, item: QueueItem): boolean',
   'run.skill === skillForAction(item.action)',
 ]) {
   if (!queueTreeProvider.includes(marker) && !extension.includes(marker)) {
     fail(`Missing queue tree active-run marker: ${marker}`);
   }
+}
+if (queueTreeProvider.includes('activeRuns.find(run => runMatchesQueueTicket(run, item))\n    || activeRuns.find')) {
+  fail('Queue active-run matching must not use broad ticket-only or project-only fallbacks.');
 }
 
 for (const marker of [

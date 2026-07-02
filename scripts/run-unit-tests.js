@@ -5712,13 +5712,21 @@ test('tree providers share action labels and icons', () => {
     'Active run: ${activeRun.id}',
     "new vscode.ThemeIcon('sync~spin'",
     'function activeRunForQueueItem(item: QueueItem, activeRuns: KronosRun[]): KronosRun | undefined',
+    'return activeRuns.find(run => runMatchesQueueItem(run, item));',
+    'function runMatchesQueueItem(run: KronosRun, item: QueueItem): boolean',
     'function runMatchesQueueTicket(run: KronosRun, item: QueueItem): boolean',
     'function runMatchesQueueProject(run: KronosRun, item: QueueItem): boolean',
+    'function runMatchesQueueProjectScope(run: KronosRun, item: QueueItem): boolean',
     'function runMatchesQueueAction(run: KronosRun, item: QueueItem): boolean',
     'run.skill === skillForAction(item.action)',
   ]) {
     assert.ok(queueTree.includes(marker), marker);
   }
+  assert.equal(
+    queueTree.includes('activeRuns.find(run => runMatchesQueueTicket(run, item))\n    || activeRuns.find'),
+    false,
+    'queue active-run matching should not mark a row active from ticket-only or project-only fallbacks',
+  );
 
   assert.ok(actionIcons.includes("case 'in_progress': return { id: 'tools'"), 'shared icons should use the valid tools codicon');
   assert.equal(actionIcons.includes("'wrench'"), false, 'shared action icons should not use the invalid wrench codicon');

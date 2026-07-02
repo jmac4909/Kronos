@@ -104,8 +104,16 @@ export class QueueTreeItem extends vscode.TreeItem {
 }
 
 function activeRunForQueueItem(item: QueueItem, activeRuns: KronosRun[]): KronosRun | undefined {
-  return activeRuns.find(run => runMatchesQueueTicket(run, item))
-    || activeRuns.find(run => runMatchesQueueProject(run, item) && runMatchesQueueAction(run, item));
+  return activeRuns.find(run => runMatchesQueueItem(run, item));
+}
+
+function runMatchesQueueItem(run: KronosRun, item: QueueItem): boolean {
+  if (item.ticket) {
+    return runMatchesQueueTicket(run, item)
+      && runMatchesQueueAction(run, item)
+      && runMatchesQueueProjectScope(run, item);
+  }
+  return runMatchesQueueProject(run, item) && runMatchesQueueAction(run, item);
 }
 
 function runMatchesQueueTicket(run: KronosRun, item: QueueItem): boolean {
@@ -113,7 +121,15 @@ function runMatchesQueueTicket(run: KronosRun, item: QueueItem): boolean {
 }
 
 function runMatchesQueueProject(run: KronosRun, item: QueueItem): boolean {
-  return Boolean((run.project && item.projects.includes(run.project)) || (run.projectPath && run.projectPath === item.project_path));
+  const projects = item.projects || [];
+  return Boolean((run.project && projects.includes(run.project)) || (run.projectPath && run.projectPath === item.project_path));
+}
+
+function runMatchesQueueProjectScope(run: KronosRun, item: QueueItem): boolean {
+  if ((item.projects || []).length === 0 && !item.project_path) {
+    return true;
+  }
+  return runMatchesQueueProject(run, item);
 }
 
 function runMatchesQueueAction(run: KronosRun, item: QueueItem): boolean {
