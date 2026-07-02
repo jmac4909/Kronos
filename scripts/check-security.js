@@ -183,6 +183,11 @@ for (const [file, source] of Object.entries({ 'src/extension.ts': extension, 'sr
     }
   }
 }
+for (const [idx, line] of extension.split(/\r?\n/).entries()) {
+  if (/^\s*vscode\.window\.withProgress\(/.test(line)) {
+    fail(`src/extension.ts:${idx + 1} must await progress tasks so command failures are surfaced.`);
+  }
+}
 for (const [file, source] of Object.entries({
   'src/extension.ts': extension,
   'src/runners/sessionDispatcher.ts': dispatcher,
@@ -476,6 +481,13 @@ for (const marker of [
   "'Open Review'",
   "'Run Center'",
   "vscode.commands.executeCommand('kronos.openMrDiff'",
+  'async function runCommandProgress',
+  'await runCommandProgress(',
+  'await vscode.window.withProgress(',
+  'unknownErrorMessage(e, failureFallback)',
+  "'Failed to refresh Kronos projects.'",
+  "'Failed to discover Kronos projects.'",
+  "'Failed to open merge request diff.'",
   'kronos.recoveryCenter',
   'kronos.stateAuditLog',
   'openStateAuditLogPanel',

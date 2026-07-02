@@ -4653,6 +4653,13 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "'Open Review'",
     "'Run Center'",
     "vscode.commands.executeCommand('kronos.openMrDiff'",
+    'async function runCommandProgress',
+    'await runCommandProgress(',
+    'await vscode.window.withProgress(',
+    'unknownErrorMessage(e, failureFallback)',
+    "'Failed to refresh Kronos projects.'",
+    "'Failed to discover Kronos projects.'",
+    "'Failed to open merge request diff.'",
     'function runQuickPickDetail',
     'This Kronos action needs a ticket context.',
     "if (command === 'evidenceGate' && ticketKey)",
@@ -4691,6 +4698,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+  assert.equal(/^\s*vscode\.window\.withProgress\(/m.test(source), false, 'progress tasks should be awaited by their command handlers');
   assert.equal(
     source.includes("randomBytes(16).toString('base64')"),
     false,

@@ -136,6 +136,21 @@ function runNotificationCommandAction(
   });
 }
 
+async function runCommandProgress(
+  options: vscode.ProgressOptions,
+  task: (
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    token: vscode.CancellationToken
+  ) => Thenable<unknown>,
+  failureFallback: string
+): Promise<void> {
+  try {
+    await vscode.window.withProgress(options, task);
+  } catch (e: unknown) {
+    vscode.window.showErrorMessage(unknownErrorMessage(e, failureFallback));
+  }
+}
+
 const BOARD_MESSAGE_COMMANDS = new Set([
   'link',
   'unlink',
@@ -960,12 +975,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('kronos.refresh', async () => {
-      vscode.window.withProgress(
+      await runCommandProgress(
         { location: vscode.ProgressLocation.Notification, title: 'Kronos: Refreshing all projects...' },
         async () => {
           await state.refresh();
           lastRefreshTime = Date.now();
-        }
+        },
+        'Failed to refresh Kronos projects.'
       );
     }),
 
@@ -1015,7 +1031,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand('kronos.discover', async () => {
-      vscode.window.withProgress(
+      await runCommandProgress(
         { location: vscode.ProgressLocation.Notification, title: 'Kronos: Scanning for projects...' },
         async () => {
           const result = await state.discover();
@@ -1090,7 +1106,8 @@ export function activate(context: vscode.ExtensionContext) {
           } catch {
             vscode.window.showErrorMessage('Failed to parse discovery results.');
           }
-        }
+        },
+        'Failed to discover Kronos projects.'
       );
     }),
 
@@ -2065,7 +2082,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (mr?.url) { openExternalHttpUrl(mr.url); }
         return;
       }
-      vscode.window.withProgress(
+      await runCommandProgress(
         { location: vscode.ProgressLocation.Notification, title: `Loading diff for ${ticketKey}...` },
         async () => {
           try {
@@ -2078,7 +2095,8 @@ export function activate(context: vscode.ExtensionContext) {
           } catch {
             vscode.window.showErrorMessage('Failed to load MR diff.');
           }
-        }
+        },
+        'Failed to open merge request diff.'
       );
     }),
 
