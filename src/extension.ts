@@ -5431,26 +5431,27 @@ function planToQueueItem(state: KronosState, plan: PlannedAction): QueueItem {
 
 function refreshAfterDispatch(state: KronosState, projectName?: string, ticketKey?: string): (code: number, run: KronosRun) => Promise<void> {
   return async (_code: number, run: KronosRun) => {
+    const resolvedTicketKey = ticketKey || run.ticket || undefined;
     if (projectName) {
       await state.refresh(projectName);
-    } else if (ticketKey) {
+    } else if (resolvedTicketKey) {
       state.reloadAndNotify();
     }
-    if (ticketKey) {
-      let ticket = state.state?.tickets[ticketKey];
+    if (resolvedTicketKey) {
+      let ticket = state.state?.tickets[resolvedTicketKey];
       if (shouldRecordRunCompletionEvidence({ run, ticket })) {
         try {
-          addTicketEvidenceNote(ticketKey, {
+          addTicketEvidenceNote(resolvedTicketKey, {
             kind: 'note',
             text: buildRunCompletionEvidenceText(run),
           });
           state.reloadAndNotify();
-          ticket = state.state?.tickets[ticketKey];
+          ticket = state.state?.tickets[resolvedTicketKey];
         } catch (e: unknown) {
           vscode.window.showWarningMessage(unknownErrorMessage(e, 'Failed to add run completion evidence.'));
         }
       }
-      run.readiness = evaluatePostRunReadiness({ run, ticketKey, ticket });
+      run.readiness = evaluatePostRunReadiness({ run, ticketKey: resolvedTicketKey, ticket });
       run.failureKind = run.readiness.failureKind;
       if (run.status === 'completed' && run.readiness.status === 'ready') {
         run.status = 'waiting_for_review';
@@ -5459,14 +5460,35 @@ function refreshAfterDispatch(state: KronosState, projectName?: string, ticketKe
       }
       writeRunRecord(run);
       if (ticket && ['await_review', 'done', 'deploy_monitor'].includes(ticket.next_action)) {
-        await removeTicketFromQueue(state, ticketKey, false);
+        await removeTicketFromQueue(state, resolvedTicketKey, false);
       }
+      await showRunCompletionToast(resolvedTicketKey, ticket, run);
     } else {
       run.readiness = evaluatePostRunReadiness({ run });
       run.failureKind = run.readiness.failureKind;
       writeRunRecord(run);
     }
   };
+}
+
+async function showRunCompletionToast(ticketKey: string, ticket: Ticket | undefined, run: KronosRun): Promise<void> {
+  if (run.status !== 'waiting_for_review') { return; }
+  const skill = run.skill || 'run';
+  const reviewTarget = ticket?.mr ? `MR !${ticket.mr.iid} ready for review` : 'ready for review';
+  const action = await vscode.window.showInformationMessage(
+    `${ticketKey} ${skill} completed - ${reviewTarget}.`,
+    'Open Review',
+    'Run Center'
+  );
+  if (action === 'Open Review') {
+    if (ticket?.mr) {
+      await vscode.commands.executeCommand('kronos.openMrDiff', { ticketKey, ticket });
+    } else {
+      await vscode.commands.executeCommand('kronos.viewTicket', { ticketKey });
+    }
+  } else if (action === 'Run Center') {
+    await vscode.commands.executeCommand('kronos.runCenter');
+  }
 }
 
 async function confirmDispatchCollisions(state: KronosState, target: {
