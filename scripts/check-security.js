@@ -185,8 +185,9 @@ for (const marker of [
 
 for (const marker of [
   'buildJiraBoardHtml(state, nonce)',
-  'Content-Security-Policy',
-  'script nonce="${nonce}"',
+  'webviewScriptCsp(panel.webview, nonce)',
+  'cspSource: webview.cspSource',
+  'script nonce="${escapeAttr(nonce)}"',
   'BOARD_MESSAGE_COMMANDS',
   'function normalizeWebviewCommand',
   'function normalizeBoardMessage',
@@ -840,9 +841,12 @@ for (const marker of [
 for (const marker of [
   'export function createWebviewNonce',
   "toString('hex')",
+  'cspSource?: string',
+  'options.cspSource',
   'export function webviewCspMeta',
   'export function withWebviewCsp',
   "default-src 'none'",
+  'style-src ${styleSrc}',
   "script-src ${scriptSrc}",
   'Content-Security-Policy',
 ]) {

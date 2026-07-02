@@ -45,6 +45,11 @@ const CLAUDE_ALLOWED_TOOL_PATTERNS = [
   'PowerShell(Get-Process *)',
 ];
 const CLAUDE_ALLOWED_TOOLS = CLAUDE_ALLOWED_TOOL_PATTERNS.join(' ');
+
+function webviewScriptCsp(webview: vscode.Webview, nonce: string) {
+  return { allowScripts: true, nonce, cspSource: webview.cspSource };
+}
+
 const RUN_CENTER_MESSAGE_COMMANDS = new Set([
   'openRunRecord',
   'openRunLog',
@@ -489,7 +494,7 @@ export function openRunCenter(options: RunCenterOptions = {}): void {
     const runs = listRuns();
     panel.webview.html = withWebviewCsp(
       buildRunCenterHtml(runs, interactive ? nonce : undefined),
-      interactive ? { allowScripts: true, nonce } : {},
+      interactive ? webviewScriptCsp(panel.webview, nonce) : {},
     );
   };
   render();
