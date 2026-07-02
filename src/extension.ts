@@ -5655,6 +5655,8 @@ async function pollReviewMergeRequests(state: KronosState): Promise<void> {
       }
       if (update.mergedNow) {
         await startDeployMonitorForMergedTicket(state, candidate.ticketKey, update.ticket);
+      } else if (update.closedNow) {
+        void vscode.window.showWarningMessage(`${candidate.ticketKey} MR closed - ticket moved to blocked.`);
       }
     } catch (e: unknown) {
       console.warn(unknownErrorMessage(e, `Failed to poll MR status for ${candidate.ticketKey}.`));

@@ -783,6 +783,11 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
       next_action: 'await_review',
       mr: { iid: 5, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/mr/5' },
     }),
+    'K-6': ticket({
+      projects: ['app'],
+      next_action: 'await_review',
+      mr: { iid: 6, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/mr/6' },
+    }),
   }), null, 2));
   const statusUpdate = ticketMutations.updateTicketMergeRequestStatus({
     ticketKey: 'K-5',
@@ -819,6 +824,24 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
   });
   assert.equal(noChange.changed, false);
   assert.equal(noChange.mergedNow, false);
+  assert.equal(noChange.closedNow, false);
+  const closedUpdate = ticketMutations.updateTicketMergeRequestStatus({
+    ticketKey: 'K-6',
+    status: {
+      state: 'closed',
+      review_status: 'changes_requested',
+    },
+    now: new Date('2026-07-02T02:05:00.000Z'),
+  });
+  assert.equal(closedUpdate.changed, true);
+  assert.equal(closedUpdate.mergedNow, false);
+  assert.equal(closedUpdate.closedNow, true);
+  assert.equal(closedUpdate.ticket.next_action, 'blocked');
+  assert.equal(closedUpdate.ticket.last_action, 'MR !6 closed; human review is needed.');
+  const closedMrTicket = JSON.parse(fs.readFileSync(stateStore.STATE_FILE, 'utf8')).tickets['K-6'];
+  assert.equal(closedMrTicket.mr.state, 'closed');
+  assert.equal(closedMrTicket.mr.review_status, 'changes_requested');
+  assert.equal(closedMrTicket.next_action, 'blocked');
 });
 
 test('queue mutation helpers centralize queue membership and ticket project links', () => {
@@ -4560,6 +4583,8 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'function pollReviewMergeRequests',
     'gitlabAdapter.mergeRequestStatus',
     'updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status })',
+    'update.closedNow',
+    'MR closed - ticket moved to blocked.',
     'startDeployMonitorForMergedTicket',
     "dispatchClaudeSession(projectPath, 'deploy-monitor', ticketKey",
     'projectNameOverride: projectName',

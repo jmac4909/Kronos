@@ -67,6 +67,7 @@ export interface MergeRequestStatusUpdate {
   ticket: Ticket;
   changed: boolean;
   mergedNow: boolean;
+  closedNow: boolean;
   previousMr: MergeRequest | null;
 }
 
@@ -194,9 +195,15 @@ export function updateTicketMergeRequestStatus(input: MergeRequestStatusInput): 
   const previousMr = cloneMergeRequest(ticket.mr);
   let changed = mergeRequestStatus(ticket.mr, input.status);
   const mergedNow = previousMr.state !== 'merged' && ticket.mr.state === 'merged';
+  const closedNow = previousMr.state !== 'closed' && ticket.mr.state === 'closed';
   if (mergedNow && ticket.next_action === 'await_review') {
     ticket.next_action = 'deploy_monitor';
     ticket.last_action = `MR !${ticket.mr.iid} merged; deploy monitor is next.`;
+    ticket.last_action_at = isoNow(input.now);
+    changed = true;
+  } else if (closedNow && ticket.next_action === 'await_review') {
+    ticket.next_action = 'blocked';
+    ticket.last_action = `MR !${ticket.mr.iid} closed; human review is needed.`;
     ticket.last_action_at = isoNow(input.now);
     changed = true;
   }
@@ -210,6 +217,7 @@ export function updateTicketMergeRequestStatus(input: MergeRequestStatusInput): 
     ticket: cloneTicket(ticket),
     changed,
     mergedNow,
+    closedNow,
     previousMr,
   };
 }
