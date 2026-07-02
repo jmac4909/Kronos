@@ -872,6 +872,18 @@ test('queue mutation helpers centralize queue membership and ticket project link
   assert.equal(queueMutations.reorderQueueItem(0, 'up').changed, false);
   assert.throws(() => queueMutations.addTicketToQueue('MISSING'), /Ticket not found/);
   assert.throws(() => queueMutations.linkTicketToProject('K-1', 'missing-project'), /Project not found/);
+
+  const source = readSourceFixture('src', 'services', 'queueMutations.ts');
+  for (const marker of [
+    'function normalizeQueueItem(item: unknown): QueueItem',
+    'function queueRecord(value: unknown): Record<string, unknown>',
+    'function queueString(value: unknown): string',
+    'function queueNullableString(value: unknown): string | null',
+    'function queueStringArray(value: unknown): string[]',
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  assert.equal(source.includes('function normalizeQueueItem(item: any): QueueItem'), false);
 });
 
 test('project mutation helpers centralize project config, scan dirs, and removal', () => {

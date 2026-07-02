@@ -251,15 +251,33 @@ function fallbackQueueItem(state: KronosState, ticketKey: string): QueueItem {
   });
 }
 
-function normalizeQueueItem(item: any): QueueItem {
+function normalizeQueueItem(item: unknown): QueueItem {
+  const record = queueRecord(item);
   return {
-    id: String(item.id || `queued-${item.ticket || Date.now()}`),
-    ticket: item.ticket || null,
-    ticket_summary: item.ticket_summary,
-    projects: Array.isArray(item.projects) ? item.projects : [],
-    project_path: String(item.project_path || ''),
-    action: String(item.action || 'implement'),
-    priority_score: Number.isFinite(Number(item.priority_score)) ? Number(item.priority_score) : 0,
-    reason: String(item.reason || ''),
+    id: queueString(record.id) || `queued-${queueString(record.ticket) || Date.now()}`,
+    ticket: queueNullableString(record.ticket),
+    ticket_summary: queueNullableString(record.ticket_summary) || undefined,
+    projects: queueStringArray(record.projects),
+    project_path: queueString(record.project_path),
+    action: queueString(record.action) || 'implement',
+    priority_score: Number.isFinite(Number(record.priority_score)) ? Number(record.priority_score) : 0,
+    reason: queueString(record.reason),
   };
+}
+
+function queueRecord(value: unknown): Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value)) ? value as Record<string, unknown> : {};
+}
+
+function queueString(value: unknown): string {
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+}
+
+function queueNullableString(value: unknown): string | null {
+  const text = queueString(value);
+  return text || null;
+}
+
+function queueStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(queueString).filter(Boolean) : [];
 }

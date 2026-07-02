@@ -846,10 +846,18 @@ for (const marker of [
   'queue-reorder',
   'queue-add-ticket',
   'ticket-link-project',
+  'function normalizeQueueItem(item: unknown): QueueItem',
+  'function queueRecord(value: unknown): Record<string, unknown>',
+  'function queueString(value: unknown): string',
+  'function queueNullableString(value: unknown): string | null',
+  'function queueStringArray(value: unknown): string[]',
 ]) {
   if (!queueMutations.includes(marker)) {
     fail(`Missing queue mutation marker: ${marker}`);
   }
+}
+if (queueMutations.includes('function normalizeQueueItem(item: any): QueueItem')) {
+  fail('Queue mutation normalization must accept unknown raw queue items.');
 }
 
 for (const marker of [
