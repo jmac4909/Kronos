@@ -85,16 +85,16 @@ export const sonarAdapter = {
     return { branches: normalizeSonarBranches(data.branches) };
   },
 
-  gate(sonarKey: string, branch: string): Promise<any> {
-    return runPipelineJson<any>(['--sonar-gate', sonarKey, '--branch', branch]);
+  gate(sonarKey: string, branch: string): Promise<unknown> {
+    return runPipelineJson<unknown>(['--sonar-gate', sonarKey, '--branch', branch]);
   },
 
-  measures(sonarKey: string, branch: string): Promise<any> {
-    return runPipelineJson<any>(['--sonar-measures', sonarKey, '--branch', branch]);
+  measures(sonarKey: string, branch: string): Promise<unknown> {
+    return runPipelineJson<unknown>(['--sonar-measures', sonarKey, '--branch', branch]);
   },
 
-  issues(sonarKey: string, branch: string): Promise<any> {
-    return runPipelineJson<any>(['--sonar-issues', sonarKey, '--branch', branch]);
+  issues(sonarKey: string, branch: string): Promise<unknown> {
+    return runPipelineJson<unknown>(['--sonar-issues', sonarKey, '--branch', branch]);
   },
 };
 
@@ -158,7 +158,7 @@ function normalizeSonarBranchStatus(value: Record<string, unknown>): SonarBranch
   return { qualityGateStatus: rawGate.trim() };
 }
 
-function parseJson(raw: string, label: string): any {
+function parseJson(raw: string, label: string): unknown {
   try {
     return JSON.parse(raw);
   } catch (e: any) {
@@ -166,7 +166,7 @@ function parseJson(raw: string, label: string): any {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 

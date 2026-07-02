@@ -2940,6 +2940,28 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
   );
 });
 
+test('integration adapters keep raw provider payloads unknown until normalized', () => {
+  const source = readSourceFixture('src', 'services', 'integrationAdapters.ts');
+  for (const marker of [
+    'gate(sonarKey: string, branch: string): Promise<unknown>',
+    'measures(sonarKey: string, branch: string): Promise<unknown>',
+    'issues(sonarKey: string, branch: string): Promise<unknown>',
+    'return runPipelineJson<unknown>',
+    'function parseJson(raw: string, label: string): unknown',
+    'function isRecord(value: unknown): value is Record<string, unknown>',
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    'Promise<any>',
+    'runPipelineJson<any>',
+    'function parseJson(raw: string, label: string): any',
+    'value is Record<string, any>',
+  ]) {
+    assert.equal(source.includes(marker), false, marker);
+  }
+});
+
 test('integration manifest reports missing, valid, and malformed manifests', () => {
   const missingPath = path.join(process.env.KRONOS_DIR, 'missing-manifest.json');
   const missing = integrationManifest.readIntegrationManifest(missingPath);
