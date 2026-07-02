@@ -3160,6 +3160,28 @@ test('integration manifest reports missing, valid, and malformed manifests', () 
   const invalidPrompt = integrationManifest.readIntegrationManifest(invalidPromptPath);
   assert.equal(invalidPrompt.valid, false);
   assert.ok(invalidPrompt.errors.some(e => e.includes('invalid prompt name')));
+
+  const invalidJsonPath = path.join(process.env.KRONOS_DIR, 'invalid-json-manifest.json');
+  fs.writeFileSync(invalidJsonPath, '{bad json');
+  const invalidJson = integrationManifest.readIntegrationManifest(invalidJsonPath);
+  assert.equal(invalidJson.present, true);
+  assert.equal(invalidJson.valid, false);
+  assert.match(invalidJson.errors[0], /Unexpected token|Expected property name/);
+
+  const source = readSourceFixture('src', 'services', 'integrationManifest.ts');
+  for (const marker of [
+    "import { unknownErrorMessage } from './errorUtils'",
+    'catch (e: unknown)',
+    "unknownErrorMessage(e, 'Could not parse integration manifest.')",
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    'catch (e: any)',
+    'e?.message',
+  ]) {
+    assert.equal(source.includes(marker), false, marker);
+  }
 });
 
 test('integration manifest audits script and prompt SHA-256 drift', () => {

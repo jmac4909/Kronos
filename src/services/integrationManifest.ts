@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { KRONOS_DIR } from './stateStore';
 import { RequiredScriptName, ScriptHealth, requiredScripts } from './scriptClient';
 import { safePromptFileName } from './fileNames';
+import { unknownErrorMessage } from './errorUtils';
 
 export const INTEGRATION_MANIFEST_FILE = path.join(KRONOS_DIR, 'manifest.json');
 
@@ -75,12 +76,12 @@ export function readIntegrationManifest(filePath = INTEGRATION_MANIFEST_FILE): I
     const manifest = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as IntegrationManifest;
     const status = validateIntegrationManifest(manifest);
     return { present: true, valid: status.errors.length === 0, path: filePath, manifest, ...status };
-  } catch (e: any) {
+  } catch (e: unknown) {
     return {
       present: true,
       valid: false,
       path: filePath,
-      errors: [e?.message || 'Could not parse integration manifest.'],
+      errors: [unknownErrorMessage(e, 'Could not parse integration manifest.')],
       warnings: [],
     };
   }
