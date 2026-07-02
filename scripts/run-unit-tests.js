@@ -4079,6 +4079,19 @@ test('post-run readiness distinguishes process completion from handoff readiness
   });
   assert.equal(waitingForReview.status, 'ready');
   assert.equal(waitingForReview.failureKind, 'none');
+  assert.equal(postRunReadiness.shouldRecordRunCompletionEvidence({
+    run: { id: 'run-1', skill: 'implement', status: 'completed' },
+    ticket: ticket({ next_action: 'await_review', projects: ['app'] }),
+  }), true);
+  assert.equal(postRunReadiness.shouldRecordRunCompletionEvidence({
+    run: { id: 'run-1', skill: 'implement', status: 'completed' },
+    ticket: readyTicket,
+  }), false);
+  assert.equal(postRunReadiness.shouldRecordRunCompletionEvidence({
+    run: { id: 'run-1', skill: 'verify-local', status: 'completed' },
+    ticket: ticket({ next_action: 'await_review', projects: ['app'] }),
+  }), false);
+  assert.match(postRunReadiness.buildRunCompletionEvidenceText({ id: 'run-1' }), /run-1 completed/);
 
   const notReady = postRunReadiness.evaluatePostRunReadiness({
     run: { status: 'completed' },
@@ -4115,6 +4128,12 @@ test('post-run readiness distinguishes process completion from handoff readiness
   const source = readSourceFixture('src', 'services', 'postRunReadiness.ts');
   for (const marker of [
     'run: unknown',
+    "import { evidenceNotes } from './evidenceData'",
+    'export function shouldRecordRunCompletionEvidence',
+    "runString(record.skill) === 'implement'",
+    "input.ticket.next_action === 'await_review'",
+    'evidenceNotes(input.ticket).length === 0',
+    'export function buildRunCompletionEvidenceText',
     'export function classifyRunFailure(run: unknown): RunFailureKind',
     'function runRecord(value: unknown): Record<string, unknown>',
     'function runString(value: unknown): string',
@@ -4310,6 +4329,11 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'function executeRunCenterAction',
     'function executeTicketDetailAction',
     'function openTicketExternalUrl',
+    'shouldRecordRunCompletionEvidence({ run, ticket })',
+    'addTicketEvidenceNote(ticketKey, {',
+    "kind: 'note'",
+    'buildRunCompletionEvidenceText(run)',
+    "unknownErrorMessage(e, 'Failed to add run completion evidence.')",
     'function runQuickPickDetail',
     'This Kronos action needs a ticket context.',
     "if (command === 'evidenceGate' && ticketKey)",

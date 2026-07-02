@@ -24,7 +24,7 @@ import { TimelineEvent, buildTicketTimeline } from './services/ticketTimeline';
 import { DispatchCollision, detectDispatchCollisions } from './services/collisionDetector';
 import { requiredScripts } from './services/scriptClient';
 import { gitlabAdapter, jiraAdapter, sonarAdapter, type MergeRequestDiffResult } from './services/integrationAdapters';
-import { evaluatePostRunReadiness } from './services/postRunReadiness';
+import { buildRunCompletionEvidenceText, evaluatePostRunReadiness, shouldRecordRunCompletionEvidence } from './services/postRunReadiness';
 import { extractAcceptanceCriteria } from './services/acceptanceCriteria';
 import type { ExistingAcceptanceCriterion } from './services/acceptanceCriteria';
 import { HumanReviewInbox, buildHumanReviewInbox } from './services/humanReviewInbox';
@@ -5390,7 +5390,19 @@ function refreshAfterDispatch(state: KronosState, projectName?: string, ticketKe
       state.reloadAndNotify();
     }
     if (ticketKey) {
-      const ticket = state.state?.tickets[ticketKey];
+      let ticket = state.state?.tickets[ticketKey];
+      if (shouldRecordRunCompletionEvidence({ run, ticket })) {
+        try {
+          addTicketEvidenceNote(ticketKey, {
+            kind: 'note',
+            text: buildRunCompletionEvidenceText(run),
+          });
+          state.reloadAndNotify();
+          ticket = state.state?.tickets[ticketKey];
+        } catch (e: unknown) {
+          vscode.window.showWarningMessage(unknownErrorMessage(e, 'Failed to add run completion evidence.'));
+        }
+      }
       run.readiness = evaluatePostRunReadiness({ run, ticketKey, ticket });
       run.failureKind = run.readiness.failureKind;
       if (run.status === 'completed' && run.readiness.status === 'ready') {

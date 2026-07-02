@@ -1,5 +1,6 @@
 import { Ticket } from '../state/types';
 import { EvidenceGateResult, evaluateEvidenceGate } from './evidenceGate';
+import { evidenceNotes } from './evidenceData';
 
 export type PostRunReadinessStatus = 'ready' | 'needs_human' | 'blocked' | 'not_ready' | 'unknown';
 export type RunFailureKind = 'none' | 'auth' | 'model' | 'script' | 'git' | 'build' | 'test' | 'sonar' | 'timeout' | 'cancelled' | 'unknown';
@@ -21,6 +22,21 @@ export interface PostRunReadiness {
 
 const HANDOFF_ACTIONS = new Set(['await_review', 'verify', 'deploy_monitor', 'done']);
 const SUCCESS_RUN_STATUSES = new Set(['completed', 'waiting_for_review']);
+
+export function shouldRecordRunCompletionEvidence(input: { run: unknown; ticket?: Ticket }): boolean {
+  if (!input.ticket) { return false; }
+  const record = runRecord(input.run);
+  return runString(record.status) === 'completed'
+    && runString(record.skill) === 'implement'
+    && input.ticket.next_action === 'await_review'
+    && evidenceNotes(input.ticket).length === 0;
+}
+
+export function buildRunCompletionEvidenceText(run: unknown): string {
+  const record = runRecord(run);
+  const runId = runString(record.id) || 'unknown run';
+  return `Kronos implement run ${runId} completed; add detailed verification evidence during review.`;
+}
 
 export function evaluatePostRunReadiness(input: {
   run: unknown;
