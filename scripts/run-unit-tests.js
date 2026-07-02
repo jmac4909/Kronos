@@ -4335,6 +4335,28 @@ test('extension publish and project command handlers normalize unknown errors', 
   }
 });
 
+test('extension MR and ticket link handlers normalize unknown errors', () => {
+  const source = readSourceFixture('src', 'extension.ts');
+  const commandStart = source.indexOf("vscode.commands.registerCommand('kronos.linkMrToTicket'");
+  const commandEnd = source.indexOf("    vscode.commands.registerCommand('kronos.sessionHistory'", commandStart);
+  assert.ok(commandStart >= 0 && commandEnd > commandStart, 'MR and ticket link command block should be present');
+  const commandSource = source.slice(commandStart, commandEnd);
+  for (const marker of [
+    "unknownErrorMessage(e, 'Failed to preview merge request link.')",
+    "unknownErrorMessage(e, 'Failed to link merge request to ticket.')",
+    "unknownErrorMessage(e, 'Failed to update ticket project links.')",
+    "unknownErrorMessage(e, 'Failed to unlink ticket.')",
+  ]) {
+    assert.ok(commandSource.includes(marker), marker);
+  }
+  for (const marker of [
+    'catch (e: any)',
+    'e?.message',
+  ]) {
+    assert.equal(commandSource.includes(marker), false, marker);
+  }
+});
+
 test('ticket detail rendering uses typed tickets and evidence records', () => {
   const extensionSource = readSourceFixture('src', 'extension.ts');
   const evidenceData = readSourceFixture('src', 'services', 'evidenceData.ts');

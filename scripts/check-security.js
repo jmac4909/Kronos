@@ -253,6 +253,10 @@ for (const marker of [
   'unknownErrorMessage(e, `Failed to remove ${name}.`)',
   "unknownErrorMessage(e, 'Could not resolve GitLab project ID.')",
   "unknownErrorMessage(e, 'Could not resolve SonarQube project key.')",
+  "unknownErrorMessage(e, 'Failed to preview merge request link.')",
+  "unknownErrorMessage(e, 'Failed to link merge request to ticket.')",
+  "unknownErrorMessage(e, 'Failed to update ticket project links.')",
+  "unknownErrorMessage(e, 'Failed to unlink ticket.')",
   'kronos.humanReviewInbox',
   'openHumanReviewInbox',
   'const HUMAN_REVIEW_MESSAGE_COMMANDS = new Set',
@@ -425,6 +429,21 @@ for (const forbidden of [
 ]) {
   if (publishProjectCommandSource.includes(forbidden)) {
     fail(`Publish/project command handlers must normalize unknown errors instead of using ${forbidden}.`);
+  }
+}
+
+const mrTicketLinkCommandStart = extension.indexOf("vscode.commands.registerCommand('kronos.linkMrToTicket'");
+const mrTicketLinkCommandEnd = extension.indexOf("    vscode.commands.registerCommand('kronos.sessionHistory'", mrTicketLinkCommandStart);
+if (mrTicketLinkCommandStart < 0 || mrTicketLinkCommandEnd <= mrTicketLinkCommandStart) {
+  fail('Missing MR and ticket link command handler block.');
+}
+const mrTicketLinkCommandSource = extension.slice(mrTicketLinkCommandStart, mrTicketLinkCommandEnd);
+for (const forbidden of [
+  'catch (e: any)',
+  'e?.message',
+]) {
+  if (mrTicketLinkCommandSource.includes(forbidden)) {
+    fail(`MR and ticket link command handlers must normalize unknown errors instead of using ${forbidden}.`);
   }
 }
 

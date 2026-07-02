@@ -2561,8 +2561,8 @@ export function activate(context: vscode.ExtensionContext) {
           targetTicketKey: ticketKey,
           jiraBaseUrl: process.env.JIRA_BASE_URL || 'https://bcbsma.atlassian.net',
         });
-      } catch (e: any) {
-        vscode.window.showErrorMessage(e?.message || 'Failed to preview merge request link.');
+      } catch (e: unknown) {
+        vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to preview merge request link.'));
         return;
       }
 
@@ -2623,8 +2623,8 @@ export function activate(context: vscode.ExtensionContext) {
         });
         state.reloadAndNotify();
         vscode.window.showInformationMessage(`Linked MR !${orphan.mr.iid} → ${ticketKey}`);
-      } catch (e: any) {
-        vscode.window.showErrorMessage(e?.message || 'Failed to link merge request to ticket.');
+      } catch (e: unknown) {
+        vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to link merge request to ticket.'));
       }
     }),
 
@@ -2674,8 +2674,8 @@ export function activate(context: vscode.ExtensionContext) {
           if (!selected.includes(p)) { unlinkTicketFromProject(ticketKey, p); }
         }
         state.reloadAndNotify();
-      } catch (e: any) {
-        vscode.window.showErrorMessage(e?.message || 'Failed to update ticket project links.');
+      } catch (e: unknown) {
+        vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to update ticket project links.'));
       }
     }),
 
@@ -2698,8 +2698,8 @@ export function activate(context: vscode.ExtensionContext) {
         try {
           unlinkTicketFromProject(ticketKey, projectName);
           state.reloadAndNotify();
-        } catch (e: any) {
-          vscode.window.showErrorMessage(e?.message || 'Failed to unlink ticket.');
+        } catch (e: unknown) {
+          vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to unlink ticket.'));
         }
       }
     }),
