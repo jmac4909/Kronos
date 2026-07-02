@@ -42,6 +42,7 @@ const evidenceGatePolicy = readSource('src/services/evidenceGatePolicy.ts');
 const collisionDetector = readSource('src/services/collisionDetector.ts');
 const runStatus = readSource('src/services/runStatus.ts');
 const runProgress = readSource('src/services/runProgress.ts');
+const runCenterSort = readSource('src/services/runCenterSort.ts');
 const attentionBadge = readSource('src/services/attentionBadge.ts');
 const queuePlanner = readSource('src/services/queuePlanner.ts');
 const agentQualityScore = readSource('src/services/agentQualityScore.ts');
@@ -1161,10 +1162,7 @@ for (const marker of [
   "runCenterActionButton('archiveFinishedRuns', 'Archive Finished')",
   'webviewActionPostScript',
   "${webviewActionPostScript('Kronos Run Center', [",
-  'function sortedRunCenterRuns',
-  'function compareRunCenterRuns',
-  'function runCenterStatusPriority',
-  'function runCenterSortTimestamp',
+  "import { sortedRunCenterRuns } from '../services/runCenterSort'",
   'const sortedRuns = sortedRunCenterRuns(runs)',
   'sorted by status and time',
   'writeSavedSession(session)',
@@ -1208,6 +1206,21 @@ if (dispatcher.includes("target.closest('[data-action][data-run-id]')")) {
 }
 if (dispatcher.includes('} catch {}')) {
   fail('Dispatcher must not silently swallow run stream failures.');
+}
+
+for (const marker of [
+  "import { isActiveRun } from './runStatus'",
+  'const RUN_CENTER_ACTIVE_LIKE_STATUSES = new Set([\'queued\'])',
+  'export function sortedRunCenterRuns',
+  'export function compareRunCenterRuns',
+  'export function runCenterStatusPriority',
+  'export function runCenterSortTimestamp',
+  'if (status === \'failed\' || status === \'cancelled\') { return 5; }',
+  'return 4;',
+]) {
+  if (!runCenterSort.includes(marker)) {
+    fail(`Missing run center sort marker: ${marker}`);
+  }
 }
 
 for (const marker of [

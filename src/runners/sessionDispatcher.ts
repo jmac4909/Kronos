@@ -21,6 +21,7 @@ import { unknownErrorMessage } from '../services/errorUtils';
 import { isActiveRun } from '../services/runStatus';
 import { runProgressSummary } from '../services/runProgress';
 import { runAttentionDetail } from '../services/runAttention';
+import { sortedRunCenterRuns } from '../services/runCenterSort';
 export { getAggregateStats, listSavedSessions, listSessionStoreIssues } from '../services/sessionStore';
 
 const CLAUDE_PATH = process.env.CLAUDE_PATH || 'claude';
@@ -347,33 +348,6 @@ function updateRun(run: KronosRun, patch: Partial<KronosRun>): void {
 
 export function listRuns(): KronosRun[] {
   return readRuns(100) as KronosRun[];
-}
-
-function sortedRunCenterRuns(runs: KronosRun[]): KronosRun[] {
-  return [...runs].sort(compareRunCenterRuns);
-}
-
-function compareRunCenterRuns(a: KronosRun, b: KronosRun): number {
-  return runCenterStatusPriority(a) - runCenterStatusPriority(b)
-    || runCenterSortTimestamp(b) - runCenterSortTimestamp(a)
-    || stringOrDefault(a.id, '').localeCompare(stringOrDefault(b.id, ''));
-}
-
-function runCenterStatusPriority(run: KronosRun): number {
-  if (isActiveRun(run)) { return 0; }
-  const status = stringOrDefault(run.status, 'unknown');
-  if (status === 'waiting_for_review') { return 1; }
-  if (status === 'needs_human') { return 2; }
-  if (status === 'completed') { return 3; }
-  if (status === 'failed' || status === 'cancelled') { return 4; }
-  return 5;
-}
-
-function runCenterSortTimestamp(run: KronosRun): number {
-  const status = stringOrDefault(run.status, 'unknown');
-  const preferred = isActiveRun(run) ? run.startedAt : run.endedAt || run.startedAt;
-  const fallback = status === 'completed' || status === 'failed' || status === 'cancelled' ? run.startedAt : run.endedAt;
-  return toValidDate(preferred)?.getTime() || toValidDate(fallback)?.getTime() || 0;
 }
 
 export interface DispatchOptions {

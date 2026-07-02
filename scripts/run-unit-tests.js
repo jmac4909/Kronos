@@ -60,6 +60,7 @@ const webviewSecurity = require('../out/services/webviewSecurity.js');
 const runStatus = require('../out/services/runStatus.js');
 const runProgress = require('../out/services/runProgress.js');
 const runAttention = require('../out/services/runAttention.js');
+const runCenterSort = require('../out/services/runCenterSort.js');
 const attentionBadge = require('../out/services/attentionBadge.js');
 const cliProbes = require('../out/services/cliProbes.js');
 const errorUtils = require('../out/services/errorUtils.js');
@@ -2840,10 +2841,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "runCenterActionButton('refreshPanel', 'Refresh')",
     "runCenterActionButton('archiveFinishedRuns', 'Archive Finished')",
     'webviewActionPostScript',
-    'function sortedRunCenterRuns',
-    'function compareRunCenterRuns',
-    'function runCenterStatusPriority',
-    'function runCenterSortTimestamp',
+    "import { sortedRunCenterRuns } from '../services/runCenterSort'",
     'const sortedRuns = sortedRunCenterRuns(runs)',
     'sorted by status and time',
     "runCenterActionButton('cancelRun', 'Stop'",
@@ -3447,6 +3445,38 @@ test('run progress helper summarizes active run activity', () => {
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+});
+
+test('run center sort orders active work first and failed or cancelled runs last', () => {
+  const ordered = runCenterSort.sortedRunCenterRuns([
+    { id: 'queued-new', status: 'queued', startedAt: '2026-07-02T10:00:00.000Z' },
+    { id: 'unknown-new', status: 'unknown', startedAt: '2026-07-02T10:00:00.000Z' },
+    { id: 'failed-newer', status: 'failed', startedAt: '2026-07-02T09:00:00.000Z', endedAt: '2026-07-02T09:30:00.000Z' },
+    { id: 'completed-latest', status: 'completed', startedAt: '2026-07-02T08:00:00.000Z', endedAt: '2026-07-02T12:00:00.000Z' },
+    { id: 'running-terminal', status: 'running', startedAt: '2026-07-02T07:00:00.000Z', endedAt: '2026-07-02T07:30:00.000Z' },
+    { id: 'active-old', status: 'running', startedAt: '2026-07-02T06:00:00.000Z' },
+    { id: 'active-new', status: 'preflight', startedAt: '2026-07-02T11:00:00.000Z' },
+    { id: 'review-ready', status: 'waiting_for_review', startedAt: '2026-07-02T05:00:00.000Z', endedAt: '2026-07-02T05:30:00.000Z' },
+    { id: 'needs-human', status: 'needs_human', startedAt: '2026-07-02T04:00:00.000Z', endedAt: '2026-07-02T04:30:00.000Z' },
+    { id: 'cancelled-old', status: 'cancelled', startedAt: '2026-07-02T03:00:00.000Z', endedAt: '2026-07-02T03:30:00.000Z' },
+  ]).map(run => run.id);
+
+  assert.deepEqual(ordered, [
+    'active-new',
+    'queued-new',
+    'active-old',
+    'review-ready',
+    'needs-human',
+    'completed-latest',
+    'unknown-new',
+    'running-terminal',
+    'failed-newer',
+    'cancelled-old',
+  ]);
+  assert.equal(runCenterSort.runCenterStatusPriority({ status: 'queued' }), 0);
+  assert.equal(runCenterSort.runCenterStatusPriority({ status: 'running', endedAt: '2026-07-02T00:00:00.000Z' }), 4);
+  assert.equal(runCenterSort.runCenterStatusPriority({ status: 'running' }), 0);
+  assert.equal(runCenterSort.runCenterStatusPriority({ status: 'failed' }), 5);
 });
 
 test('attention badge aggregates review, aging, and paused-run signals', () => {
