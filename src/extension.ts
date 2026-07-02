@@ -5547,14 +5547,12 @@ function planToQueueItem(state: KronosState, plan: PlannedAction): QueueItem {
 
 function refreshAfterDispatch(state: KronosState, projectName?: string, ticketKey?: string): (code: number, run: KronosRun) => Promise<void> {
   return async (_code: number, run: KronosRun) => {
-    const resolvedTicketKey = ticketKey || run.ticket || undefined;
-    if (projectName) {
-      await state.refresh(projectName);
-    } else if (resolvedTicketKey) {
-      state.reloadAndNotify();
-    }
+    let resolvedTicketKey = resolveDispatchTicketKey(ticketKey, run);
+    await reloadStateAfterDispatch(state, projectName);
+    const resolvedTicket = resolveTicketAfterDispatch(state, resolvedTicketKey);
+    resolvedTicketKey = resolvedTicket.ticketKey || resolvedTicketKey;
     if (resolvedTicketKey) {
-      let ticket = state.state?.tickets[resolvedTicketKey];
+      let ticket = resolvedTicket.ticket;
       if (shouldRecordRunCompletionEvidence({ run, ticket })) {
         try {
           addTicketEvidenceNote(resolvedTicketKey, {
@@ -5585,6 +5583,33 @@ function refreshAfterDispatch(state: KronosState, projectName?: string, ticketKe
       writeRunRecord(run);
     }
   };
+}
+
+async function reloadStateAfterDispatch(state: KronosState, projectName?: string): Promise<void> {
+  if (projectName) {
+    await state.refresh(projectName);
+  }
+  state.reloadAndNotify();
+}
+
+function resolveDispatchTicketKey(ticketKey: string | undefined, run: KronosRun): string | undefined {
+  return [ticketKey, run.ticket]
+    .map(value => typeof value === 'string' ? value.trim() : '')
+    .find(Boolean);
+}
+
+function resolveTicketAfterDispatch(state: KronosState, ticketKey: string | undefined): { ticketKey?: string; ticket?: Ticket } {
+  if (!ticketKey || !state.state?.tickets) {
+    return { ticketKey };
+  }
+  const direct = state.state.tickets[ticketKey];
+  if (direct) {
+    return { ticketKey, ticket: direct };
+  }
+  const matchedKey = Object.keys(state.state.tickets).find(key => key.toLowerCase() === ticketKey.toLowerCase());
+  return matchedKey
+    ? { ticketKey: matchedKey, ticket: state.state.tickets[matchedKey] }
+    : { ticketKey };
 }
 
 async function showRunCompletionToast(ticketKey: string, ticket: Ticket | undefined, run: KronosRun): Promise<void> {

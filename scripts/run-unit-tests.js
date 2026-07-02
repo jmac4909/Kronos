@@ -2719,7 +2719,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "unknownErrorMessage(e, 'Post-run completion callback failed.')",
     "label: 'Post-run completion callback failed'",
     "const nextStatus = run.status === 'completed' || run.status === 'waiting_for_review' ? 'needs_human' : run.status",
-    'void runCompletionCallback(opts, code ?? 1, run',
+    'await runCompletionCallback(opts, code ?? 1, run',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -4737,7 +4737,10 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "kind: 'note'",
     'buildRunCompletionEvidenceText(run, ticket)',
     "unknownErrorMessage(e, 'Failed to add run completion evidence.')",
-    'const resolvedTicketKey = ticketKey || run.ticket || undefined',
+    'let resolvedTicketKey = resolveDispatchTicketKey(ticketKey, run)',
+    'await reloadStateAfterDispatch(state, projectName)',
+    'function resolveDispatchTicketKey(ticketKey: string | undefined, run: KronosRun): string | undefined',
+    'function resolveTicketAfterDispatch(state: KronosState, ticketKey: string | undefined): { ticketKey?: string; ticket?: Ticket }',
     'await showRunCompletionToast(resolvedTicketKey, ticket, run)',
     'async function showRunCompletionToast(ticketKey: string, ticket: Ticket | undefined, run: KronosRun): Promise<void>',
     "run.status !== 'waiting_for_review'",

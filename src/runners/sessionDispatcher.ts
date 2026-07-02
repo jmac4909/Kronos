@@ -758,7 +758,7 @@ export async function dispatchClaudeSession(
   let processClosed = false;
   let spawnErrorHandled = false;
 
-  proc.on('error', (error: Error) => {
+  proc.on('error', async (error: Error) => {
     spawnErrorHandled = true;
     processClosed = true;
     const message = `Failed to launch Claude CLI: ${error.message}`;
@@ -774,7 +774,7 @@ export async function dispatchClaudeSession(
     });
     panel.webview.html = withWebviewCsp(buildProgressHtml(projectName, skill, ticket || '', events));
     saveSession(projectName, skill, ticket || '', events);
-    void runCompletionCallback(opts, 1, run, { projectName, skill, ticket: ticket || '', events, panel });
+    await runCompletionCallback(opts, 1, run, { projectName, skill, ticket: ticket || '', events, panel });
   });
 
   proc.stdout.on('data', (data: Buffer) => {
@@ -819,7 +819,7 @@ export async function dispatchClaudeSession(
     }
   });
 
-  proc.on('close', (code) => {
+  proc.on('close', async (code) => {
     if (spawnErrorHandled) { return; }
     processClosed = true;
     const persisted = readRunRecord(run.id) as KronosRun | null;
@@ -872,7 +872,7 @@ export async function dispatchClaudeSession(
       }
     }
 
-    void runCompletionCallback(opts, code ?? 1, run, { projectName, skill, ticket: ticket || '', events, panel });
+    await runCompletionCallback(opts, code ?? 1, run, { projectName, skill, ticket: ticket || '', events, panel });
   });
 
   panel.onDidDispose(() => {
