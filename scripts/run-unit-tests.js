@@ -2682,6 +2682,13 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "stringOrDefault(run.worktreePath || run.cwd, 'unknown workspace')",
     "const id = safeFileStem(`${project}-${skill}-${ticket || 'no-ticket'}-${Date.now().toString(36)}`, { fallback: 'run', maxLength: 160 })",
     "safeFileStem(ticket || skill, { fallback: 'worktree', maxLength: 80 })",
+    'onComplete?: (code: number, run: KronosRun) => void | Promise<void>',
+    'async function runCompletionCallback',
+    'await opts.onComplete(code, run)',
+    "unknownErrorMessage(e, 'Post-run completion callback failed.')",
+    "label: 'Post-run completion callback failed'",
+    "const nextStatus = run.status === 'completed' || run.status === 'waiting_for_review' ? 'needs_human' : run.status",
+    'void runCompletionCallback(opts, code ?? 1, run',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -2755,6 +2762,11 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     source.includes('readiness?: any'),
     false,
     'dispatcher should type run readiness with the post-run readiness contract',
+  );
+  assert.equal(
+    source.includes('if (opts.onComplete) { opts.onComplete'),
+    false,
+    'completion callbacks should be routed through runCompletionCallback',
   );
 
   assert.ok(

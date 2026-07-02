@@ -347,7 +347,7 @@ export function listRuns(): KronosRun[] {
 }
 
 export interface DispatchOptions {
-  onComplete?: (code: number, run: KronosRun) => void;
+  onComplete?: (code: number, run: KronosRun) => void | Promise<void>;
   customPrompt?: string;
   promptMetadata?: PromptRunMetadata;
   noWorktree?: boolean;
@@ -357,6 +357,35 @@ export interface DispatchOptions {
   extraDirs?: string[];
   workspaceCwd?: string;
   projectNameOverride?: string;
+}
+
+async function runCompletionCallback(
+  opts: DispatchOptions,
+  code: number,
+  run: KronosRun,
+  context: { projectName: string; skill: string; ticket: string; events: ProgressEvent[]; panel: vscode.WebviewPanel }
+): Promise<void> {
+  if (!opts.onComplete) { return; }
+  try {
+    await opts.onComplete(code, run);
+  } catch (e: unknown) {
+    const detail = unknownErrorMessage(e, 'Post-run completion callback failed.');
+    const event = { type: 'error' as const, label: 'Post-run completion callback failed', detail, timestamp: new Date() };
+    context.events.push(event);
+    addRunEvent(run, event);
+    const nextStatus = run.status === 'completed' || run.status === 'waiting_for_review' ? 'needs_human' : run.status;
+    const failureReason = run.failureReason
+      ? `${run.failureReason}; post-run callback failed: ${detail}`
+      : `Post-run callback failed: ${detail}`;
+    updateRun(run, {
+      status: nextStatus,
+      failureReason,
+      failureKind: classifyRunFailure({ ...run, status: nextStatus, failureReason, events: run.events }),
+    });
+    context.panel.webview.html = withWebviewCsp(buildProgressHtml(context.projectName, context.skill, context.ticket, context.events));
+    saveSession(context.projectName, context.skill, context.ticket, context.events);
+    vscode.window.showWarningMessage(`Kronos post-run completion failed for ${run.id}. See Run Center.`);
+  }
 }
 
 function resolveCliPath(value: string): string {
@@ -612,7 +641,7 @@ export async function dispatchClaudeSession(
     });
     panel.webview.html = withWebviewCsp(buildProgressHtml(projectName, skill, ticket || '', events));
     saveSession(projectName, skill, ticket || '', events);
-    if (opts.onComplete) { opts.onComplete(1, run); }
+    await runCompletionCallback(opts, 1, run, { projectName, skill, ticket: ticket || '', events, panel });
     return;
   }
 
@@ -680,7 +709,7 @@ export async function dispatchClaudeSession(
       });
       panel.webview.html = withWebviewCsp(buildProgressHtml(projectName, skill, ticket || '', events));
       saveSession(projectName, skill, ticket || '', events);
-      if (opts.onComplete) { opts.onComplete(1, run); }
+      await runCompletionCallback(opts, 1, run, { projectName, skill, ticket: ticket || '', events, panel });
       return;
     }
   }
@@ -745,7 +774,7 @@ export async function dispatchClaudeSession(
     });
     panel.webview.html = withWebviewCsp(buildProgressHtml(projectName, skill, ticket || '', events));
     saveSession(projectName, skill, ticket || '', events);
-    if (opts.onComplete) { opts.onComplete(1, run); }
+    void runCompletionCallback(opts, 1, run, { projectName, skill, ticket: ticket || '', events, panel });
   });
 
   proc.stdout.on('data', (data: Buffer) => {
@@ -832,7 +861,7 @@ export async function dispatchClaudeSession(
       }
     }
 
-    if (opts.onComplete) { opts.onComplete(code ?? 1, run); }
+    void runCompletionCallback(opts, code ?? 1, run, { projectName, skill, ticket: ticket || '', events, panel });
   });
 
   panel.onDidDispose(() => {

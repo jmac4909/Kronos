@@ -210,6 +210,9 @@ if (runCreateIndex < 0 || authPreflightIndex < 0 || runCreateIndex > authPreflig
 if (dispatcher.includes("fs.readFileSync(path.join(KRONOS_DIR, 'state.json')")) {
   fail('Dispatch must load project config through validated stateStore reads.');
 }
+if (dispatcher.includes('if (opts.onComplete) { opts.onComplete')) {
+  fail('Dispatch completion callbacks must be awaited through runCompletionCallback.');
+}
 for (const marker of [
   "import { readStateFile } from '../services/stateStore'",
   'function configuredProjectExtraDirs',
@@ -873,7 +876,13 @@ for (const marker of [
   'workspaceCwd?: string',
   'projectNameOverride?: string',
   'managedWorktreePath',
-  'onComplete?: (code: number, run: KronosRun) => void',
+  'onComplete?: (code: number, run: KronosRun) => void | Promise<void>',
+  'async function runCompletionCallback',
+  'await opts.onComplete(code, run)',
+  "unknownErrorMessage(e, 'Post-run completion callback failed.')",
+  "label: 'Post-run completion callback failed'",
+  "const nextStatus = run.status === 'completed' || run.status === 'waiting_for_review' ? 'needs_human' : run.status",
+  'void runCompletionCallback(opts, code ?? 1, run',
   'Readiness',
   'function resolveBaseRef',
   'function configuredStateBaseBranch',
