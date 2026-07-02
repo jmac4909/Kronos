@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { formatRelativeTime } from '../services/relativeTime';
 import { KronosState } from '../state/KronosState';
 import { Project, DiscoveredProject } from '../state/types';
 
@@ -63,7 +64,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeElement>
         items.push(new DetailItem(`${proj.open_mr_count} open MR(s)`, ''));
       }
       if (proj.last_polled) {
-        items.push(new DetailItem(`Refreshed ${timeAgo(proj.last_polled)}`, ''));
+        items.push(new DetailItem(`Refreshed ${formatRelativeTime(proj.last_polled)}`, ''));
       }
       items.push(new DetailItem(`Path: ${proj.path}`, ''));
       return items;
@@ -144,18 +145,4 @@ function healthToIcon(health: string): vscode.ThemeColor | undefined {
     case 'red': return new vscode.ThemeColor('testing.iconFailed');
     default: return new vscode.ThemeColor('disabledForeground');
   }
-}
-
-function timeAgo(isoDate: string): string {
-  try {
-    const timestamp = new Date(isoDate).getTime();
-    if (!Number.isFinite(timestamp)) { return isoDate; }
-    const diff = Date.now() - timestamp;
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) { return 'just now'; }
-    if (mins < 60) { return `${mins}m ago`; }
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) { return `${hours}h ago`; }
-    return `${Math.floor(hours / 24)}d ago`;
-  } catch { return isoDate; }
 }

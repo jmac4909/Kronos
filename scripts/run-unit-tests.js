@@ -60,6 +60,7 @@ const webviewDiagnostics = require('../out/services/webviewDiagnostics.js');
 const webviewSecurity = require('../out/services/webviewSecurity.js');
 const runStatus = require('../out/services/runStatus.js');
 const runProgress = require('../out/services/runProgress.js');
+const relativeTime = require('../out/services/relativeTime.js');
 const runAttention = require('../out/services/runAttention.js');
 const runCenterSort = require('../out/services/runCenterSort.js');
 const attentionBadge = require('../out/services/attentionBadge.js');
@@ -3603,6 +3604,28 @@ test('run progress helper summarizes active run activity', () => {
   }
 });
 
+test('relative time formatter handles invalid, past, and future timestamps', () => {
+  const now = new Date('2026-07-02T12:00:00.000Z');
+
+  assert.equal(relativeTime.formatRelativeTime('not-a-date', now), 'not-a-date');
+  assert.equal(relativeTime.formatRelativeTime('2026-07-02T11:59:45.000Z', now), 'just now');
+  assert.equal(relativeTime.formatRelativeTime('2026-07-02T11:55:00.000Z', now), '5m ago');
+  assert.equal(relativeTime.formatRelativeTime('2026-07-02T10:00:00.000Z', now), '2h ago');
+  assert.equal(relativeTime.formatRelativeTime('2026-06-29T12:00:00.000Z', now), '3d ago');
+  assert.equal(relativeTime.formatRelativeTime('2026-07-02T12:05:00.000Z', now), 'in 5m');
+  assert.equal(relativeTime.formatRelativeTime('2026-07-02T14:00:00.000Z', now), 'in 2h');
+  assert.equal(relativeTime.formatRelativeTime('2026-07-05T12:00:00.000Z', now), 'in 3d');
+
+  const source = readSourceFixture('src', 'services', 'relativeTime.ts');
+  for (const marker of [
+    'export function formatRelativeTime',
+    'const absMins = Math.floor(Math.abs(diffMs) / 60000)',
+    "return past ? `${value}${unit} ago` : `in ${value}${unit}`",
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+});
+
 test('run center sort orders active work first and failed or cancelled runs last', () => {
   const ordered = runCenterSort.sortedRunCenterRuns([
     { id: 'queued-new', status: 'queued', startedAt: '2026-07-02T10:00:00.000Z' },
@@ -5865,9 +5888,8 @@ test('tree providers share action labels and icons', () => {
     assert.ok(ticketTree.includes(marker), marker);
   }
   for (const marker of [
-    'const timestamp = new Date(isoDate).getTime()',
-    'if (!Number.isFinite(timestamp)) { return isoDate; }',
-    'const diff = Date.now() - timestamp',
+    "import { formatRelativeTime } from '../services/relativeTime'",
+    'formatRelativeTime(proj.last_polled)',
   ]) {
     assert.ok(projectTree.includes(marker), marker);
   }

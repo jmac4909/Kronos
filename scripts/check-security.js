@@ -76,6 +76,7 @@ const changedFiles = readSource('src/services/changedFiles.ts');
 const sonarReportView = readSource('src/services/sonarReportView.ts');
 const agingReportView = readSource('src/services/agingReportView.ts');
 const webviewHtml = readSource('src/services/webviewHtml.ts');
+const relativeTime = readSource('src/services/relativeTime.ts');
 const unitTests = readSource('scripts/run-unit-tests.js');
 const vscodeIgnore = readSource('.vscodeignore');
 const extension = sources['src/extension.ts'];
@@ -1733,12 +1734,21 @@ for (const marker of [
 }
 
 for (const marker of [
-  'const timestamp = new Date(isoDate).getTime()',
-  'if (!Number.isFinite(timestamp)) { return isoDate; }',
-  'const diff = Date.now() - timestamp',
+  "import { formatRelativeTime } from '../services/relativeTime'",
+  'formatRelativeTime(proj.last_polled)',
 ]) {
   if (!projectTreeProvider.includes(marker)) {
     fail(`Missing project tree date marker: ${marker}`);
+  }
+}
+
+for (const marker of [
+  'export function formatRelativeTime',
+  'const absMins = Math.floor(Math.abs(diffMs) / 60000)',
+  "return past ? `${value}${unit} ago` : `in ${value}${unit}`",
+]) {
+  if (!relativeTime.includes(marker)) {
+    fail(`Missing relative time marker: ${marker}`);
   }
 }
 
