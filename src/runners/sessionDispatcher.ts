@@ -346,6 +346,33 @@ export function listRuns(): KronosRun[] {
   return readRuns(100) as KronosRun[];
 }
 
+function sortedRunCenterRuns(runs: KronosRun[]): KronosRun[] {
+  return [...runs].sort(compareRunCenterRuns);
+}
+
+function compareRunCenterRuns(a: KronosRun, b: KronosRun): number {
+  return runCenterStatusPriority(a) - runCenterStatusPriority(b)
+    || runCenterSortTimestamp(b) - runCenterSortTimestamp(a)
+    || stringOrDefault(a.id, '').localeCompare(stringOrDefault(b.id, ''));
+}
+
+function runCenterStatusPriority(run: KronosRun): number {
+  if (isActiveRun(run)) { return 0; }
+  const status = stringOrDefault(run.status, 'unknown');
+  if (status === 'waiting_for_review') { return 1; }
+  if (status === 'needs_human') { return 2; }
+  if (status === 'completed') { return 3; }
+  if (status === 'failed' || status === 'cancelled') { return 4; }
+  return 5;
+}
+
+function runCenterSortTimestamp(run: KronosRun): number {
+  const status = stringOrDefault(run.status, 'unknown');
+  const preferred = isActiveRun(run) ? run.startedAt : run.endedAt || run.startedAt;
+  const fallback = status === 'completed' || status === 'failed' || status === 'cancelled' ? run.startedAt : run.endedAt;
+  return toValidDate(preferred)?.getTime() || toValidDate(fallback)?.getTime() || 0;
+}
+
 export interface DispatchOptions {
   onComplete?: (code: number, run: KronosRun) => void | Promise<void>;
   customPrompt?: string;
@@ -1200,7 +1227,8 @@ document.addEventListener('click', function(event) {
 function buildRunCenterHtml(runs: KronosRun[], nonce?: string): string {
   const interactive = Boolean(nonce);
   const actionHeader = interactive ? '<th>Actions</th>' : '';
-  const rows = runs.map(run => {
+  const sortedRuns = sortedRunCenterRuns(runs);
+  const rows = sortedRuns.map(run => {
     const status = stringOrDefault(run.status, 'unknown');
     const statusClass = escapeClass(status);
     const ended = run.endedAt ? progressDateTimeLabel(run.endedAt) : '';
@@ -1271,7 +1299,7 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string): string {
   <div class="kronos-header">
     <div>
       <h1 class="kronos-title">Kronos Run Center</h1>
-      <div class="kronos-subtitle">${runs.length} persisted run${runs.length === 1 ? '' : 's'} sorted newest first</div>
+      <div class="kronos-subtitle">${runs.length} persisted run${runs.length === 1 ? '' : 's'} sorted by status and time</div>
     </div>
     ${refreshAction}
   </div>
