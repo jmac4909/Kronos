@@ -24,7 +24,7 @@ import { RecoveryInventory, RecoveryItem, buildRecoveryInventory } from './servi
 import { TimelineEvent, buildTicketTimeline } from './services/ticketTimeline';
 import { DispatchCollision, detectDispatchCollisions } from './services/collisionDetector';
 import { requiredScripts } from './services/scriptClient';
-import { gitlabAdapter, jiraAdapter, sonarAdapter } from './services/integrationAdapters';
+import { gitlabAdapter, jiraAdapter, sonarAdapter, type MergeRequestDiffResult } from './services/integrationAdapters';
 import { evaluatePostRunReadiness } from './services/postRunReadiness';
 import { extractAcceptanceCriteria } from './services/acceptanceCriteria';
 import type { ExistingAcceptanceCriterion } from './services/acceptanceCriteria';
@@ -46,7 +46,7 @@ import { removeProject as removeProjectFromState, setProjectConfigValue, setProj
 import { DoctorCheck, runDoctorChecks as collectDoctorChecks, runDoctorReachabilityChecks as collectDoctorReachabilityChecks } from './services/doctorChecks';
 import { checkClaudeModelAccess } from './services/cliProbes';
 import { buildCombinedVerificationPlan, buildCombinedVerificationPromptVars } from './services/combinedVerification';
-import { normalizeChangedFiles, primaryChangedFilePath } from './services/changedFiles';
+import { primaryChangedFilePath } from './services/changedFiles';
 import { buildSonarReport } from './services/sonarReportView';
 import { buildAgingReportHtml } from './services/agingReportView';
 import { buildNextActionContext, buildNextActionStartDecision, skillForAction } from './services/nextActionContext';
@@ -4699,25 +4699,13 @@ async function loadMrFileHints(state: KronosState, targets: Array<{ ticketKey?: 
   for (const ticketKey of Array.from(candidateKeys).slice(0, LIVE_MR_DIFF_LIMIT)) {
     try {
       const diff = await gitlabAdapter.mergeRequestDiff(state, ticketKey, { timeout: LIVE_MR_DIFF_TIMEOUT_MS });
-      const files = normalizeChangedFileHints(diff.files);
+      const files = diff.files;
       if (files.length > 0) {
         hints[ticketKey] = files;
       }
     } catch {}
   }
   return hints;
-}
-
-function normalizeChangedFileHints(files: any[]): MergeRequestChangedFile[] {
-  return (files || []).map(file => {
-    if (typeof file === 'string') {
-      return { path: file };
-    }
-    if (file && typeof file === 'object') {
-      return file as MergeRequestChangedFile;
-    }
-    return null;
-  }).filter((file): file is MergeRequestChangedFile => Boolean(file));
 }
 
 function openQueuePlanWindowPanel(state: KronosState): void {
@@ -5739,10 +5727,9 @@ function buildDashboardWorklistHtml(lanes: DashboardWorklistLane[]): string {
   </div>`;
 }
 
-function buildDiffHtml(data: any): string {
-  const payload = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
-  const mr = payload.mr && typeof payload.mr === 'object' && !Array.isArray(payload.mr) ? payload.mr : {};
-  const files = normalizeChangedFiles(payload.files);
+function buildDiffHtml(data: MergeRequestDiffResult): string {
+  const mr = data.mr;
+  const files = data.files;
   const esc = escapeHtml;
   const fileAnchor = (idx: number, filePath: string) => `file-${idx}-${encodeURIComponent(filePath || `file-${idx + 1}`)}`;
 

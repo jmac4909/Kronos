@@ -10,10 +10,13 @@ export interface MergeRequestDiffResult {
   mr: {
     title?: string;
     iid?: number;
-    [key: string]: any;
+    source_branch?: string;
+    target_branch?: string;
+    author?: string;
+    [key: string]: unknown;
   };
   files: MergeRequestChangedFile[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface SonarBranch {

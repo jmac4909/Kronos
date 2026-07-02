@@ -3818,6 +3818,29 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
   }
 });
 
+test('merge request diff rendering uses normalized adapter results', () => {
+  const extensionSource = readSourceFixture('src', 'extension.ts');
+  const integrationAdapters = readSourceFixture('src', 'services', 'integrationAdapters.ts');
+  for (const marker of [
+    'type MergeRequestDiffResult',
+    'function buildDiffHtml(data: MergeRequestDiffResult)',
+    'const files = data.files',
+    'const files = diff.files',
+  ]) {
+    assert.ok(extensionSource.includes(marker), marker);
+  }
+  for (const marker of [
+    'function normalizeChangedFileHints',
+    'function buildDiffHtml(data: any)',
+    'normalizeChangedFiles(payload.files)',
+  ]) {
+    assert.equal(extensionSource.includes(marker), false, marker);
+  }
+  assert.ok(integrationAdapters.includes('export interface MergeRequestDiffResult'));
+  assert.ok(integrationAdapters.includes('files: normalizeChangedFiles(data.files)'));
+  assert.ok(integrationAdapters.includes('[key: string]: unknown'));
+});
+
 test('tree providers share action labels and icons', () => {
   const ticketTree = readSourceFixture('src', 'views', 'TicketTreeProvider.ts');
   const queueTree = readSourceFixture('src', 'views', 'QueueTreeProvider.ts');
