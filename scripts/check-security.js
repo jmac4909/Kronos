@@ -310,6 +310,11 @@ for (const marker of [
   'const EVIDENCE_GATE_MESSAGE_COMMANDS = new Set',
   'function evidenceGateActionButtons',
   "actionButton('extractAcceptanceCriteria', 'Extract AC'",
+  "if (request.command === 'refreshPanel') {\n      state.reloadAndNotify();\n      render();\n      return;\n    }",
+  "openEvidenceGatePanel(state, evidenceGatePanelGatesForState(state), 'Kronos Evidence Gate', { refreshAllEvidenceGates: true })",
+  'options.refreshAllEvidenceGates',
+  'function evidenceGatePanelGatesForState(state: KronosState): EvidenceGateResult[]',
+  'function isProofSensitiveAction',
   'function kronosActionPanelScript',
   'kronos.evidenceHandoff',
   'openEvidenceHandoffPanel',
@@ -497,6 +502,15 @@ if (extension.includes(".filter(([_, t]) => t.next_action === 'await_review' && 
 }
 if (extension.includes('mr: ticket.mr!')) {
   fail('Review branch helper should not need non-null assertions.');
+}
+const evidenceGateHandlerStart = extension.indexOf('const request = normalizeActionPanelMessage(msg, EVIDENCE_GATE_MESSAGE_COMMANDS);');
+const evidenceGateHandlerEnd = extension.indexOf('function openEvidenceHandoffPanel', evidenceGateHandlerStart);
+if (evidenceGateHandlerStart < 0 || evidenceGateHandlerEnd <= evidenceGateHandlerStart) {
+  fail('Missing Evidence Gate message handler block.');
+}
+const evidenceGateHandlerSource = extension.slice(evidenceGateHandlerStart, evidenceGateHandlerEnd);
+if (!evidenceGateHandlerSource.includes("if (request.command === 'refreshPanel') {\n      state.reloadAndNotify();\n      render();\n      return;\n    }")) {
+  fail('Evidence Gate refresh should reload state before rendering.');
 }
 for (const forbidden of [
   "actionButton('openEvidenceGate'",

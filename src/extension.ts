@@ -1724,9 +1724,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showWarningMessage('No Kronos state loaded.');
         return;
       }
-      const gates = evaluateEvidenceGates(state.state.tickets)
-        .filter(gate => gate.status !== 'pass' || ['await_review', 'verify', 'deploy_monitor', 'done'].includes(state.state!.tickets[gate.ticketKey]?.next_action));
-      openEvidenceGatePanel(state, gates, 'Kronos Evidence Gate');
+      openEvidenceGatePanel(state, evidenceGatePanelGatesForState(state), 'Kronos Evidence Gate', { refreshAllEvidenceGates: true });
     }),
 
     vscode.commands.registerCommand('kronos.exportEvidence', async (treeItem: any) => {
@@ -3934,6 +3932,7 @@ function openHumanReviewInbox(state: KronosState): void {
       return;
     }
     if (request.command === 'refreshPanel') {
+      state.reloadAndNotify();
       render();
       return;
     }
@@ -4074,7 +4073,12 @@ async function startTicketFromActionPanel(state: KronosState, ticketKey: string)
   await vscode.commands.executeCommand('kronos.startQueueItem', { item: planToQueueItem(state, plan) });
 }
 
-function openEvidenceGatePanel(state: KronosState, gates: EvidenceGateResult[], title: string): void {
+function openEvidenceGatePanel(
+  state: KronosState,
+  gates: EvidenceGateResult[],
+  title: string,
+  options: { refreshAllEvidenceGates?: boolean } = {},
+): void {
   const panel = vscode.window.createWebviewPanel(
     'kronosEvidenceGate',
     title,
@@ -4084,12 +4088,14 @@ function openEvidenceGatePanel(state: KronosState, gates: EvidenceGateResult[], 
   const nonce = createNonce();
   const gateTicketKeys = gates.map(gate => gate.ticketKey);
   const render = () => {
-    const freshGates = gateTicketKeys
-      .map(ticketKey => {
-        const ticket = state.state?.tickets?.[ticketKey];
-        return ticket ? evaluateEvidenceGate(ticketKey, ticket) : undefined;
-      })
-      .filter((gate): gate is EvidenceGateResult => Boolean(gate));
+    const freshGates = options.refreshAllEvidenceGates
+      ? evidenceGatePanelGatesForState(state)
+      : gateTicketKeys
+        .map(ticketKey => {
+          const ticket = state.state?.tickets?.[ticketKey];
+          return ticket ? evaluateEvidenceGate(ticketKey, ticket) : undefined;
+        })
+        .filter((gate): gate is EvidenceGateResult => Boolean(gate));
     panel.webview.html = withWebviewCsp(buildEvidenceGateHtml(freshGates, title, nonce), webviewScriptCsp(panel.webview, nonce));
   };
   render();
@@ -4100,6 +4106,7 @@ function openEvidenceGatePanel(state: KronosState, gates: EvidenceGateResult[], 
       return;
     }
     if (request.command === 'refreshPanel') {
+      state.reloadAndNotify();
       render();
       return;
     }
@@ -4110,6 +4117,17 @@ function openEvidenceGatePanel(state: KronosState, gates: EvidenceGateResult[], 
     await executeEvidenceGateAction(request.command, request.ticket);
     render();
   });
+}
+
+function evidenceGatePanelGatesForState(state: KronosState): EvidenceGateResult[] {
+  const currentState = state.state;
+  if (!currentState) { return []; }
+  return evaluateEvidenceGates(currentState.tickets)
+    .filter(gate => gate.status !== 'pass' || isProofSensitiveAction(currentState.tickets[gate.ticketKey]?.next_action));
+}
+
+function isProofSensitiveAction(action: string | undefined): boolean {
+  return action === 'await_review' || action === 'verify' || action === 'deploy_monitor' || action === 'done';
 }
 
 function openEvidenceHandoffPanel(plan: EvidenceHandoffPlan): void {

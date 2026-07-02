@@ -4562,6 +4562,11 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "actionButton(isMissingExtraction ? 'extractAcceptanceCriteria' : 'updateAcceptanceCriteria'",
     "actionButton('refreshPanel', 'Refresh')",
     "request.command === 'refreshPanel'",
+    "if (request.command === 'refreshPanel') {\n      state.reloadAndNotify();\n      render();\n      return;\n    }",
+    "openEvidenceGatePanel(state, evidenceGatePanelGatesForState(state), 'Kronos Evidence Gate', { refreshAllEvidenceGates: true })",
+    'options.refreshAllEvidenceGates',
+    'function evidenceGatePanelGatesForState(state: KronosState): EvidenceGateResult[]',
+    'function isProofSensitiveAction',
     'function kronosActionPanelScript',
     "${webviewVsCodeApiScript('Kronos action panel')}",
     'script nonce="${escapeAttr(nonce)}"',
@@ -4668,6 +4673,14 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     source.includes('run.events[run.events.length - 1]'),
     false,
     'extension run pickers should tolerate missing or malformed run.events',
+  );
+  const evidenceGateHandlerStart = source.indexOf('const request = normalizeActionPanelMessage(msg, EVIDENCE_GATE_MESSAGE_COMMANDS);');
+  const evidenceGateHandlerEnd = source.indexOf('function openEvidenceHandoffPanel', evidenceGateHandlerStart);
+  assert.ok(evidenceGateHandlerStart >= 0 && evidenceGateHandlerEnd > evidenceGateHandlerStart, 'Evidence Gate message handler should be present');
+  const evidenceGateHandlerSource = source.slice(evidenceGateHandlerStart, evidenceGateHandlerEnd);
+  assert.ok(
+    evidenceGateHandlerSource.includes("if (request.command === 'refreshPanel') {\n      state.reloadAndNotify();\n      render();\n      return;\n    }"),
+    'Evidence Gate refresh should reload state before rendering',
   );
   assert.equal(
     source.includes(".filter(([_, t]) => t.next_action === 'await_review' && t.mr)"),
