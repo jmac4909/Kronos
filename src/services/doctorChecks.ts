@@ -1,4 +1,3 @@
-import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { KronosState, QueueState } from '../state/types';
@@ -8,7 +7,7 @@ import { KronosProfile } from './profileManager';
 import { ProviderReachabilityOptions, ProviderReachabilityTarget, probeProviderReachability } from './providerReachability';
 import { requiredScripts } from './scriptClient';
 import { KRONOS_DIR } from './stateStore';
-import { resolveGcloudCommand } from './cliProbes';
+import { defaultCliProbeCommandRunner, readableGoogleApplicationCredentials, resolveGcloudCommand } from './cliProbes';
 
 export interface DoctorCheck {
   name: string;
@@ -86,8 +85,13 @@ export function runDoctorChecks(input: DoctorChecksInput): DoctorCheck[] {
   commandCheck(checks, commandRunner, 'Python', 'python', ['--version']);
   commandCheck(checks, commandRunner, 'Git', 'git', ['--version']);
   claudeVersionCheck(checks, commandRunner);
-  const gcloudCommand = resolveGcloudCommand({ env: env as NodeJS.ProcessEnv });
-  commandCheck(checks, commandRunner, 'GCloud CLI', gcloudCommand, ['--version']);
+  const readableGacFile = readableGoogleApplicationCredentials({ env: env as NodeJS.ProcessEnv });
+  const gcloudCommand = readableGacFile ? '' : resolveGcloudCommand({ env: env as NodeJS.ProcessEnv });
+  if (readableGacFile) {
+    add('GCloud CLI', 'pass', 'Skipped because GOOGLE_APPLICATION_CREDENTIALS points to a readable file.');
+  } else {
+    commandCheck(checks, commandRunner, 'GCloud CLI', gcloudCommand, ['--version']);
+  }
 
   add('Active integration profile', 'pass', `${input.profile.label} (${input.profile.id})`);
   credentialCheck(checks, env, 'Jira credentials', input.profile.providers.jira, ['JIRA_BASE_URL', 'JIRA_EMAIL', 'JIRA_API_TOKEN']);
@@ -96,11 +100,15 @@ export function runDoctorChecks(input: DoctorChecksInput): DoctorCheck[] {
   credentialCheck(checks, env, 'SonarQube credentials', input.profile.providers.sonar, ['SONAR_HOST_URL', 'SONAR_TOKEN']);
   credentialAnyCheck(checks, env, 'GitHub Actions credentials', input.profile.providers.githubActions, ['GITHUB_TOKEN', 'GH_TOKEN']);
 
-  try {
-    commandRunner(gcloudCommand, ['auth', 'application-default', 'print-access-token'], { timeoutMs: TOKEN_TIMEOUT_MS });
-    add('GCP application default auth', 'pass', 'Token command succeeded');
-  } catch (e: any) {
-    add('GCP application default auth', 'warn', e?.message || 'Auth check failed');
+  if (readableGacFile) {
+    add('GCP application default auth', 'pass', 'GOOGLE_APPLICATION_CREDENTIALS file is readable; skipped gcloud token command.');
+  } else {
+    try {
+      commandRunner(gcloudCommand, ['auth', 'application-default', 'print-access-token'], { timeoutMs: TOKEN_TIMEOUT_MS });
+      add('GCP application default auth', 'pass', 'Token command succeeded');
+    } catch (e: any) {
+      add('GCP application default auth', 'warn', e?.message || 'Auth check failed');
+    }
   }
 
   const stateLoadError = input.stateLoadErrors?.find(error => error.target === 'state.json');
@@ -308,10 +316,8 @@ function firstProjectConfigValue(state: KronosState | null, keys: string[]): str
 }
 
 function defaultCommandRunner(command: string, args: string[], options: DoctorCommandOptions): string {
-  return execFileSync(command, args, {
-    encoding: 'utf-8',
-    timeout: options.timeoutMs,
-    windowsHide: true,
+  return defaultCliProbeCommandRunner(command, args, {
+    timeoutMs: options.timeoutMs,
     maxBuffer: MAX_COMMAND_BUFFER,
   });
 }

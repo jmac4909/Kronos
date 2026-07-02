@@ -16,6 +16,7 @@ export interface CliProbeOptions {
   platform?: string;
   env?: NodeJS.ProcessEnv;
   existsSync?: (filePath: string) => boolean;
+  accessSync?: (filePath: string, mode?: number) => void;
 }
 
 export interface CliProbeResult {
@@ -84,13 +85,56 @@ export function resolveGcloudCommand(options: Pick<CliProbeOptions, 'platform' |
     || 'gcloud.cmd';
 }
 
+export function commandNeedsCmdWrapper(command: string, platform = process.platform): boolean {
+  return platform === 'win32' && /\.(cmd|bat)$/i.test(command);
+}
+
+export function quoteWindowsCmdToken(value: string): string {
+  const escaped = String(value)
+    .replace(/%/g, '%%')
+    .replace(/(["^&|<>()])/g, '^$1');
+  return `"${escaped}"`;
+}
+
+export function windowsCmdFileInvocation(command: string, args: string[], env: NodeJS.ProcessEnv = process.env): { command: string; args: string[] } {
+  const cmd = env.ComSpec || env.COMSPEC || 'cmd.exe';
+  const shellLine = `"${[command, ...args].map(quoteWindowsCmdToken).join(' ')}"`;
+  return {
+    command: cmd,
+    args: ['/d', '/s', '/c', shellLine],
+  };
+}
+
 export function defaultCliProbeCommandRunner(command: string, args: string[], options: CliProbeCommandOptions): string {
+  if (commandNeedsCmdWrapper(command)) {
+    const invocation = windowsCmdFileInvocation(command, args);
+    return execFileSync(invocation.command, invocation.args, {
+      encoding: 'utf-8',
+      timeout: options.timeoutMs,
+      windowsHide: true,
+      maxBuffer: options.maxBuffer,
+    });
+  }
+
   return execFileSync(command, args, {
     encoding: 'utf-8',
     timeout: options.timeoutMs,
     windowsHide: true,
     maxBuffer: options.maxBuffer,
   });
+}
+
+export function readableGoogleApplicationCredentials(options: Pick<CliProbeOptions, 'env' | 'accessSync'> = {}): string | undefined {
+  const env = options.env || process.env;
+  const filePath = env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (!filePath) { return undefined; }
+  const accessSync = options.accessSync || fs.accessSync;
+  try {
+    accessSync(filePath, fs.constants.R_OK);
+    return filePath;
+  } catch {
+    return undefined;
+  }
 }
 
 export function runCliProbe(command: string, args: string[], options: CliProbeOptions = {}): CliProbeResult {
@@ -129,6 +173,12 @@ export function readClaudeAgents<T = unknown>(options: CliProbeOptions = {}): T[
 }
 
 export function checkGcloudApplicationDefaultAuth(options: CliProbeOptions = {}): CliProbeResult {
+  if (readableGoogleApplicationCredentials(options)) {
+    return {
+      ok: true,
+      output: 'GOOGLE_APPLICATION_CREDENTIALS file is readable; skipped gcloud token command.\n',
+    };
+  }
   return runCliProbe(resolveGcloudCommand(options), ['auth', 'application-default', 'print-access-token'], {
     ...options,
     timeoutMs: options.timeoutMs || GCLOUD_AUTH_TIMEOUT_MS,

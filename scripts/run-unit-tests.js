@@ -1335,6 +1335,29 @@ test('CLI probes resolve gcloud.cmd on Windows', () => {
   assert.equal(result.ok, true);
   assert.equal(calls[0].command, gcloudCmd);
   assert.deepEqual(calls[0].args, ['auth', 'application-default', 'print-access-token']);
+
+  assert.equal(cliProbes.commandNeedsCmdWrapper(gcloudCmd, 'win32'), true);
+  assert.equal(cliProbes.commandNeedsCmdWrapper(gcloudCmd, 'linux'), false);
+  const invocation = cliProbes.windowsCmdFileInvocation(gcloudCmd, ['auth', 'application-default', 'print-access-token'], {
+    ComSpec: 'C:\\Windows\\System32\\cmd.exe',
+  });
+  assert.equal(invocation.command, 'C:\\Windows\\System32\\cmd.exe');
+  assert.deepEqual(invocation.args.slice(0, 3), ['/d', '/s', '/c']);
+  assert.match(invocation.args[3], /"C:\\Users\\dev\\AppData\\Local\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud\.cmd"/);
+  assert.match(invocation.args[3], /"application-default"/);
+});
+
+test('CLI probes accept readable GOOGLE_APPLICATION_CREDENTIALS without running gcloud', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-gac-'));
+  const credentialsPath = path.join(dir, 'service-account.json');
+  fs.writeFileSync(credentialsPath, '{}');
+  const result = cliProbes.checkGcloudApplicationDefaultAuth({
+    env: { GOOGLE_APPLICATION_CREDENTIALS: credentialsPath },
+    commandRunner: () => { throw new Error('gcloud should not run'); },
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.output, /GOOGLE_APPLICATION_CREDENTIALS file is readable/);
 });
 
 test('terminal profiles prefer Windows Git Bash and avoid PowerShell gcloud shims', () => {
@@ -3229,6 +3252,38 @@ test('doctor checks centralize command, credential, project config, and reachabi
   assert.match(loadErrorByName['Session store integrity'].detail, /invalid_session_stats/);
 });
 
+test('doctor checks skip gcloud commands when GOOGLE_APPLICATION_CREDENTIALS is readable', () => {
+  const credentialsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-gac-doctor-'));
+  const credentialsPath = path.join(credentialsDir, 'credentials.json');
+  fs.writeFileSync(credentialsPath, '{}');
+  const calls = [];
+  const commandRunner = (command, args) => {
+    calls.push([command, ...args].join(' '));
+    if (command === 'python') { return 'Python 3.12.0\n'; }
+    if (command === 'git') { return 'git version 2.45.0\n'; }
+    if (command === 'claude') { return 'claude 1.2.3\n'; }
+    throw new Error(`unexpected command ${command}`);
+  };
+
+  const checks = doctorChecks.runDoctorChecks({
+    state: baseState({ 'K-GAC': ticket({ summary: 'GAC ticket' }) }),
+    queue: null,
+    profile: profileManager.resolveProfile('personal-local'),
+    requiredPrompts: [],
+    dispatchModel: 'claude-opus-4-6',
+    env: { GOOGLE_APPLICATION_CREDENTIALS: credentialsPath },
+    commandRunner,
+    kronosDir: process.env.KRONOS_DIR,
+  });
+  const byName = Object.fromEntries(checks.map(check => [check.name, check]));
+
+  assert.equal(byName['GCloud CLI'].status, 'pass');
+  assert.match(byName['GCloud CLI'].detail, /Skipped because GOOGLE_APPLICATION_CREDENTIALS/);
+  assert.equal(byName['GCP application default auth'].status, 'pass');
+  assert.match(byName['GCP application default auth'].detail, /skipped gcloud token command/);
+  assert.equal(calls.some(call => call.includes('gcloud')), false);
+});
+
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
 }
@@ -3597,6 +3652,8 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'class="kronos-shell diff-shell"',
     'id="board-filter"',
     'id="board-filter-summary"',
+    'function initKronosJiraBoard',
+    "document.addEventListener('DOMContentLoaded', initKronosJiraBoard)",
     'function applyBoardFilter',
     'let lastFocusedEl = null',
     'data-search="${attr(searchText)}"',

@@ -5359,6 +5359,7 @@ function buildJiraBoardHtml(state: KronosState, nonce: string): string {
   }
 </style>
 <script nonce="${nonce}">
+function initKronosJiraBoard() {
 const vscode = acquireVsCodeApi();
 const ticketData = ${ticketJsonRaw};
 let currentModalKey = '';
@@ -5578,6 +5579,12 @@ window.addEventListener('message', function(e) {
     });
   }
 });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initKronosJiraBoard);
+} else {
+  initKronosJiraBoard();
+}
 </script>
 </head><body><div class="kronos-shell board-shell">
   <div class="kronos-header">
