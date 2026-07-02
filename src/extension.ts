@@ -1150,6 +1150,7 @@ export function activate(context: vscode.ExtensionContext) {
         dispatchClaudeSession(projectPath, 'deploy-monitor', ticketKey, {
           onComplete: refreshAfterDispatch(state, projectName, ticketKey),
           noWorktree: true,
+          projectNameOverride: projectName,
         });
       } else {
         vscode.window.showWarningMessage('No project linked. Link the ticket to a project first.');
@@ -5666,18 +5667,19 @@ function reviewMergeRequestCandidates(state: KronosState): Array<{ ticketKey: st
 async function startDeployMonitorForMergedTicket(state: KronosState, ticketKey: string, ticket: Ticket): Promise<void> {
   const projectName = ticket.projects?.[0];
   const projectPath = getProjectPath(state, projectName);
-  if (!projectName || !projectPath || hasActiveDeployMonitorRun(projectName, ticketKey)) { return; }
+  if (!projectName || !projectPath || hasActiveDeployMonitorRun(projectName, projectPath, ticketKey)) { return; }
   await dispatchClaudeSession(projectPath, 'deploy-monitor', ticketKey, {
     onComplete: refreshAfterDispatch(state, projectName, ticketKey),
     noWorktree: true,
+    projectNameOverride: projectName,
   });
   void vscode.window.showInformationMessage(`${ticketKey} merged - deploy monitor started.`);
 }
 
-function hasActiveDeployMonitorRun(projectName: string, ticketKey: string): boolean {
+function hasActiveDeployMonitorRun(projectName: string, projectPath: string, ticketKey: string): boolean {
   return listRuns().some(run => isActiveRun(run)
     && run.skill === 'deploy-monitor'
-    && run.project === projectName
+    && (run.project === projectName || run.projectPath === projectPath)
     && (!run.ticket || run.ticket === ticketKey));
 }
 
