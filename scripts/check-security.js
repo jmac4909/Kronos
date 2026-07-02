@@ -512,6 +512,24 @@ const evidenceGateHandlerSource = extension.slice(evidenceGateHandlerStart, evid
 if (!evidenceGateHandlerSource.includes("if (request.command === 'refreshPanel') {\n      state.reloadAndNotify();\n      render();\n      return;\n    }")) {
   fail('Evidence Gate refresh should reload state before rendering.');
 }
+const dashboardHandlerStart = extension.indexOf('const request = normalizeActionPanelMessage(msg, DASHBOARD_MESSAGE_COMMANDS);');
+const dashboardHandlerEnd = extension.indexOf("    vscode.commands.registerCommand('kronos.queueMoveUp'", dashboardHandlerStart);
+if (dashboardHandlerStart < 0 || dashboardHandlerEnd <= dashboardHandlerStart) {
+  fail('Missing Dashboard message handler block.');
+}
+const dashboardHandlerSource = extension.slice(dashboardHandlerStart, dashboardHandlerEnd);
+if (!dashboardHandlerSource.includes("if (request.command === 'refreshPanel') {\n            state.reloadAndNotify();\n            await render();\n            return;\n          }")) {
+  fail('Dashboard refresh should reload state before rendering.');
+}
+const agingHandlerStart = extension.indexOf('const request = normalizeActionPanelMessage(msg, AGING_REPORT_MESSAGE_COMMANDS);');
+const agingHandlerEnd = extension.indexOf('function openIntegrationManifestPanel', agingHandlerStart);
+if (agingHandlerStart < 0 || agingHandlerEnd <= agingHandlerStart) {
+  fail('Missing Aging Report message handler block.');
+}
+const agingHandlerSource = extension.slice(agingHandlerStart, agingHandlerEnd);
+if (!agingHandlerSource.includes("if (request.command === 'refreshPanel') {\n      state.reloadAndNotify();\n      render();\n      return;\n    }")) {
+  fail('Aging Report refresh should reload state before rendering.');
+}
 for (const forbidden of [
   "actionButton('openEvidenceGate'",
   "actionButton('openRunCenter'",

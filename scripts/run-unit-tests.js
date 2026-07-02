@@ -4682,6 +4682,22 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     evidenceGateHandlerSource.includes("if (request.command === 'refreshPanel') {\n      state.reloadAndNotify();\n      render();\n      return;\n    }"),
     'Evidence Gate refresh should reload state before rendering',
   );
+  const dashboardHandlerStart = source.indexOf('const request = normalizeActionPanelMessage(msg, DASHBOARD_MESSAGE_COMMANDS);');
+  const dashboardHandlerEnd = source.indexOf("    vscode.commands.registerCommand('kronos.queueMoveUp'", dashboardHandlerStart);
+  assert.ok(dashboardHandlerStart >= 0 && dashboardHandlerEnd > dashboardHandlerStart, 'Dashboard message handler should be present');
+  const dashboardHandlerSource = source.slice(dashboardHandlerStart, dashboardHandlerEnd);
+  assert.ok(
+    dashboardHandlerSource.includes("if (request.command === 'refreshPanel') {\n            state.reloadAndNotify();\n            await render();\n            return;\n          }"),
+    'Dashboard refresh should reload state before rendering',
+  );
+  const agingHandlerStart = source.indexOf('const request = normalizeActionPanelMessage(msg, AGING_REPORT_MESSAGE_COMMANDS);');
+  const agingHandlerEnd = source.indexOf('function openIntegrationManifestPanel', agingHandlerStart);
+  assert.ok(agingHandlerStart >= 0 && agingHandlerEnd > agingHandlerStart, 'Aging Report message handler should be present');
+  const agingHandlerSource = source.slice(agingHandlerStart, agingHandlerEnd);
+  assert.ok(
+    agingHandlerSource.includes("if (request.command === 'refreshPanel') {\n      state.reloadAndNotify();\n      render();\n      return;\n    }"),
+    'Aging Report refresh should reload state before rendering',
+  );
   assert.equal(
     source.includes(".filter(([_, t]) => t.next_action === 'await_review' && t.mr)"),
     false,

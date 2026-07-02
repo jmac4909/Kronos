@@ -2016,6 +2016,7 @@ export function activate(context: vscode.ExtensionContext) {
             return;
           }
           if (request.command === 'refreshPanel') {
+            state.reloadAndNotify();
             await render();
             return;
           }
@@ -5053,6 +5054,7 @@ function openAgingReportPanel(state: KronosState): void {
       return;
     }
     if (request.command === 'refreshPanel') {
+      state.reloadAndNotify();
       render();
       return;
     }
