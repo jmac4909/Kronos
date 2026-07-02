@@ -1370,6 +1370,23 @@ test('git workspace service owns branch metadata and safe worktree lifecycle com
   });
   assert.equal(onlyClaudeArtifacts.status, 'removable');
 
+  const generatedClaudeWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-worktree-generated-'));
+  fs.mkdirSync(path.join(generatedClaudeWorkspace, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(generatedClaudeWorkspace, '.claude', 'settings.local.json'), '{}\n');
+  const generatedWarning = gitWorkspace.removeWorktreeSafely(projectPath, generatedClaudeWorkspace, {
+    runner: args => {
+      const joined = args.join(' ');
+      if (joined === 'status --porcelain') { return '?? .claude/\n?? .claude/settings.local.json\n'; }
+      if (joined === 'branch --show-current') { return ''; }
+      if (joined === `worktree remove ${generatedClaudeWorkspace}`) {
+        assert.equal(fs.existsSync(path.join(generatedClaudeWorkspace, '.claude')), false);
+        return '';
+      }
+      throw new Error(`unexpected git call: ${joined}`);
+    },
+  });
+  assert.equal(generatedWarning, null);
+
   const mixedClaudeArtifacts = gitWorkspace.inspectTrackedWorktree(entry, {
     exists: () => true,
     runner: args => {
@@ -1423,6 +1440,9 @@ test('git workspace service owns branch metadata and safe worktree lifecycle com
     "unknownErrorMessage(e, 'Could not inspect worktree.')",
     'function blockingWorktreeStatus',
     'function isIgnorableWorktreeStatusLine',
+    'function removeIgnorableWorktreeArtifacts',
+    "path.join(worktreePath, '.claude')",
+    'fs.rmSync(dotClaudePath, { recursive: true, force: true })',
     "statusPath === '.claude' || statusPath === '.claude/' || statusPath.startsWith('.claude/')",
   ]) {
     assert.ok(source.includes(marker), marker);

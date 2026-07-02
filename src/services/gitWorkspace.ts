@@ -130,6 +130,7 @@ export function removeWorktreeSafely(
     return inspected.reason;
   }
   try {
+    removeIgnorableWorktreeArtifacts(worktreePath);
     runner(['worktree', 'remove', worktreePath], { cwd: projectPath, timeoutMs: 10000 });
     options.onRemoved?.();
     return null;
@@ -185,6 +186,13 @@ function isIgnorableWorktreeStatusLine(line: string): boolean {
   }
   const statusPath = line.slice(3).trim();
   return statusPath === '.claude' || statusPath === '.claude/' || statusPath.startsWith('.claude/');
+}
+
+function removeIgnorableWorktreeArtifacts(worktreePath: string): void {
+  const dotClaudePath = path.join(worktreePath, '.claude');
+  if (fs.existsSync(dotClaudePath)) {
+    fs.rmSync(dotClaudePath, { recursive: true, force: true });
+  }
 }
 
 export function createWorkspaceDiffArtifact(
