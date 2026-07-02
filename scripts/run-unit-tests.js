@@ -5163,6 +5163,7 @@ test('extension run recovery helpers use typed run records', () => {
     'catch (e: unknown)',
     "unknownErrorMessage(e, 'Failed to resume run.')",
     "unknownErrorMessage(e, 'Failed to archive run.')",
+    'unknownErrorMessage(e, `Could not inspect run workspace ${candidate}.`)',
     "unknownErrorMessage(e, 'Failed to pause run.')",
     "unknownErrorMessage(e, 'Failed to continue run.')",
     "unknownErrorMessage(e, 'Failed to cancel run.')",
@@ -5192,6 +5193,11 @@ test('extension run recovery helpers use typed run records', () => {
     source.includes('try { await state.refresh(); } catch {}'),
     false,
     'background refresh failures should be logged',
+  );
+  assert.equal(
+    source.includes('} catch {}'),
+    false,
+    'extension helpers should not silently swallow errors',
   );
   assert.equal(
     source.includes('skip failures silently'),
@@ -5409,12 +5415,18 @@ test('extension command handlers normalize remaining unknown errors', () => {
     "unknownErrorMessage(e, 'Failed to update scan dirs.')",
     "unknownErrorMessage(e, 'Failed to restore backup.')",
     "unknownErrorMessage(e, 'Failed to snapshot integration manifest.')",
+    'unknownErrorMessage(e, `Could not load Kronos env file ${envPath}.`)',
+    'function unknownErrorCode(error: unknown): string',
+    "unknownErrorMessage(e, 'Could not inspect project remotes for setup.')",
+    'unknownErrorMessage(e, `Could not resolve MR branch for ${ticket.key}.`)',
+    'unknownErrorMessage(e, `Could not find fallback remote branch for ${ticket.key}.`)',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
   for (const marker of [
     'catch (e: any)',
     'e?.message',
+    '} catch {}',
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }

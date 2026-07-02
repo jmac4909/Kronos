@@ -499,7 +499,9 @@ function resolveRunWorkspace(run: KronosRun): string | null {
         if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
           return candidate;
         }
-      } catch {}
+      } catch (e: unknown) {
+        console.warn(unknownErrorMessage(e, `Could not inspect run workspace ${candidate}.`));
+      }
     }
   }
   return null;
@@ -986,7 +988,18 @@ function loadEnvFile(): void {
         if (!process.env[k.trim()]) { process.env[k.trim()] = val; }
       }
     }
-  } catch {}
+  } catch (e: unknown) {
+    if (unknownErrorCode(e) !== 'ENOENT') {
+      console.warn(unknownErrorMessage(e, `Could not load Kronos env file ${envPath}.`));
+    }
+  }
+}
+
+function unknownErrorCode(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return '';
+  }
+  return String(Reflect.get(error, 'code') || '');
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -2064,7 +2077,9 @@ export function activate(context: vscode.ExtensionContext) {
               } catch (e: unknown) {
                 vscode.window.showWarningMessage(unknownErrorMessage(e, 'Could not resolve SonarQube project key.'));
               }
-            } catch {}
+            } catch (e: unknown) {
+              vscode.window.showWarningMessage(unknownErrorMessage(e, 'Could not inspect project remotes for setup.'));
+            }
 
             const profile = getActiveProfile();
             writeProjectSetupConfig({
@@ -2492,13 +2507,17 @@ export function activate(context: vscode.ExtensionContext) {
           try {
             const branch = await gitlabAdapter.mergeRequestBranch(state, ticket.key);
             if (branch) { remoteBranch = `origin/${branch}`; }
-          } catch {}
+          } catch (e: unknown) {
+            console.warn(unknownErrorMessage(e, `Could not resolve MR branch for ${ticket.key}.`));
+          }
         }
         if (!remoteBranch) {
           try {
             const first = firstRemoteBranchMatching(projectPath, `*${ticket.key}*`);
             if (first) { remoteBranch = first; }
-          } catch {}
+          } catch (e: unknown) {
+            console.warn(unknownErrorMessage(e, `Could not find fallback remote branch for ${ticket.key}.`));
+          }
         }
 
         const prompt = loadPromptForDispatch(state, 'sonar-fix-branch', { SONAR_KEY: sonarKey, TICKET_KEY: ticket.key, CUSTOM_INSTRUCTIONS: instructionBlock }, projectPath);

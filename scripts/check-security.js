@@ -547,6 +547,12 @@ for (const marker of [
   "unknownErrorMessage(e, 'Failed to update scan dirs.')",
   "unknownErrorMessage(e, 'Failed to restore backup.')",
   "unknownErrorMessage(e, 'Failed to snapshot integration manifest.')",
+  'unknownErrorMessage(e, `Could not load Kronos env file ${envPath}.`)',
+  'function unknownErrorCode(error: unknown): string',
+  "unknownErrorMessage(e, 'Could not inspect project remotes for setup.')",
+  'unknownErrorMessage(e, `Could not inspect run workspace ${candidate}.`)',
+  'unknownErrorMessage(e, `Could not resolve MR branch for ${ticket.key}.`)',
+  'unknownErrorMessage(e, `Could not find fallback remote branch for ${ticket.key}.`)',
   "import { buildSonarReport, type SonarIssue }",
   'function recordFromUnknown(value: unknown): Record<string, unknown>',
   'function resolveProjectName(state: KronosState, item: unknown): string | undefined',
@@ -568,6 +574,9 @@ for (const marker of [
 }
 if (extension.includes('try { await state.refresh(); } catch {}')) {
   fail('Background Kronos refresh failures must be logged with a normalized warning.');
+}
+if (extension.includes('} catch {}')) {
+  fail('Extension helpers must not silently swallow errors.');
 }
 if (extension.includes('const ticketData: Record<string, any>')) {
   fail('Jira board ticket data payload must stay typed, not Record<string, any>.');
