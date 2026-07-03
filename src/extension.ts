@@ -221,6 +221,19 @@ function startActiveRunPanelRefresh(
   panel.onDidDispose(() => clearInterval(pollTimer));
 }
 
+function startStatusBarRunRefresh(context: vscode.ExtensionContext, state: KronosState, intervalMs: number): void {
+  const safeIntervalMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 5000;
+  let hadActiveRuns = false;
+  const timer = setInterval(() => {
+    const hasActiveRuns = listRuns().some(isActiveRun);
+    if (hasActiveRuns || hadActiveRuns) {
+      updateStatusBar(state);
+    }
+    hadActiveRuns = hasActiveRuns;
+  }, safeIntervalMs);
+  context.subscriptions.push({ dispose: () => clearInterval(timer) });
+}
+
 async function startClaudeDispatch(
   projectPath: string,
   skill: string,
@@ -1154,6 +1167,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
+  startStatusBarRunRefresh(context, state, sessionPollMs);
   if (state.loadIssues.length > 0) {
     const loaded = state.state ? 'loaded with warnings' : 'could not load state.json';
     runNotificationCommandAction(

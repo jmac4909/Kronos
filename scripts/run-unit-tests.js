@@ -6322,8 +6322,17 @@ test('extension activation tracks long-lived disposables', () => {
     'context.subscriptions.push(view, visibilitySubscription)',
     'state.onDidChange(() => updateStatusBar(state)),',
     'state.onDidSessionChange(() => updateStatusBar(state)),',
+    'startStatusBarRunRefresh(context, state, sessionPollMs)',
   ]) {
     assert.ok(activateSource.includes(marker), marker);
+  }
+  for (const marker of [
+    'function startStatusBarRunRefresh(context: vscode.ExtensionContext, state: KronosState, intervalMs: number): void',
+    'const hasActiveRuns = listRuns().some(isActiveRun)',
+    'if (hasActiveRuns || hadActiveRuns)',
+    'context.subscriptions.push({ dispose: () => clearInterval(timer) })',
+  ]) {
+    assert.ok(source.includes(marker), marker);
   }
   assert.equal(
     activateSource.includes("vscode.window.registerTreeDataProvider('kronosSessions', sessionTree);\n  vscode.window.registerTreeDataProvider('kronosTasks', taskTree);"),
