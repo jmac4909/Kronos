@@ -26,6 +26,7 @@ export class KronosScriptMissingError extends Error {
 
   constructor(scriptName: RequiredScriptName, filePath: string) {
     super(`Kronos script missing: ${filePath}`);
+    Object.setPrototypeOf(this, KronosScriptMissingError.prototype);
     this.name = 'KronosScriptMissingError';
     this.scriptName = scriptName;
     this.filePath = filePath;
@@ -33,18 +34,28 @@ export class KronosScriptMissingError extends Error {
 }
 
 export function isKronosScriptMissingError(error: unknown): error is KronosScriptMissingError {
-  return error instanceof KronosScriptMissingError;
+  if (error instanceof KronosScriptMissingError) { return true; }
+  if (!error || typeof error !== 'object') { return false; }
+  const record = error as Record<string, unknown>;
+  return record['name'] === 'KronosScriptMissingError'
+    && isRequiredScriptName(record['scriptName'])
+    && typeof record['filePath'] === 'string';
 }
 
 const DEFAULT_TIMEOUT = 60000;
 const DEFAULT_BUFFER = 10 * 1024 * 1024;
+const REQUIRED_SCRIPT_NAMES = new Set<RequiredScriptName>(['kronos_state.py', 'pipeline_monitor.py', 'gitlab_api.py']);
 
 export function requiredScripts(): ScriptHealth[] {
-  return (['kronos_state.py', 'pipeline_monitor.py', 'gitlab_api.py'] as RequiredScriptName[])
+  return Array.from(REQUIRED_SCRIPT_NAMES)
     .map(name => {
       const filePath = scriptPath(name);
       return { name, path: filePath, present: fs.existsSync(filePath) };
     });
+}
+
+function isRequiredScriptName(value: unknown): value is RequiredScriptName {
+  return typeof value === 'string' && REQUIRED_SCRIPT_NAMES.has(value as RequiredScriptName);
 }
 
 function scriptPath(scriptName: RequiredScriptName): string {
