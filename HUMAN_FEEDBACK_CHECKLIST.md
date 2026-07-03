@@ -12,14 +12,20 @@ Use this checklist for the first hands-on review. The target session is 20 to 30
 
 Alternative dev path: open this folder in VS Code and start the `Run Kronos Extension` launch configuration.
 
+## Safe Review State
+
+`npm run feedback:ready` validates and packages Kronos; it does not seed fixture tickets or write sample state under `~/.claude/kronos`.
+
+For mutation steps, use a scratch ticket that already exists in the reviewer's local `~/.claude/kronos/state.json` and is clearly safe for test evidence. If the available state only contains real work tickets, run the smoke as read-only: inspect panels and gates, but skip evidence note/check creation, export, and publish/handoff actions. Record "no safe scratch ticket available" in feedback notes.
+
 ## Smoke Flow
 
 1. Confirm the Kronos activity bar appears and all six tree views load.
 2. Open Dashboard and check whether the command center makes the current day obvious: now, next, blocked, needs human, evidence, quality, and recovery.
 3. Open the Jira Board. Try search, filters, grouping, a ticket modal, and a ticket detail view.
 4. In Ticket Detail, inspect timeline, acceptance criteria, linked MR/build/project fields, evidence ledger, and evidence gate.
-5. Add one evidence note and one evidence check to a non-critical test ticket or fixture ticket.
-6. Export evidence and open the evidence handoff panel. Confirm the comment is understandable and safe to paste manually.
+5. On the approved scratch ticket only, add one evidence note and one evidence check.
+6. On the approved scratch ticket only, export evidence and open the evidence handoff panel. Confirm the comment is understandable and safe to paste manually.
 7. Open Queue Planner, Backlog Triage, Next Best Action, Plan Next 2 Hours, and Overnight Candidates. Check whether each recommendation explains why it is next.
 8. Open Run Center. Inspect saved runs, logs, status labels, recovery actions, retry/resume affordances, and archive behavior.
 9. Open Recovery Center and Human Review Inbox. Confirm the highest-risk item is easy to identify.

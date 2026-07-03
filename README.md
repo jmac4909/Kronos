@@ -6,9 +6,9 @@ Kronos is a VS Code extension for coordinating multi-project Claude Code work. I
 
 This build is ready for local human feedback, not marketplace release. The core extension compiles, packages, and has regression coverage for state validation, prompt governance, evidence gates, queue planning, run recovery, webview escaping, and integration wrappers.
 
-The extension expects local operator state under `~/.claude/kronos` and optional integration scripts under `~/.claude/scripts`. Missing integrations should be surfaced through Kronos Doctor instead of crashing the UI.
+The extension expects local operator state under `~/.claude/kronos` and optional integration scripts under `~/.claude/scripts`. Missing integrations should be surfaced through Kronos Doctor instead of crashing the UI. Human feedback mutation steps require an explicitly safe scratch ticket in that local state; the VSIX does not bundle sample tickets.
 
-Windows webview execution has been smoke-tested in the EC2 lab on VS Code 1.127.0. Jira Board, Run Center, Evidence Gate, and Human Review Inbox reported script readiness and accepted click actions without CSP or runtime errors. The human feedback checklist remains the operator UX gate.
+Recent Windows webview smoke evidence covers Jira Board, Run Center, Evidence Gate, and Human Review Inbox script readiness and click handling. Keep snapshot-specific lab details in `WINDOWS_FEEDBACK_2026-07-02.md`; the human feedback checklist remains the operator UX gate for the target review environment.
 
 ## Quick Start
 
