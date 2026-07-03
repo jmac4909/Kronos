@@ -133,6 +133,7 @@ export interface MergeRequest {
   author?: string;
   comment_count?: number;
   last_comment_at?: string;
+  comments?: MergeRequestComment[];
   source_branch?: string;
   target_branch?: string;
   sourceBranch?: string;
@@ -141,6 +142,13 @@ export interface MergeRequest {
   head_branch?: string;
   files?: MergeRequestChangedFile[];
   changed_files?: MergeRequestChangedFile[];
+}
+
+export interface MergeRequestComment {
+  id?: string;
+  author?: string;
+  created?: string;
+  body: string;
 }
 
 export interface MergeRequestChangedFile {

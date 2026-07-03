@@ -399,7 +399,13 @@ test('state store validates queue and ticket evidence shapes', () => {
   assert.doesNotThrow(() => stateStore.validateStateFileShape({
     ...baseState({
       'K-MR': ticket({
-        mr: { iid: 3, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/3' },
+        mr: {
+          iid: 3,
+          state: 'opened',
+          review_status: 'pending_review',
+          url: 'https://gitlab.example/3',
+          comments: [{ id: 'n1', author: 'Reviewer', created: '2026-07-02T01:00:00.000Z', body: 'Please update tests.' }],
+        },
         build: { number: 4, status: 'SUCCESS', url: 'https://jenkins.example/4' },
       }),
     }),
@@ -920,6 +926,10 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
       source_branch: 'feature/K-5',
       comment_count: 2,
       last_comment_at: '2026-07-02T01:00:00.000Z',
+      comments: [
+        { id: '1', author: 'Reviewer', created: '2026-07-02T00:30:00.000Z', body: 'Looks close.' },
+        { id: '2', author: 'Reviewer', created: '2026-07-02T01:00:00.000Z', body: 'Please add a Windows check.' },
+      ],
     },
     now: new Date('2026-07-02T01:05:00.000Z'),
   });
@@ -932,6 +942,7 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
   assert.equal(updatedMrTicket.mr.state, 'merged');
   assert.equal(updatedMrTicket.mr.review_status, 'approved');
   assert.equal(updatedMrTicket.mr.comment_count, 2);
+  assert.deepEqual(updatedMrTicket.mr.comments.map(comment => comment.body), ['Looks close.', 'Please add a Windows check.']);
   assert.equal(updatedMrTicket.next_action, 'deploy_monitor');
   const noChange = ticketMutations.updateTicketMergeRequestStatus({
     ticketKey: 'K-5',
@@ -942,6 +953,10 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
       source_branch: 'feature/K-5',
       comment_count: 2,
       last_comment_at: '2026-07-02T01:00:00.000Z',
+      comments: [
+        { id: '1', author: 'Reviewer', created: '2026-07-02T00:30:00.000Z', body: 'Looks close.' },
+        { id: '2', author: 'Reviewer', created: '2026-07-02T01:00:00.000Z', body: 'Please add a Windows check.' },
+      ],
     },
   });
   assert.equal(noChange.changed, false);
@@ -4490,7 +4505,6 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
     review_status: 'pending_review',
     comment_count: 3,
     last_comment_at: '2026-07-02T04:00:00.000Z',
-    comments: [],
   });
   assert.deepEqual(integrationAdapters.normalizeMergeRequestStatus({
     mr: {
@@ -4501,7 +4515,6 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
   }), {
     state: 'opened',
     review_status: 'pending_review',
-    comments: [],
   });
   assert.deepEqual(integrationAdapters.normalizeMergeRequestComments(['plain', { body: 42 }]), [{ body: 'plain' }, { body: '' }]);
   await assert.rejects(
@@ -6511,6 +6524,9 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
     'function buildTicketHtml(key: string, ticket: Ticket',
     'const mr = ticket.mr',
     'const build = ticket.build',
+    'function mergeRequestComments(record: object | null | undefined)',
+    'const comments = mergeRequestComments(mr).slice(-5).reverse()',
+    'class="mr-comments"',
     'function existingAcceptanceCriterion(record: object)',
     'export type EvidenceRecord = object',
     'Reflect.get(record, key)',

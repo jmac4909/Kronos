@@ -201,13 +201,16 @@ class ReviewItem extends vscode.TreeItem {
     const mr = ticket.mr!;
     const reviewStatus = mr.review_status.replace(/_/g, ' ');
     const projs = ticket.projects?.join(', ') || 'unlinked';
+    const latestComment = latestMergeRequestCommentSummary(ticket);
+    const commentSuffix = mr.comment_count !== undefined ? ` · ${mr.comment_count} comment${mr.comment_count === 1 ? '' : 's'}` : '';
 
-    this.description = `${isNew ? 'NEW · ' : ''}${projs} · MR !${mr.iid} · ${reviewStatus}`;
+    this.description = `${isNew ? 'NEW · ' : ''}${projs} · MR !${mr.iid} · ${reviewStatus}${commentSuffix}`;
     this.label = `${ticketKey} — ${ticket.summary}`;
     this.tooltip = new vscode.MarkdownString(
       `**${ticketKey}**: ${ticket.summary}\n\n` +
       (isNew ? `New since you last opened the Review view.\n\n` : '') +
       `Projects: ${projs}\n\nMR: !${mr.iid} — ${reviewStatus}\n\n` +
+      (latestComment ? `Latest MR comment: ${latestComment}\n\n` : '') +
       `_Click to view diff_`
     );
     this.command = { command: 'kronos.openMrDiff', title: 'View Diff', arguments: [this] };
@@ -225,4 +228,14 @@ class ReviewItem extends vscode.TreeItem {
 
 function isReviewTicket(ticket: Ticket): boolean {
   return Boolean(ticket.mr && ticket.next_action === 'await_review' && ticket.mr.state === 'opened');
+}
+
+function latestMergeRequestCommentSummary(ticket: Ticket): string {
+  const comments = ticket.mr?.comments || [];
+  const latest = comments.at(-1);
+  if (!latest) { return ''; }
+  const author = latest.author ? `${latest.author}: ` : '';
+  const body = latest.body.replace(/\s+/g, ' ').trim();
+  const summary = body.length > 180 ? `${body.slice(0, 177)}...` : body;
+  return `${author}${summary}`;
 }

@@ -1,5 +1,5 @@
 import { ScriptRunOptions, runGitlabJson, runPipelineJson } from './scriptClient';
-import { MergeRequest, MergeRequestChangedFile } from '../state/types';
+import { MergeRequest, MergeRequestChangedFile, MergeRequestComment } from '../state/types';
 import { normalizeChangedFiles } from './changedFiles';
 import { unknownErrorMessage } from './errorUtils';
 
@@ -20,13 +20,6 @@ export interface MergeRequestDiffResult {
   [key: string]: unknown;
 }
 
-export interface MergeRequestComment {
-  id?: string;
-  author?: string;
-  created?: string;
-  body: string;
-}
-
 export interface MergeRequestStatusResult {
   state?: MergeRequest['state'];
   review_status?: MergeRequest['review_status'];
@@ -41,7 +34,7 @@ export interface MergeRequestStatusResult {
   head_branch?: string;
   comment_count?: number;
   last_comment_at?: string;
-  comments: MergeRequestComment[];
+  comments?: MergeRequestComment[];
   [key: string]: unknown;
 }
 
@@ -174,9 +167,7 @@ export function normalizeMergeRequestStatus(value: unknown): MergeRequestStatusR
     mr['last_note_at'],
     data['last_note_at'],
   ));
-  const status: MergeRequestStatusResult = {
-    comments,
-  };
+  const status: MergeRequestStatusResult = {};
 
   const state = normalizeMergeRequestState(firstDefined(mr['state'], data['state']));
   if (state) { status.state = state; }
@@ -205,6 +196,7 @@ export function normalizeMergeRequestStatus(value: unknown): MergeRequestStatusR
   copyString(status, 'branch', firstDefined(mr['branch'], data['branch']));
   copyString(status, 'head_branch', firstDefined(mr['head_branch'], data['head_branch']));
   if (commentsSource !== undefined) {
+    status.comments = comments;
     status.comment_count = comments.length;
   } else if (providedCommentCount !== undefined) {
     status.comment_count = providedCommentCount;

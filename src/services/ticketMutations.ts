@@ -1,6 +1,7 @@
 import {
   KronosState,
   MergeRequest,
+  MergeRequestComment,
   Ticket,
   TicketAcceptanceCriterion,
   TicketEvidence,
@@ -306,6 +307,7 @@ function mergeRequestStatus(target: MergeRequest, status: Partial<MergeRequest>)
   changed = setMergeRequestString(target, 'head_branch', status.head_branch) || changed;
   changed = setMergeRequestNumber(target, 'comment_count', status.comment_count) || changed;
   changed = setMergeRequestString(target, 'last_comment_at', status.last_comment_at) || changed;
+  changed = setMergeRequestComments(target, status.comments) || changed;
   return changed;
 }
 
@@ -323,6 +325,38 @@ function setMergeRequestString<K extends keyof MergeRequest>(target: MergeReques
 function setMergeRequestNumber<K extends keyof MergeRequest>(target: MergeRequest, key: K, value: unknown): boolean {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) { return false; }
   return setMergeRequestField(target, key, Math.floor(value) as MergeRequest[K]);
+}
+
+function setMergeRequestComments(target: MergeRequest, value: unknown): boolean {
+  if (value === undefined) { return false; }
+  if (!Array.isArray(value)) { return false; }
+  const comments = normalizeStoredMergeRequestComments(value);
+  if (JSON.stringify(target.comments || []) === JSON.stringify(comments)) { return false; }
+  target.comments = comments;
+  return true;
+}
+
+function normalizeStoredMergeRequestComments(value: unknown[]): MergeRequestComment[] {
+  return value
+    .map(normalizeStoredMergeRequestComment)
+    .filter((comment): comment is MergeRequestComment => Boolean(comment))
+    .slice(-10);
+}
+
+function normalizeStoredMergeRequestComment(value: unknown): MergeRequestComment | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) { return null; }
+  const record = value as Record<string, unknown>;
+  const body = optionalTrim(typeof record['body'] === 'string' ? record['body'] : undefined);
+  if (!body) { return null; }
+  const idValue = record['id'];
+  const id = typeof idValue === 'string' || typeof idValue === 'number' ? optionalTrim(String(idValue)) : undefined;
+  const author = optionalTrim(typeof record['author'] === 'string' ? record['author'] : undefined);
+  const created = optionalTrim(typeof record['created'] === 'string' ? record['created'] : undefined);
+  const comment: MergeRequestComment = { body: body.length > 500 ? `${body.slice(0, 497)}...` : body };
+  if (id) { comment.id = id; }
+  if (author) { comment.author = author; }
+  if (created) { comment.created = created; }
+  return comment;
 }
 
 function validMergeRequestState(value: unknown): MergeRequest['state'] | undefined {

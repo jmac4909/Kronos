@@ -4726,6 +4726,14 @@ function ticketStringArray(value: unknown): string[] {
     : [];
 }
 
+function mergeRequestComments(record: object | null | undefined): Array<Record<string, unknown>> {
+  if (!record) { return []; }
+  const value = Reflect.get(record, 'comments');
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => ticketRecord(item) && typeof item['body'] === 'string')
+    : [];
+}
+
 function ticketRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -6092,12 +6100,25 @@ function buildTicketHtml(key: string, ticket: Ticket, state: KronosState, nonce?
     const mrUrl = safeHttpHref(ticketStringField(mr, 'url'));
     const commentCount = ticketStringField(mr, 'comment_count');
     const lastCommentAt = ticketStringField(mr, 'last_comment_at');
+    const comments = mergeRequestComments(mr).slice(-5).reverse();
+    const commentsHtml = comments.length > 0
+      ? `<div class="mr-comments">${comments.map(comment => {
+        const author = ticketStringField(comment, 'author');
+        const created = ticketStringField(comment, 'created');
+        const body = ticketStringField(comment, 'body');
+        return `<div class="mr-comment">
+          <div class="mr-comment-meta">${author ? esc(author) : 'Reviewer'}${created ? ` - ${esc(formatWebviewDateTime(created))}` : ''}</div>
+          <div>${esc(body)}</div>
+        </div>`;
+      }).join('')}</div>`
+      : '';
     mrHtml = `<div class="section">
       <h3>Merge Request</h3>
       <div class="mr-card">
         <div><strong>MR !${esc(ticketStringField(mr, 'iid', '?'))}</strong> — <span style="color:${reviewColor}">${esc(reviewStatus.replace(/_/g, ' '))}</span></div>
         <div>State: ${esc(ticketStringField(mr, 'state', 'unknown'))}</div>
         ${commentCount ? `<div>Comments: ${esc(commentCount)}${lastCommentAt ? ` · latest ${esc(formatWebviewDateTime(lastCommentAt))}` : ''}</div>` : ''}
+        ${commentsHtml}
         ${mrUrl ? `<a href="${mrUrl}" class="link">Open in GitLab &rarr;</a>` : ''}
       </div>
     </div>`;
@@ -6158,6 +6179,9 @@ function buildTicketHtml(key: string, ticket: Ticket, state: KronosState, nonce?
   .tag.project { background: rgba(33, 150, 243, 0.2); color: var(--vscode-textLink-foreground); }
   .tag.label { border-color: var(--k-border); background: var(--k-surface-soft); color: var(--k-muted); }
   .mr-card, .build-card { padding: 12px; border: 1px solid var(--k-border); border-left: 3px solid var(--k-border); border-radius: var(--k-radius); margin: 4px 0; font-size: 13px; background: var(--k-surface-soft); }
+  .mr-comments { display: grid; gap: 7px; margin-top: 9px; }
+  .mr-comment { padding: 8px 10px; border: 1px solid var(--k-border); border-radius: var(--k-radius-sm); background: var(--k-bg); white-space: pre-wrap; word-break: break-word; }
+  .mr-comment-meta { color: var(--k-muted); font-size: 10px; font-weight: 650; margin-bottom: 4px; text-transform: uppercase; }
   .gate { padding: 12px; border: 1px solid var(--k-border); border-left: 3px solid var(--k-border); border-radius: var(--k-radius); background: var(--k-surface-soft); font-size: 12px; }
   .gate.pass { border-left-color: #4caf50; }
   .gate.warn { border-left-color: #ff9800; }

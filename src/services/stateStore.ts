@@ -447,6 +447,36 @@ function repairMergeRequest(ticket: MutableStateRecord, key: string, issues: Sta
     mr['url'] = String(mr['url']);
     addStateIssue(issues, `ticket ${key} mr.url was coerced to a string.`);
   }
+  repairMergeRequestComments(mr, key, issues);
+}
+
+function repairMergeRequestComments(mr: MutableStateRecord, key: string, issues: StateFileLoadIssue[]): void {
+  if (mr['comments'] === undefined) { return; }
+  if (!Array.isArray(mr['comments'])) {
+    delete mr['comments'];
+    addStateIssue(issues, `ticket ${key} mr.comments was invalid and was ignored.`);
+    return;
+  }
+  const comments: MutableStateRecord[] = [];
+  for (const [idx, comment] of mr['comments'].entries()) {
+    if (!isPlainObject(comment)) {
+      addStateIssue(issues, `ticket ${key} mr comment ${idx} was invalid and was ignored.`);
+      continue;
+    }
+    const body = typeof comment['body'] === 'string' ? comment['body'].trim() : '';
+    if (!body) {
+      addStateIssue(issues, `ticket ${key} mr comment ${idx} had no body and was ignored.`);
+      continue;
+    }
+    const repaired: MutableStateRecord = { body };
+    for (const field of ['id', 'author', 'created']) {
+      if (comment[field] !== undefined && comment[field] !== null) {
+        repaired[field] = String(comment[field]);
+      }
+    }
+    comments.push(repaired);
+  }
+  mr['comments'] = comments.slice(-10);
 }
 
 function repairBuildStatus(ticket: MutableStateRecord, key: string, issues: StateFileLoadIssue[]): void {
@@ -706,6 +736,27 @@ function validateMergeRequest(mr: unknown, label: string): void {
     throw new Error(`${label}.review_status is invalid`);
   }
   requireString(value['url'], `${label}.url`);
+  if (value['comments'] !== undefined) {
+    if (!Array.isArray(value['comments'])) {
+      throw new Error(`${label}.comments must be an array`);
+    }
+    for (const [idx, comment] of value['comments'].entries()) {
+      validateMergeRequestComment(comment, `${label} comment ${idx}`);
+    }
+  }
+}
+
+function validateMergeRequestComment(comment: unknown, label: string): void {
+  if (!isPlainObject(comment)) {
+    throw new Error(`${label} must be an object`);
+  }
+  const value = comment;
+  requireString(value['body'], `${label}.body`);
+  for (const field of ['id', 'author', 'created']) {
+    if (value[field] !== undefined && typeof value[field] !== 'string') {
+      throw new Error(`${label}.${field} must be a string`);
+    }
+  }
 }
 
 function validateBuildStatus(build: unknown, label: string): void {
