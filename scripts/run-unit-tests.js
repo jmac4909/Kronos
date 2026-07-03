@@ -1066,6 +1066,46 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
   assert.equal(closedMrTicket.mr.state, 'closed');
   assert.equal(closedMrTicket.mr.review_status, 'changes_requested');
   assert.equal(closedMrTicket.next_action, 'blocked');
+
+  fs.writeFileSync(stateStore.STATE_FILE, JSON.stringify(baseState({
+    'K-7': ticket({
+      projects: ['app'],
+      next_action: 'await_review',
+      mr: { iid: 7, state: 'merged', review_status: 'approved', url: 'https://gitlab.example/mr/7' },
+    }),
+    'K-8': ticket({
+      projects: ['app'],
+      next_action: 'deploy_monitor',
+      mr: { iid: 8, state: 'merged', review_status: 'approved', url: 'https://gitlab.example/mr/8' },
+    }),
+    'K-9': ticket({
+      projects: ['app'],
+      next_action: 'await_review',
+      mr: { iid: 9, state: 'closed', review_status: 'changes_requested', url: 'https://gitlab.example/mr/9' },
+    }),
+    'K-10': ticket({
+      projects: ['app'],
+      next_action: 'blocked',
+      mr: { iid: 10, state: 'closed', review_status: 'changes_requested', url: 'https://gitlab.example/mr/10' },
+    }),
+  }), null, 2));
+  const terminalReconciliations = ticketMutations.reconcileTerminalMergeRequestState({
+    now: new Date('2026-07-02T03:05:00.000Z'),
+  });
+  assert.deepEqual(terminalReconciliations.map(item => `${item.ticketKey}:${item.action}:${item.changed}`), [
+    'K-7:deploy_monitor:true',
+    'K-8:deploy_monitor:false',
+    'K-9:blocked:true',
+  ]);
+  const reconciledTerminalState = JSON.parse(fs.readFileSync(stateStore.STATE_FILE, 'utf8')).tickets;
+  assert.equal(reconciledTerminalState['K-7'].next_action, 'deploy_monitor');
+  assert.equal(reconciledTerminalState['K-7'].last_action, 'MR !7 merged; deploy monitor is next.');
+  assert.equal(reconciledTerminalState['K-7'].last_action_at, '2026-07-02T03:05:00.000Z');
+  assert.equal(reconciledTerminalState['K-8'].next_action, 'deploy_monitor');
+  assert.equal(reconciledTerminalState['K-8'].last_action, null);
+  assert.equal(reconciledTerminalState['K-9'].next_action, 'blocked');
+  assert.equal(reconciledTerminalState['K-9'].last_action, 'MR !9 closed; human review is needed.');
+  assert.equal(reconciledTerminalState['K-10'].next_action, 'blocked');
 });
 
 test('merge request notifications summarize review status and new comment changes without duplicate terminal alerts', () => {
@@ -6666,6 +6706,11 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'void poll();',
     'function pollReviewMergeRequests',
     'state.reloadAndNotify();',
+    'await reconcileTerminalReviewMergeRequests(state);',
+    'function reconcileTerminalReviewMergeRequests(state: KronosState): Promise<void>',
+    'const updates = reconcileTerminalMergeRequestState();',
+    'reviewTerminalMergeRequestActions',
+    'function hasDeployMonitorRunForTicket(ticketKey: string): boolean',
     'gitlabAdapter.mergeRequestStatus',
     'updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status })',
     'const decision = decideReviewMonitorAction(candidate.ticketKey, update)',

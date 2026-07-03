@@ -73,6 +73,14 @@ export interface MergeRequestStatusUpdate {
   previousMr: MergeRequest | null;
 }
 
+export interface TerminalMergeRequestReconciliation {
+  ticketKey: string;
+  ticket: Ticket;
+  action: 'deploy_monitor' | 'blocked';
+  changed: boolean;
+  message: string;
+}
+
 export function addTicketEvidenceNote(ticketKey: string, input: TicketEvidenceNoteInput): KronosState {
   return mutateState('add-ticket-evidence', state => {
     const ticket = requireTicket(state, ticketKey);
@@ -229,6 +237,57 @@ export function updateTicketMergeRequestStatus(input: MergeRequestStatusInput): 
     closedNow,
     previousMr,
   };
+}
+
+export function reconcileTerminalMergeRequestState(input: { now?: Date } = {}): TerminalMergeRequestReconciliation[] {
+  const state = readStateFile();
+  if (!state) {
+    throw new Error('No readable Kronos state found.');
+  }
+  validateStateFileShape(state);
+
+  const reconciled: TerminalMergeRequestReconciliation[] = [];
+  let changed = false;
+  const now = isoNow(input.now);
+  for (const [ticketKey, ticket] of Object.entries(state.tickets)) {
+    if (!ticket.mr) { continue; }
+    if (ticket.mr.state === 'merged' && (ticket.next_action === 'await_review' || ticket.next_action === 'deploy_monitor')) {
+      const wasAwaitingReview = ticket.next_action === 'await_review';
+      if (wasAwaitingReview) {
+        ticket.next_action = 'deploy_monitor';
+        ticket.last_action = `MR !${ticket.mr.iid} merged; deploy monitor is next.`;
+        ticket.last_action_at = now;
+        changed = true;
+      }
+      reconciled.push({
+        ticketKey,
+        ticket: cloneTicket(ticket),
+        action: 'deploy_monitor',
+        changed: wasAwaitingReview,
+        message: wasAwaitingReview
+          ? `MR !${ticket.mr.iid} merged; deploy monitor is next.`
+          : `MR !${ticket.mr.iid} already merged; deploy monitor is pending.`,
+      });
+    } else if (ticket.mr.state === 'closed' && ticket.next_action === 'await_review') {
+      ticket.next_action = 'blocked';
+      ticket.last_action = `MR !${ticket.mr.iid} closed; human review is needed.`;
+      ticket.last_action_at = now;
+      changed = true;
+      reconciled.push({
+        ticketKey,
+        ticket: cloneTicket(ticket),
+        action: 'blocked',
+        changed: true,
+        message: `MR !${ticket.mr.iid} closed; human review is needed.`,
+      });
+    }
+  }
+
+  if (changed) {
+    validateStateFileShape(state);
+    writeJsonFileAtomic(STATE_FILE, state, 'reconcile-terminal-mr-state');
+  }
+  return reconciled;
 }
 
 export function previewLinkMergeRequestToTicket(state: KronosState, input: LinkMergeRequestInput): LinkMergeRequestPreview {

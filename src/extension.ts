@@ -40,7 +40,7 @@ import { SafetyPlan, assessSafetyGate } from './services/safetyGate';
 import { computeTrendMetrics } from './services/trendMetrics';
 import { TicketFilter, TicketGroupBy, TICKET_FILTER_PRESETS, describeTicketFilter } from './services/ticketFilters';
 import { buildRunResumePrompt, readRunLogTail } from './services/runRecovery';
-import { addTicketEvidenceCheck, addTicketEvidenceNote, linkMergeRequestToTicket, previewLinkMergeRequestToTicket, recordTicketEnvironmentResult, replaceTicketAcceptanceCriteria, updateTicketAcceptanceCriteria, updateTicketMergeRequestStatus, type TicketEvidenceCheckInput } from './services/ticketMutations';
+import { addTicketEvidenceCheck, addTicketEvidenceNote, linkMergeRequestToTicket, previewLinkMergeRequestToTicket, reconcileTerminalMergeRequestState, recordTicketEnvironmentResult, replaceTicketAcceptanceCriteria, updateTicketAcceptanceCriteria, updateTicketMergeRequestStatus, type TicketEvidenceCheckInput } from './services/ticketMutations';
 import { addPlanToQueue as addPlanToQueueState, addTicketToQueue, linkTicketToProject, recordPlanQueueDecision, removeTicketFromQueue as removeTicketFromQueueState, reorderQueueItem, selectNextQueueItem, unlinkTicketFromProject } from './services/queueMutations';
 import { removeProject as removeProjectFromState, setProjectConfigValue, setProjectIntegrationConfig, setScanDirs, writeProjectSetupConfig } from './services/projectMutations';
 import { DoctorCheck, runDoctorChecks as collectDoctorChecks, runDoctorReachabilityChecks as collectDoctorReachabilityChecks } from './services/doctorChecks';
@@ -96,6 +96,7 @@ const LIVE_MR_DIFF_TIMEOUT_MS = 8000;
 const REVIEW_POLL_FAILURE_NOTIFICATION_MS = 15 * 60 * 1000;
 const REVIEW_SEEN_KEYS_STORAGE_KEY = 'kronos.review.seenKeys.v1';
 const reviewPollFailureNotifications = new Map<string, number>();
+const reviewTerminalMergeRequestActions = new Set<string>();
 const OPTIONAL_SCRIPT_PANEL_WARNING = 'Kronos integration scripts are not installed. Run Kronos: Doctor for setup details.';
 
 function recordFromUnknown(value: unknown): Record<string, unknown> {
@@ -5242,6 +5243,7 @@ function startReviewAutomation(context: vscode.ExtensionContext, state: KronosSt
 
 async function pollReviewMergeRequests(state: KronosState): Promise<void> {
   state.reloadAndNotify();
+  await reconcileTerminalReviewMergeRequests(state);
   for (const candidate of reviewMergeRequestCandidates(state)) {
     try {
       const status = await gitlabAdapter.mergeRequestStatus(state, candidate.ticketKey, { timeout: LIVE_MR_DIFF_TIMEOUT_MS });
@@ -5260,6 +5262,29 @@ async function pollReviewMergeRequests(state: KronosState): Promise<void> {
     } catch (e: unknown) {
       console.warn(unknownErrorMessage(e, `Failed to poll MR status for ${candidate.ticketKey}.`));
       notifyReviewMergeRequestPollFailure(candidate.ticketKey, e);
+    }
+  }
+}
+
+async function reconcileTerminalReviewMergeRequests(state: KronosState): Promise<void> {
+  const updates = reconcileTerminalMergeRequestState();
+  if (updates.some(update => update.changed)) {
+    state.reloadAndNotify();
+  }
+  for (const update of updates) {
+    const mrIid = update.ticket.mr?.iid || 'mr';
+    const actionKey = `${update.ticketKey}:${mrIid}:${update.action}`;
+    if (reviewTerminalMergeRequestActions.has(actionKey)) { continue; }
+    if (update.action === 'deploy_monitor') {
+      if (hasDeployMonitorRunForTicket(update.ticketKey)) {
+        reviewTerminalMergeRequestActions.add(actionKey);
+        continue;
+      }
+      await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket);
+      reviewTerminalMergeRequestActions.add(actionKey);
+    } else if (update.action === 'blocked') {
+      reviewTerminalMergeRequestActions.add(actionKey);
+      void vscode.window.showWarningMessage(`${update.ticketKey} ${update.message}`);
     }
   }
 }
@@ -5337,6 +5362,10 @@ function hasActiveDeployMonitorRun(projectName: string, projectPath: string, tic
     && run.skill === 'deploy-monitor'
     && (run.project === projectName || run.projectPath === projectPath)
     && (!run.ticket || run.ticket === ticketKey));
+}
+
+function hasDeployMonitorRunForTicket(ticketKey: string): boolean {
+  return listRuns().some(run => run.skill === 'deploy-monitor' && run.ticket === ticketKey);
 }
 
 async function pickProjectFromTickets<T extends { key: string; projects: string[] }>(
