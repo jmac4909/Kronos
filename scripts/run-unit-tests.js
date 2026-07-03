@@ -4566,6 +4566,13 @@ test('recovery panel view renders escaped recovery and state audit rows', () => 
   assert.ok(recoveryHtml.includes('Prompt'));
   assert.ok(recoveryHtml.includes('Retry'));
   assert.ok(recoveryHtml.includes('Archive'));
+  const externalRecoveryHtml = recoveryPanelView.buildRecoveryHtml({
+    generatedAt: '2026-07-01T12:00:00.000Z',
+    summary: { critical: 0, warning: 0, info: 0, total: 0 },
+    items: [],
+  }, 'nonce-ext', undefined, 'vscode-resource://kronos/action.js');
+  assert.match(externalRecoveryHtml, /src="vscode-resource:\/\/kronos\/action\.js"/);
+  assert.ok(externalRecoveryHtml.includes('data-kronos-webview-name="Kronos Recovery Center"'));
 
   const auditHtml = recoveryPanelView.buildStateAuditLogHtml([
     {
@@ -6980,7 +6987,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "linkTicketToProject(ticket, project);\n              state.reloadAndNotify();\n              renderBoard();",
     "unlinkTicketFromProject(ticket, project);\n              state.reloadAndNotify();\n              renderBoard();",
     "const result = addTicketToQueue(ticket);\n              state.reloadAndNotify();\n              renderBoard();",
-    "await removeTicketFromQueue(state, ticket, true);\n            renderBoard();",
+    "await removeTicketFromQueue(state, ticket, true, context.extensionUri);\n            renderBoard();",
     "unknownErrorMessage(e, 'Failed to link ticket.')",
     "unknownErrorMessage(e, 'Failed to unlink ticket.')",
     "unknownErrorMessage(e, 'Failed to add ticket to queue.')",
@@ -7100,7 +7107,8 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status })',
     'const decision = decideReviewMonitorAction(candidate.ticketKey, update)',
     "decision.kind === 'deploy_monitor'",
-    "rememberReviewTerminalMergeRequestAction(candidate.ticketKey, update.ticket, 'deploy_monitor')",
+    'const started = await startDeployMonitorForMergedTicket(state, candidate.ticketKey, update.ticket)',
+    "if (started) {\n          rememberReviewTerminalMergeRequestAction(candidate.ticketKey, update.ticket, 'deploy_monitor');\n        }",
     "decision.kind === 'blocked'",
     'notifyReviewMonitorDecision(decision)',
     'notifyReviewMergeRequestPollFailure(candidate.ticketKey, e)',
@@ -7129,8 +7137,8 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'return false;',
     'unknownErrorMessage(e, `Failed to start ${skill} session.`)',
     "import { deployMonitorHandoffCheckName, hasDeployMonitorHandoffIssue, hasHandledDeployMonitorRun, resolveDeployMonitorProject } from './services/deployMonitorHandoff'",
-    'await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket)',
-    'reviewTerminalMergeRequestActions.add(actionKey)',
+    'const started = await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket)',
+    'if (started) { reviewTerminalMergeRequestActions.add(actionKey); }',
     'console.warn(unknownErrorMessage(e, `Failed to load MR diff hints for ${ticketKey}.`))',
     "const started = await startClaudeDispatch(projectPath, 'deploy-monitor', ticketKey",
     'if (!started) {',
@@ -7212,7 +7220,10 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "actionButton('evidenceGate', 'Gate', { ticket, primary: true })",
     "actionButton('runCenter', 'Run Center', { runId })",
     'openInteractiveRunCenter(state, extensionUri, runId || undefined)',
-    'await openRecoveryCenter(state, runId || undefined)',
+    'await openRecoveryCenter(state, extensionUri, runId || undefined)',
+    'await openRecoveryCenter(state, context.extensionUri, resolveRunId(item))',
+    'openRecoveryPanel(state, inventory, backups, focusRunId, extensionUri)',
+    'kronosScriptableWebviewOptions(extensionUri)',
     "actionButton('viewTicket', 'View', { ticket, primary: true })",
     "actionButton('startTicket', 'Start', { ticket })",
     'function buildRecoveryInventoryForState',
@@ -7304,7 +7315,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "actionButton('executeRecoveryItem'",
     'recoveryActionLabel',
     'kronosOperatorPanelCss',
-    'kronosActionPanelScript(nonce)',
+    "kronosActionPanelScript(nonce, 'Kronos Recovery Center', true, actionScriptUri)",
   ]) {
     assert.ok(recoveryPanelViewSource.includes(marker), marker);
   }

@@ -46,7 +46,7 @@ export function buildStateAuditLogHtml(events: StateAuditEvent[], stateAuditFile
 </div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
 }
 
-export function buildRecoveryHtml(inventory: RecoveryInventory, nonce?: string, focusRunId?: string): string {
+export function buildRecoveryHtml(inventory: RecoveryInventory, nonce?: string, focusRunId?: string, actionScriptUri?: string): string {
   const focusedRunId = focusRunId?.trim() || '';
   const items = focusedRunId
     ? [...inventory.items].sort((a, b) => focusedRecoveryItemSort(a, b, focusedRunId))
@@ -76,7 +76,7 @@ export function buildRecoveryHtml(inventory: RecoveryInventory, nonce?: string, 
     <div class="summary-card"><div class="num">${inventory.summary.total}</div><div class="lbl">Total</div></div>
   </div>
   ${empty || `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Severity</th><th>Kind</th><th>Item</th><th>Detail</th><th class="action-cell">Action</th></tr>${rows}</table></div>`}
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Recovery Center', true, actionScriptUri) : ''}</body></html>`;
 }
 
 function focusedRecoveryItemSort(a: RecoveryItem, b: RecoveryItem, focusRunId: string): number {

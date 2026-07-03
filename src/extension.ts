@@ -1113,7 +1113,7 @@ function openTicketExternalUrl(state: KronosState, ticketKey: string, kind: 'jir
   openExternalHttpUrl(url);
 }
 
-async function executeTicketDetailAction(state: KronosState, command: string, ticketKey: string): Promise<void> {
+async function executeTicketDetailAction(state: KronosState, command: string, ticketKey: string, extensionUri?: vscode.Uri): Promise<void> {
   if (!ticketKey || !state.state?.tickets?.[ticketKey]) {
     vscode.window.showWarningMessage(`${ticketKey || 'Ticket'} is no longer in Kronos state.`);
     return;
@@ -1123,7 +1123,7 @@ async function executeTicketDetailAction(state: KronosState, command: string, ti
   } else if (command === 'addToQueue') {
     await vscode.commands.executeCommand('kronos.addToQueue', { ticketKey });
   } else if (command === 'removeFromQueue') {
-    await removeTicketFromQueue(state, ticketKey, true);
+    await removeTicketFromQueue(state, ticketKey, true, extensionUri);
   } else if (command === 'linkTicket') {
     await vscode.commands.executeCommand('kronos.linkTicket', { ticketKey });
   } else if (command === 'addEvidence') {
@@ -1647,7 +1647,7 @@ export function activate(context: vscode.ExtensionContext) {
         targetProjects = picks.map(p => p.label);
       }
 
-      const canStart = await confirmDispatchCollisions(state, { ticketKey, projects: targetProjects, action: 'implement' });
+      const canStart = await confirmDispatchCollisions(state, { ticketKey, projects: targetProjects, action: 'implement' }, context.extensionUri);
       if (!canStart) { return; }
 
       for (const projName of targetProjects) {
@@ -1712,7 +1712,7 @@ export function activate(context: vscode.ExtensionContext) {
             projects: projs,
             action: item.action,
             excludeQueueItemId: item.id,
-          });
+          }, context.extensionUri);
           if (!canStart) { return; }
           vscode.window.showInformationMessage(`Starting: [${item.action}] ${projLabel}/${item.ticket || 'refresh'}`);
           for (const projName of projs) {
@@ -1913,7 +1913,7 @@ export function activate(context: vscode.ExtensionContext) {
               vscode.window.showWarningMessage(unknownErrorMessage(e, 'Failed to add ticket to queue.'));
             }
           } else if (command === 'removeFromQueue' && hasTicket(ticket)) {
-            await removeTicketFromQueue(state, ticket, true);
+            await removeTicketFromQueue(state, ticket, true, context.extensionUri);
             renderBoard();
           } else if (command === 'start' && hasTicket(ticket)) {
             await vscode.commands.executeCommand('kronos.implement', { ticketKey: ticket });
@@ -2003,7 +2003,7 @@ export function activate(context: vscode.ExtensionContext) {
           vscode.window.showWarningMessage('Ignored invalid Kronos ticket action.');
           return;
         }
-        await executeTicketDetailAction(state, request.command, ticketKey);
+        await executeTicketDetailAction(state, request.command, ticketKey, context.extensionUri);
         render();
       });
     }),
@@ -2391,7 +2391,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('kronos.removeFromQueue', async (treeItem: unknown) => {
       const ticketKey = resolveTicketKey(treeItem);
       if (!ticketKey) { return; }
-      await removeTicketFromQueue(state, ticketKey, true);
+      await removeTicketFromQueue(state, ticketKey, true, context.extensionUri);
     }),
 
     vscode.commands.registerCommand('kronos.removeProject', async (item: unknown) => {
@@ -2527,7 +2527,7 @@ export function activate(context: vscode.ExtensionContext) {
       };
       if (queueData.ticket) { collisionTarget.ticketKey = queueData.ticket; }
       if (queueData.id) { collisionTarget.excludeQueueItemId = queueData.id; }
-      const canStart = await confirmDispatchCollisions(state, collisionTarget);
+      const canStart = await confirmDispatchCollisions(state, collisionTarget, context.extensionUri);
       if (!canStart) { return; }
 
       for (const projName of projs) {
@@ -3668,7 +3668,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand('kronos.recoveryCenter', async (item: unknown) => {
-      await openRecoveryCenter(state, resolveRunId(item));
+      await openRecoveryCenter(state, context.extensionUri, resolveRunId(item));
     }),
 
     vscode.commands.registerCommand('kronos.stateAuditLog', async () => {
@@ -4023,10 +4023,10 @@ function buildPromptSmokeTests(
   return tests;
 }
 
-async function openRecoveryCenter(state: KronosState, focusRunId?: string): Promise<void> {
+async function openRecoveryCenter(state: KronosState, extensionUri?: vscode.Uri, focusRunId?: string): Promise<void> {
   const backups = listBackups();
   const inventory = buildRecoveryInventoryForState(state, backups);
-  openRecoveryPanel(state, inventory, backups, focusRunId);
+  openRecoveryPanel(state, inventory, backups, focusRunId, extensionUri);
 
   if (!inventory.items.some(item => item.action)) {
     vscode.window.showInformationMessage('Recovery Center found no active recovery items.');
@@ -4045,14 +4045,15 @@ function buildRecoveryInventoryForState(state: KronosState, backups = listBackup
   return buildRecoveryInventory(input);
 }
 
-function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInventory, initialBackups = listBackups(), focusRunId?: string): void {
+function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInventory, initialBackups = listBackups(), focusRunId?: string, extensionUri?: vscode.Uri): void {
   const panel = vscode.window.createWebviewPanel(
     'kronosRecoveryCenter',
     'Kronos Recovery Center',
     vscode.ViewColumn.One,
-    { enableScripts: true }
+    kronosScriptableWebviewOptions(extensionUri)
   );
   const nonce = createWebviewNonce();
+  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
   let currentInventory = initialInventory;
   let currentBackups = initialBackups;
   const render = (refresh = false) => {
@@ -4060,7 +4061,7 @@ function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInvento
       currentBackups = listBackups();
       currentInventory = buildRecoveryInventoryForState(state, currentBackups);
     }
-    panel.webview.html = withWebviewCsp(buildRecoveryHtml(currentInventory, nonce, focusRunId), webviewScriptCspOptions(panel.webview.cspSource, nonce));
+    panel.webview.html = withWebviewCsp(buildRecoveryHtml(currentInventory, nonce, focusRunId, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   render();
   const logReady = createWebviewReadyMonitor(panel, 'Kronos Recovery Center');
@@ -4076,7 +4077,7 @@ function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInvento
       vscode.window.showWarningMessage('Recovery item is no longer available.');
       return;
     }
-    await executeRecoveryAction(item, state, currentBackups, request.recoveryAction);
+    await executeRecoveryAction(item, state, currentBackups, request.recoveryAction, extensionUri);
     render(true);
   });
 }
@@ -4094,14 +4095,14 @@ function openStateAuditLogPanel(): void {
   attachOperatorCommandHandler(panel, 'Kronos State Audit Log', STATE_AUDIT_OPERATOR_COMMANDS);
 }
 
-async function executeRecoveryAction(item: RecoveryItem, state: KronosState, backups = listBackups(), requestedAction?: string): Promise<void> {
+async function executeRecoveryAction(item: RecoveryItem, state: KronosState, backups = listBackups(), requestedAction?: string, extensionUri?: vscode.Uri): Promise<void> {
   const action = recoveryActionForRequest(item, requestedAction);
   if (!action) {
     vscode.window.showWarningMessage('Recovery item action is no longer available.');
     return;
   }
   if (action === 'openRunCenter') {
-    openInteractiveRunCenter(state, undefined, item.runId);
+    openInteractiveRunCenter(state, extensionUri, item.runId);
     return;
   }
   if (action === 'retryRun') {
@@ -5091,7 +5092,7 @@ interface JiraBoardTicketPayload {
   isQueued: boolean;
 }
 
-async function removeTicketFromQueue(state: KronosState, ticketKey: string, interactive: boolean): Promise<boolean> {
+async function removeTicketFromQueue(state: KronosState, ticketKey: string, interactive: boolean, extensionUri?: vscode.Uri): Promise<boolean> {
   const ticket = state.state?.tickets?.[ticketKey];
   const decision = decideQueueRemoval(ticketKey, ticket, interactive);
   if (decision.kind === 'block_failing_gate' || decision.kind === 'block_missing_evidence') {
@@ -5107,7 +5108,11 @@ async function removeTicketFromQueue(state: KronosState, ticketKey: string, inte
     );
     if (action === 'Open Gate') {
       if (decision.gate) {
-        openEvidenceGatePanel(state, [decision.gate], `Evidence Gate: ${ticketKey}`);
+        if (extensionUri) {
+          openEvidenceGatePanel(state, [decision.gate], `Evidence Gate: ${ticketKey}`, { extensionUri });
+        } else {
+          openEvidenceGatePanel(state, [decision.gate], `Evidence Gate: ${ticketKey}`);
+        }
       }
       return false;
     }
@@ -5250,7 +5255,7 @@ async function confirmDispatchCollisions(state: KronosState, target: {
   projects: string[];
   action: string;
   excludeQueueItemId?: string;
-}): Promise<boolean> {
+}, extensionUri?: vscode.Uri): Promise<boolean> {
   const mrFiles = await loadMrFileHints(state, [target]);
   const collisionInput: DispatchCollisionInput = {
     ...target,
@@ -5274,7 +5279,7 @@ async function confirmDispatchCollisions(state: KronosState, target: {
     'Cancel'
   );
   if (action === 'Open Run Center') {
-    openInteractiveRunCenter(state);
+    openInteractiveRunCenter(state, extensionUri);
     return false;
   }
   return action === 'Start Anyway';
@@ -5440,8 +5445,10 @@ async function pollReviewMergeRequests(state: KronosState): Promise<void> {
       }
       const decision = decideReviewMonitorAction(candidate.ticketKey, update);
       if (decision.kind === 'deploy_monitor') {
-        await startDeployMonitorForMergedTicket(state, candidate.ticketKey, update.ticket);
-        rememberReviewTerminalMergeRequestAction(candidate.ticketKey, update.ticket, 'deploy_monitor');
+        const started = await startDeployMonitorForMergedTicket(state, candidate.ticketKey, update.ticket);
+        if (started) {
+          rememberReviewTerminalMergeRequestAction(candidate.ticketKey, update.ticket, 'deploy_monitor');
+        }
       } else if (decision.kind === 'blocked') {
         notifyReviewMonitorDecision(decision);
       } else if (decision.kind === 'notify') {
@@ -5463,8 +5470,8 @@ async function reconcileTerminalReviewMergeRequests(state: KronosState): Promise
     const actionKey = reviewTerminalMergeRequestActionKey(update.ticketKey, update.ticket, update.action);
     if (reviewTerminalMergeRequestActions.has(actionKey)) { continue; }
     if (update.action === 'deploy_monitor') {
-      await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket);
-      reviewTerminalMergeRequestActions.add(actionKey);
+      const started = await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket);
+      if (started) { reviewTerminalMergeRequestActions.add(actionKey); }
     } else if (update.action === 'blocked') {
       reviewTerminalMergeRequestActions.add(actionKey);
       void vscode.window.showWarningMessage(`${update.ticketKey} ${update.message}`);
@@ -5705,7 +5712,7 @@ async function executeDashboardAction(state: KronosState, request: ActionPanelMe
       await vscode.commands.executeCommand('kronos.evidenceGate');
     }
   } else if (command === 'recoveryCenter') {
-    await openRecoveryCenter(state, runId || undefined);
+    await openRecoveryCenter(state, extensionUri, runId || undefined);
   } else if (command === 'startTicket' && ticketKey) {
     await startTicketFromActionPanel(state, ticketKey);
   } else if ((command === 'viewTicket' || command === 'addEvidence' || command === 'addEvidenceCheck') && ticketKey) {
