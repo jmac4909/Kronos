@@ -49,6 +49,7 @@ const ticketFilters = require('../out/services/ticketFilters.js');
 const runRecovery = require('../out/services/runRecovery.js');
 const providerReachability = require('../out/services/providerReachability.js');
 const ticketMutations = require('../out/services/ticketMutations.js');
+const mergeRequestNotifications = require('../out/services/mergeRequestNotifications.js');
 const queueMutations = require('../out/services/queueMutations.js');
 const projectMutations = require('../out/services/projectMutations.js');
 const doctorChecks = require('../out/services/doctorChecks.js');
@@ -963,6 +964,62 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
   assert.equal(closedMrTicket.mr.state, 'closed');
   assert.equal(closedMrTicket.mr.review_status, 'changes_requested');
   assert.equal(closedMrTicket.next_action, 'blocked');
+});
+
+test('merge request notifications summarize review status and new comment changes without duplicate terminal alerts', () => {
+  const baseUpdate = {
+    changed: true,
+    mergedNow: false,
+    closedNow: false,
+    previousMr: { iid: 1, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/1' },
+    ticket: ticket({
+      mr: { iid: 1, state: 'opened', review_status: 'approved', url: 'https://gitlab.example/1' },
+    }),
+  };
+
+  assert.deepEqual(mergeRequestNotifications.describeMergeRequestStatusChange('K-1', baseUpdate), {
+    severity: 'info',
+    message: 'K-1: MR !1 approved.',
+  });
+  assert.deepEqual(mergeRequestNotifications.describeMergeRequestStatusChange('K-2', {
+    ...baseUpdate,
+    previousMr: { iid: 2, state: 'opened', review_status: 'approved', url: 'https://gitlab.example/2' },
+    ticket: ticket({
+      mr: { iid: 2, state: 'opened', review_status: 'changes_requested', url: 'https://gitlab.example/2' },
+    }),
+  }), {
+    severity: 'warning',
+    message: 'K-2: MR !2 changes requested.',
+  });
+  assert.deepEqual(mergeRequestNotifications.describeMergeRequestStatusChange('K-3', {
+    ...baseUpdate,
+    previousMr: { iid: 3, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/3', comment_count: 2 },
+    ticket: ticket({
+      mr: { iid: 3, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/3', comment_count: 4 },
+    }),
+  }), {
+    severity: 'info',
+    message: 'K-3: MR !3 2 new MR comments.',
+  });
+  assert.deepEqual(mergeRequestNotifications.describeMergeRequestStatusChange('K-4', {
+    ...baseUpdate,
+    previousMr: { iid: 4, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/4', last_comment_at: '2026-07-02T01:00:00.000Z' },
+    ticket: ticket({
+      mr: { iid: 4, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/4', last_comment_at: '2026-07-02T02:00:00.000Z' },
+    }),
+  }), {
+    severity: 'info',
+    message: 'K-4: MR !4 new MR comment.',
+  });
+  assert.equal(mergeRequestNotifications.describeMergeRequestStatusChange('K-5', {
+    ...baseUpdate,
+    previousMr: { iid: 5, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/5' },
+    ticket: ticket({
+      mr: { iid: 5, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/5', comment_count: 3 },
+    }),
+  }), null);
+  assert.equal(mergeRequestNotifications.describeMergeRequestStatusChange('K-6', { ...baseUpdate, mergedNow: true }), null);
+  assert.equal(mergeRequestNotifications.describeMergeRequestStatusChange('K-7', { ...baseUpdate, closedNow: true }), null);
 });
 
 test('queue mutation helpers centralize queue membership and ticket project links', () => {
@@ -5573,6 +5630,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "import { buildPromptHistoryHtml, buildPromptManagerHtml, buildPromptSmokeTestsHtml } from './services/promptPanelView'",
     "import { buildRecoveryHtml, buildStateAuditLogHtml } from './services/recoveryPanelView'",
     "import { buildHumanReviewInboxHtml } from './services/humanReviewPanelView'",
+    "import { describeMergeRequestStatusChange } from './services/mergeRequestNotifications'",
     "import { buildEvidenceGateHtml, buildEvidenceHandoffHtml, buildEvidencePublishHtml } from './services/evidencePanelView'",
     "import { buildBacklogTriageHtml, buildCollisionReportHtml, buildProjectBatchPlanHtml, buildQueuePlanModeHtml, buildQueuePlannerHtml, buildReleaseBatchPlanHtml } from './services/queuePlannerPanelView'",
     "import { createWebviewReadyMonitor } from './services/webviewDiagnostics'",
@@ -5692,6 +5750,9 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status })',
     'update.closedNow',
     'MR closed - ticket moved to blocked.',
+    'notifyMergeRequestStatusChange(candidate.ticketKey, update)',
+    'function notifyMergeRequestStatusChange(ticketKey: string, update: MergeRequestStatusUpdate): void',
+    'describeMergeRequestStatusChange(ticketKey, update)',
     'type TicketWithOpenMergeRequest = Ticket & { mr: NonNullable<Ticket[\'mr\']> }',
     'function isOpenReviewMergeRequestEntry(entry: [string, Ticket]): entry is [string, TicketWithOpenMergeRequest]',
     '.filter(isOpenReviewMergeRequestEntry)',
