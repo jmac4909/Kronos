@@ -20,9 +20,9 @@ import { evidenceAcceptanceCriteria, evidenceChecked, evidenceChecks, evidenceEn
 import { EvidenceHandoffPlan, buildEvidenceHandoffPlan } from './services/evidenceHandoff';
 import { EvidencePublishDestination, EvidencePublishResult, buildEvidencePublishPlan, publishEvidencePlan, readyPublishDestinations } from './services/evidencePublisher';
 import { RUNS_DIR, archiveRun, listRunStoreIssues, markRunCancelled, markRunContinued, markRunNeedsHuman, markRunPaused, runRecordPath, writeRunRecord } from './services/runStore';
-import { RecoveryInventory, RecoveryItem, buildRecoveryInventory } from './services/recoveryCenter';
+import { RecoveryInventory, RecoveryItem, buildRecoveryInventory, type RecoveryInventoryInput } from './services/recoveryCenter';
 import { TimelineEvent, buildTicketTimeline } from './services/ticketTimeline';
-import { DispatchCollision, detectDispatchCollisions } from './services/collisionDetector';
+import { DispatchCollision, detectDispatchCollisions, type DispatchCollisionInput } from './services/collisionDetector';
 import { gitlabAdapter, jiraAdapter, sonarAdapter, type MergeRequestDiffResult } from './services/integrationAdapters';
 import { buildRunCompletionEvidenceCheck, buildRunCompletionEvidenceText, evaluatePostRunReadiness, resolvePostRunTicket, shouldRecordRunCompletionEvidence } from './services/postRunReadiness';
 import { describeMergeRequestStatusChange } from './services/mergeRequestNotifications';
@@ -40,7 +40,7 @@ import { SafetyPlan, assessSafetyGate } from './services/safetyGate';
 import { computeTrendMetrics } from './services/trendMetrics';
 import { TicketFilter, TicketGroupBy, TICKET_FILTER_PRESETS, describeTicketFilter } from './services/ticketFilters';
 import { buildRunResumePrompt, readRunLogTail } from './services/runRecovery';
-import { addTicketEvidenceCheck, addTicketEvidenceNote, linkMergeRequestToTicket, previewLinkMergeRequestToTicket, recordTicketEnvironmentResult, replaceTicketAcceptanceCriteria, updateTicketAcceptanceCriteria, updateTicketMergeRequestStatus, type MergeRequestStatusUpdate } from './services/ticketMutations';
+import { addTicketEvidenceCheck, addTicketEvidenceNote, linkMergeRequestToTicket, previewLinkMergeRequestToTicket, recordTicketEnvironmentResult, replaceTicketAcceptanceCriteria, updateTicketAcceptanceCriteria, updateTicketMergeRequestStatus, type MergeRequestStatusUpdate, type TicketEvidenceCheckInput } from './services/ticketMutations';
 import { addPlanToQueue as addPlanToQueueState, addTicketToQueue, linkTicketToProject, recordPlanQueueDecision, removeTicketFromQueue as removeTicketFromQueueState, reorderQueueItem, selectNextQueueItem, unlinkTicketFromProject } from './services/queueMutations';
 import { removeProject as removeProjectFromState, setProjectConfigValue, setProjectIntegrationConfig, setScanDirs, writeProjectSetupConfig } from './services/projectMutations';
 import { DoctorCheck, runDoctorChecks as collectDoctorChecks, runDoctorReachabilityChecks as collectDoctorReachabilityChecks } from './services/doctorChecks';
@@ -409,13 +409,12 @@ function normalizeSonarIssueCommandList(value: unknown): SonarIssue[] {
 
 function normalizeSonarIssueCommandValue(value: unknown): SonarIssue | null {
   const record = recordFromUnknown(value);
-  const issue: SonarIssue = {
-    severity: typeof record.severity === 'string' ? record.severity : undefined,
-    rule: typeof record.rule === 'string' ? record.rule : undefined,
-    component: typeof record.component === 'string' ? record.component : undefined,
-    line: record.line,
-    message: typeof record.message === 'string' ? record.message : undefined,
-  };
+  const issue: SonarIssue = {};
+  if (typeof record.severity === 'string') { issue.severity = record.severity; }
+  if (typeof record.rule === 'string') { issue.rule = record.rule; }
+  if (typeof record.component === 'string') { issue.component = record.component; }
+  if (record.line !== undefined) { issue.line = record.line; }
+  if (typeof record.message === 'string') { issue.message = record.message; }
   return issue.severity || issue.rule || issue.component || issue.message || issue.line !== undefined ? issue : null;
 }
 
@@ -895,20 +894,20 @@ async function promptTicketView(
   const tickets = Object.values(state.state?.tickets || {});
 
   if (picked.id === 'query') {
-    filter.query = await promptOptionalText('Ticket search text', filter.query);
+    setTicketFilterString(filter, 'query', await promptOptionalText('Ticket search text', filter.query));
   } else if (picked.id === 'project') {
-    filter.project = await promptOptionalChoice('Project', filter.project, uniqueStrings([
+    setTicketFilterString(filter, 'project', await promptOptionalChoice('Project', filter.project, uniqueStrings([
       ...Object.keys(state.state?.projects || {}),
       ...tickets.flatMap(ticket => ticket.projects || []),
-    ]));
+    ])));
   } else if (picked.id === 'action') {
-    filter.action = await promptOptionalChoice('Action status', filter.action, uniqueStrings(tickets.map(ticket => ticket.next_action)));
+    setTicketFilterString(filter, 'action', await promptOptionalChoice('Action status', filter.action, uniqueStrings(tickets.map(ticket => ticket.next_action))));
   } else if (picked.id === 'priority') {
-    filter.priority = await promptOptionalChoice('Priority', filter.priority, uniqueStrings(tickets.map(ticket => ticket.priority)));
+    setTicketFilterString(filter, 'priority', await promptOptionalChoice('Priority', filter.priority, uniqueStrings(tickets.map(ticket => ticket.priority))));
   } else if (picked.id === 'label') {
-    filter.label = await promptOptionalChoice('Label', filter.label, uniqueStrings(tickets.flatMap(ticket => ticket.labels || [])));
+    setTicketFilterString(filter, 'label', await promptOptionalChoice('Label', filter.label, uniqueStrings(tickets.flatMap(ticket => ticket.labels || []))));
   } else if (picked.id === 'mrState') {
-    filter.mrState = await promptOptionalChoice('MR state', filter.mrState, uniqueStrings([
+    setTicketFilterString(filter, 'mrState', await promptOptionalChoice('MR state', filter.mrState, uniqueStrings([
       'none',
       'opened',
       'merged',
@@ -917,12 +916,12 @@ async function promptTicketView(
       'approved',
       'changes_requested',
       ...tickets.flatMap(ticket => ticket.mr ? [ticket.mr.state, ticket.mr.review_status] : []),
-    ]));
+    ])));
   } else if (picked.id === 'buildStatus') {
-    filter.buildStatus = await promptOptionalChoice('Build status', filter.buildStatus, uniqueStrings([
+    setTicketFilterString(filter, 'buildStatus', await promptOptionalChoice('Build status', filter.buildStatus, uniqueStrings([
       'none',
       ...tickets.map(ticket => ticket.build?.status || ''),
-    ]));
+    ])));
   } else if (picked.id === 'staleDays') {
     const value = await vscode.window.showInputBox({
       prompt: 'Minimum age in days; leave blank for any age',
@@ -930,10 +929,12 @@ async function promptTicketView(
       validateInput: value => !value.trim() || (/^\d+$/.test(value.trim()) && Number(value.trim()) > 0) ? null : 'Enter a positive whole number.',
     });
     if (value === undefined) { return null; }
-    filter.staleDays = value.trim() ? Number(value.trim()) : undefined;
+    if (value.trim()) { filter.staleDays = Number(value.trim()); }
+    else { delete filter.staleDays; }
   } else if (picked.id === 'linked') {
     const linked = await promptOptionalChoice('Link state', filter.linked, ['linked', 'unlinked']);
-    filter.linked = linked === 'linked' || linked === 'unlinked' ? linked : undefined;
+    if (linked === 'linked' || linked === 'unlinked') { filter.linked = linked; }
+    else { delete filter.linked; }
   } else if (picked.id === 'groupBy') {
     const selected = await promptOptionalChoice('Group by', groupBy, ['none', 'action', 'project', 'priority']);
     groupBy = (selected === 'action' || selected === 'project' || selected === 'priority') ? selected : 'none';
@@ -949,10 +950,24 @@ async function promptOptionalText(placeHolder: string, current?: string): Promis
 }
 
 async function promptOptionalChoice(placeHolder: string, current: string | undefined, values: string[]): Promise<string | undefined> {
-  const options = ['Any', ...values].map(value => ({ label: value, description: value === current ? 'current' : undefined }));
+  const options: vscode.QuickPickItem[] = ['Any', ...values].map(value => {
+    const option: vscode.QuickPickItem = { label: value };
+    if (value === current) { option.description = 'current'; }
+    return option;
+  });
   const picked = await vscode.window.showQuickPick(options, { placeHolder });
   if (!picked) { return current; }
   return picked.label === 'Any' ? undefined : picked.label;
+}
+
+function setTicketFilterString<K extends 'query' | 'project' | 'action' | 'priority' | 'label' | 'mrState' | 'buildStatus'>(
+  filter: TicketFilter,
+  key: K,
+  value: string | undefined,
+): void {
+  const trimmed = value?.trim();
+  if (trimmed) { filter[key] = trimmed; }
+  else { delete filter[key]; }
 }
 
 function cleanTicketFilter(filter: TicketFilter): TicketFilter {
@@ -1347,11 +1362,12 @@ export function activate(context: vscode.ExtensionContext) {
       const ticketKey = resolveTicketKey(item);
       const projectPath = getProjectPath(state, projectName);
       if (projectPath) {
-        await startClaudeDispatch(projectPath, 'deploy-monitor', ticketKey, {
+        const dispatchOptions: DispatchOptions = {
           onComplete: refreshAfterDispatch(state, projectName, ticketKey),
           noWorktree: true,
-          projectNameOverride: projectName,
-        });
+        };
+        if (projectName) { dispatchOptions.projectNameOverride = projectName; }
+        await startClaudeDispatch(projectPath, 'deploy-monitor', ticketKey, dispatchOptions);
       } else {
         vscode.window.showWarningMessage('No project linked. Link the ticket to a project first.');
       }
@@ -1399,11 +1415,12 @@ export function activate(context: vscode.ExtensionContext) {
             const skill = skillForAction(item.action);
             const isCodeAction = ['implement', 'in_progress', 'fix_build'].includes(item.action);
             const ticketKey = item.ticket || undefined;
-            await startClaudeDispatch(projectPath, skill, ticketKey, {
+            const dispatchOptions: DispatchOptions = {
               onComplete: refreshAfterDispatch(state, projName, ticketKey),
               parallel: isCodeAction,
-              appendSystemPrompt: isCodeAction ? getImplementPrompt(state) : undefined,
-            });
+            };
+            if (isCodeAction) { dispatchOptions.appendSystemPrompt = getImplementPrompt(state); }
+            await startClaudeDispatch(projectPath, skill, ticketKey, dispatchOptions);
           }
         }
       } catch (e: unknown) {
@@ -1778,15 +1795,16 @@ export function activate(context: vscode.ExtensionContext) {
       if (!confidence) { return; }
 
       try {
-        addTicketEvidenceCheck(ticketKey, {
+        const evidenceCheck: TicketEvidenceCheckInput = {
           name: name.trim(),
           result: result.label as 'pass' | 'fail' | 'warn' | 'unknown',
-          environment: environment === 'n/a' ? undefined : environment,
           command,
           summary,
           artifactPath: artifact,
           confidence: confidence.label as 'low' | 'medium' | 'high',
-        });
+        };
+        if (environment !== 'n/a') { evidenceCheck.environment = environment; }
+        addTicketEvidenceCheck(ticketKey, evidenceCheck);
         state.reloadAndNotify();
         vscode.window.showInformationMessage(`Added ${result.label} evidence check to ${ticketKey}.`);
       } catch (e: unknown) {
@@ -1987,25 +2005,33 @@ export function activate(context: vscode.ExtensionContext) {
       const plan = buildEvidencePublishPlan(ticketKey, ticket, exported.comment);
       const ready = readyPublishDestinations(plan);
       if (ready.length === 0) {
-        openEvidencePublishPanel(plan.destinations.map(destination => ({
-          kind: destination.kind,
-          label: destination.label,
-          status: destination.status,
-          detail: destination.detail,
-          endpoint: destination.endpoint,
-        })), ticketKey);
+        openEvidencePublishPanel(plan.destinations.map(destination => {
+          const result: EvidencePublishDestination = {
+            kind: destination.kind,
+            label: destination.label,
+            status: destination.status,
+            detail: destination.detail,
+          };
+          if (destination.endpoint) { result.endpoint = destination.endpoint; }
+          return result;
+        }), ticketKey);
         vscode.window.showWarningMessage(`No evidence publish destinations are ready for ${ticketKey}. Use Evidence Handoff for manual posting.`);
         return;
       }
 
-      const selected = await vscode.window.showQuickPick(
-        ready.map(destination => ({
+      type EvidenceDestinationQuickPick = vscode.QuickPickItem & { destination: EvidencePublishDestination };
+      const destinationItems: EvidenceDestinationQuickPick[] = ready.map(destination => {
+        const item: EvidenceDestinationQuickPick = {
           label: destination.label,
-          description: destination.endpoint,
           detail: destination.detail,
           destination,
           picked: true,
-        })),
+        };
+        if (destination.endpoint) { item.description = destination.endpoint; }
+        return item;
+      });
+      const selected = await vscode.window.showQuickPick(
+        destinationItems,
         { placeHolder: `Publish evidence for ${ticketKey}`, canPickMany: true }
       );
       if (!selected || selected.length === 0) { return; }
@@ -2185,12 +2211,13 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const canStart = await confirmDispatchCollisions(state, {
-        ticketKey: queueData.ticket,
+      const collisionTarget: { ticketKey?: string | null; projects: string[]; action: string; excludeQueueItemId?: string } = {
         projects: projs,
         action: queueData.action,
-        excludeQueueItemId: queueData.id,
-      });
+      };
+      if (queueData.ticket) { collisionTarget.ticketKey = queueData.ticket; }
+      if (queueData.id) { collisionTarget.excludeQueueItemId = queueData.id; }
+      const canStart = await confirmDispatchCollisions(state, collisionTarget);
       if (!canStart) { return; }
 
       for (const projName of projs) {
@@ -2198,11 +2225,13 @@ export function activate(context: vscode.ExtensionContext) {
         if (!projectPath) { continue; }
         const otherProjects = projs.filter(p => p !== projName);
         const scopeHint = otherProjects.length > 0 ? `\nYou are working in ${projName}. Focus ONLY on this codebase. Other projects: ${otherProjects.join(', ')}.` : '';
-        await startClaudeDispatch(projectPath, skill, queueData.ticket || undefined, {
+        const dispatchOptions: DispatchOptions = {
           onComplete: refreshAfterDispatch(state, projName, queueData.ticket),
           parallel: isCodeAction,
-          appendSystemPrompt: isCodeAction ? getImplementPrompt(state) + scopeHint + extraPrompt : extraPrompt || undefined,
-        });
+        };
+        const appendSystemPrompt = isCodeAction ? getImplementPrompt(state) + scopeHint + extraPrompt : extraPrompt || undefined;
+        if (appendSystemPrompt) { dispatchOptions.appendSystemPrompt = appendSystemPrompt; }
+        await startClaudeDispatch(projectPath, skill, queueData.ticket || undefined, dispatchOptions);
       }
     }),
 
@@ -2415,16 +2444,17 @@ export function activate(context: vscode.ExtensionContext) {
           sonarAdapter.issues(sonarKey, branch),
         ]);
         const nonce = createWebviewNonce();
-        const report = buildSonarReport({
+        const reportInput = {
           projectName,
           branch,
           sonarKey,
-          host: process.env.SONAR_HOST_URL,
           gate,
           measures,
           issues,
           nonce,
-        });
+        };
+        if (process.env.SONAR_HOST_URL) { Object.assign(reportInput, { host: process.env.SONAR_HOST_URL }); }
+        const report = buildSonarReport(reportInput);
         const panel = vscode.window.createWebviewPanel('sonarReport', `Sonar: ${projectName}`, vscode.ViewColumn.One, { enableScripts: true });
         panel.webview.html = withWebviewCsp(report.html, webviewScriptCspOptions(panel.webview.cspSource, nonce));
 
@@ -2480,7 +2510,7 @@ export function activate(context: vscode.ExtensionContext) {
         issuesBlock,
       ].filter(Boolean).join('\n\n');
 
-      const canFix = await confirmSafetyGate({
+      const safetyPlan: SafetyPlan = {
         command: 'kronos.fixSonarIssues',
         title: 'Fix SonarQube Issues',
         target: `${projectName}${sourceBranch ? ` / ${sourceBranch}` : ''}`,
@@ -2492,9 +2522,10 @@ export function activate(context: vscode.ExtensionContext) {
           'Apply source changes for SonarQube findings.',
           'May push changes and create or update a merge request through the agent prompt.',
         ],
-        warnings: customInstructions ? ['Custom Sonar instructions will be passed to the agent.'] : undefined,
         confirmationLabel: 'Fix Sonar',
-      });
+      };
+      if (customInstructions) { safetyPlan.warnings = ['Custom Sonar instructions will be passed to the agent.']; }
+      const canFix = await confirmSafetyGate(safetyPlan);
       if (!canFix) { return; }
 
       const fixPrompt = loadPromptForDispatch(state, 'sonar-fix', { PROJECT_NAME: projectName, SONAR_KEY: sonarKey, CUSTOM_INSTRUCTIONS: instructionBlock }, projectPath);
@@ -2564,13 +2595,14 @@ export function activate(context: vscode.ExtensionContext) {
 
         const prompt = loadPromptForDispatch(state, 'sonar-fix-branch', { SONAR_KEY: sonarKey, TICKET_KEY: ticket.key, CUSTOM_INSTRUCTIONS: instructionBlock }, projectPath);
 
-        await startClaudeDispatch(projectPath, 'sonar-fix', ticket.key, {
+        const dispatchOptions: DispatchOptions = {
           onComplete: refreshAfterDispatch(state, projectName, ticket.key),
           customPrompt: prompt.text,
           promptMetadata: prompt.metadata,
           parallel: true,
-          worktreeBranch: remoteBranch || undefined,
-        });
+        };
+        if (remoteBranch) { dispatchOptions.worktreeBranch = remoteBranch; }
+        await startClaudeDispatch(projectPath, 'sonar-fix', ticket.key, dispatchOptions);
       }
     }),
 
@@ -2591,7 +2623,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const findingDesc = description || 'Fix all CRITICAL and FAIL findings from the last develop verification. Read the session history or git log to find what was flagged.';
 
-      const canFix = await confirmSafetyGate({
+      const safetyPlan: SafetyPlan = {
         command: 'kronos.fixFinding',
         title: 'Fix Verification Finding',
         target: projectName,
@@ -2600,9 +2632,10 @@ export function activate(context: vscode.ExtensionContext) {
           'Dispatch an agent in the project workspace.',
           'Allow source edits needed to address the verification finding.',
         ],
-        warnings: description ? undefined : ['Blank finding text asks the agent to infer all critical/failing findings from prior context.'],
         confirmationLabel: 'Fix Finding',
-      });
+      };
+      if (!description) { safetyPlan.warnings = ['Blank finding text asks the agent to infer all critical/failing findings from prior context.']; }
+      const canFix = await confirmSafetyGate(safetyPlan);
       if (!canFix) { return; }
 
       const prompt = loadPromptForDispatch(state, 'fix-finding', { FINDING_DESC: findingDesc }, projectPath);
@@ -3679,15 +3712,16 @@ function buildPromptSmokeTests(
   const manifest = readIntegrationManifest().manifest;
   for (const [templateName, entry] of Object.entries(manifest?.prompts || {})) {
     for (const [idx, smoke] of (entry.smoke_tests || []).entries()) {
-      tests.push({
+      const test: PromptSmokeTest = {
         id: `manifest:${templateName}:${smoke.name || idx + 1}`,
         templateName,
-        variables: smoke.variables,
-        mustContain: smoke.mustContain,
-        mustNotContain: smoke.mustNotContain,
-        allowMissingVariables: smoke.allowMissingVariables,
         source: 'manifest',
-      });
+      };
+      if (smoke.variables) { test.variables = smoke.variables; }
+      if (smoke.mustContain) { test.mustContain = smoke.mustContain; }
+      if (smoke.mustNotContain) { test.mustNotContain = smoke.mustNotContain; }
+      if (smoke.allowMissingVariables !== undefined) { test.allowMissingVariables = smoke.allowMissingVariables; }
+      tests.push(test);
     }
   }
   return tests;
@@ -3704,14 +3738,15 @@ async function openRecoveryCenter(state: KronosState): Promise<void> {
 }
 
 function buildRecoveryInventoryForState(state: KronosState, backups = listBackups()): RecoveryInventory {
-  return buildRecoveryInventory({
+  const input: RecoveryInventoryInput = {
     runs: listRuns(),
     runStoreIssues: listRunStoreIssues(),
-    tickets: state.state?.tickets,
     backups,
     worktreeReport: cleanupStaleWorktrees({ remove: false }),
     doctorChecks: runDoctorChecks(state),
-  });
+  };
+  if (state.state?.tickets) { input.tickets = state.state.tickets; }
+  return buildRecoveryInventory(input);
 }
 
 function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInventory, initialBackups = listBackups()): void {
@@ -3885,10 +3920,9 @@ function openHumanReviewInbox(state: KronosState): void {
       worktreeReport: cleanupStaleWorktrees({ remove: false }),
       doctorChecks: runDoctorChecks(state),
     });
-    panel.webview.html = withWebviewCsp(buildHumanReviewInboxHtml(inbox, {
-      tickets: state.state?.tickets,
-      nonce,
-    }), webviewScriptCspOptions(panel.webview.cspSource, nonce));
+    const htmlOptions = { nonce };
+    if (state.state?.tickets) { Object.assign(htmlOptions, { tickets: state.state.tickets }); }
+    panel.webview.html = withWebviewCsp(buildHumanReviewInboxHtml(inbox, htmlOptions), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   const logReady = createWebviewReadyMonitor(panel, 'Kronos Human Review Inbox');
   panel.webview.onDidReceiveMessage(async msg => {
@@ -4277,16 +4311,17 @@ async function openCollisionReportPanel(state: KronosState): Promise<void> {
     plans = planNextActions(state).slice(0, 25);
     const mrFiles = await loadMrFileHints(state, plans);
     const reports = plans.map(plan => {
-      const collisions = detectDispatchCollisions({
+      const collisionInput: DispatchCollisionInput = {
         ticketKey: plan.ticketKey,
         projects: plan.projects,
         action: plan.action,
         queue: state.queue,
         runs: listRuns(),
-        tickets: state.state?.tickets,
         mrFiles,
-        excludeQueueItemId: plan.queueItem?.id,
-      });
+      };
+      if (state.state?.tickets) { collisionInput.tickets = state.state.tickets; }
+      if (plan.queueItem?.id) { collisionInput.excludeQueueItemId = plan.queueItem.id; }
+      const collisions = detectDispatchCollisions(collisionInput);
       return { plan, collisions };
     }).filter(report => report.collisions.length > 0);
     panel.webview.html = withWebviewCsp(buildCollisionReportHtml(reports, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
@@ -4632,10 +4667,10 @@ function recordPlanDecision(
   snoozeMinutes?: number,
   reason?: string
 ): void {
-  recordPlanQueueDecision(plan, decision, {
-    snoozeMinutes,
-    reason,
-  });
+  const options: { snoozeMinutes?: number; reason?: string } = {};
+  if (snoozeMinutes !== undefined) { options.snoozeMinutes = snoozeMinutes; }
+  if (reason !== undefined) { options.reason = reason; }
+  recordPlanQueueDecision(plan, decision, options);
   state.reloadAndNotify();
 }
 
@@ -4675,12 +4710,14 @@ function existingAcceptanceCriterion(record: object): ExistingAcceptanceCriterio
   const text = evidenceString(record, 'text');
   if (!text) { return undefined; }
   const source = evidenceString(record, 'source');
-  return {
-    id: evidenceString(record, 'id') || undefined,
+  const criterion: ExistingAcceptanceCriterion = {
     text,
     checked: evidenceChecked(record),
-    source: source === 'description' || source === 'manual' ? source : undefined,
   };
+  const id = evidenceString(record, 'id');
+  if (id) { criterion.id = id; }
+  if (source === 'description' || source === 'manual') { criterion.source = source; }
+  return criterion;
 }
 
 function ticketAttachments(value: unknown): TicketAttachmentSummary[] {
@@ -4786,16 +4823,15 @@ function refreshAfterDispatch(state: KronosState, projectName?: string, ticketKe
     if (refreshWarning) {
       run.warnings = [...(run.warnings || []), refreshWarning];
     }
-    const resolvedTicket = resolvePostRunTicket({
-      tickets: state.state?.tickets,
-      ticketKey: resolvedTicketKey,
-      projectName,
-      run,
-    });
+    const ticketResolutionInput: { tickets?: Record<string, Ticket>; ticketKey?: string; projectName?: string; run?: unknown } = { run };
+    if (state.state?.tickets) { ticketResolutionInput.tickets = state.state.tickets; }
+    if (resolvedTicketKey) { ticketResolutionInput.ticketKey = resolvedTicketKey; }
+    if (projectName) { ticketResolutionInput.projectName = projectName; }
+    const resolvedTicket = resolvePostRunTicket(ticketResolutionInput);
     resolvedTicketKey = resolvedTicket.ticketKey || resolvedTicketKey;
     if (resolvedTicketKey) {
       let ticket = resolvedTicket.ticket;
-      if (shouldRecordRunCompletionEvidence({ run, ticket })) {
+      if (ticket && shouldRecordRunCompletionEvidence({ run, ticket })) {
         try {
           addTicketEvidenceNote(resolvedTicketKey, {
             kind: 'note',
@@ -4807,15 +4843,15 @@ function refreshAfterDispatch(state: KronosState, projectName?: string, ticketKe
         }
       }
       state.reloadAndNotify();
-      const reloadedTicket = resolvePostRunTicket({
-        tickets: state.state?.tickets,
-        ticketKey: resolvedTicketKey,
-        projectName,
-        run,
-      });
+      const reloadedTicketInput: { tickets?: Record<string, Ticket>; ticketKey?: string; projectName?: string; run?: unknown } = { run, ticketKey: resolvedTicketKey };
+      if (state.state?.tickets) { reloadedTicketInput.tickets = state.state.tickets; }
+      if (projectName) { reloadedTicketInput.projectName = projectName; }
+      const reloadedTicket = resolvePostRunTicket(reloadedTicketInput);
       resolvedTicketKey = reloadedTicket.ticketKey || resolvedTicketKey;
       ticket = reloadedTicket.ticket;
-      run.readiness = evaluatePostRunReadiness({ run, ticketKey: resolvedTicketKey, ticket });
+      const readinessInput: { run: unknown; ticketKey?: string; ticket?: Ticket } = { run, ticketKey: resolvedTicketKey };
+      if (ticket) { readinessInput.ticket = ticket; }
+      run.readiness = evaluatePostRunReadiness(readinessInput);
       run.failureKind = run.readiness.failureKind;
       if (run.status === 'completed' && run.readiness.status === 'ready') {
         run.status = 'waiting_for_review';
@@ -4896,13 +4932,14 @@ async function confirmDispatchCollisions(state: KronosState, target: {
   excludeQueueItemId?: string;
 }): Promise<boolean> {
   const mrFiles = await loadMrFileHints(state, [target]);
-  const collisions = detectDispatchCollisions({
+  const collisionInput: DispatchCollisionInput = {
     ...target,
     queue: state.queue,
     runs: listRuns(),
-    tickets: state.state?.tickets,
     mrFiles,
-  });
+  };
+  if (state.state?.tickets) { collisionInput.tickets = state.state.tickets; }
+  const collisions = detectDispatchCollisions(collisionInput);
   if (collisions.length === 0) { return true; }
 
   const detail = collisions.slice(0, 5)
@@ -5006,7 +5043,10 @@ function queueCommandPayloadFromRecord(record: Record<string, unknown>): QueueCo
     : [];
   const ticket = typeof record.ticket === 'string' && record.ticket.trim() ? record.ticket.trim() : undefined;
   const id = typeof record.id === 'string' && record.id.trim() ? record.id.trim() : undefined;
-  return { id, ticket, projects, action: action.trim() };
+  const payload: QueueCommandPayload = { projects, action: action.trim() };
+  if (id) { payload.id = id; }
+  if (ticket) { payload.ticket = ticket; }
+  return payload;
 }
 
 function resolveQueueIndex(item: unknown): number | undefined {
