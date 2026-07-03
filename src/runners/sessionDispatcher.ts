@@ -248,6 +248,8 @@ export interface PromptRunMetadata {
   missingVariables?: string[];
   appendSystemPromptHash?: string;
   retryOfRunId?: string;
+  handoff?: string;
+  mergeRequestIid?: number;
 }
 
 interface WorktreeCleanupResult {
@@ -372,6 +374,13 @@ export interface DispatchOptions {
   extraDirs?: string[];
   workspaceCwd?: string;
   projectNameOverride?: string;
+}
+
+export interface DispatchLaunchResult {
+  runId?: string;
+  launched: boolean;
+  status?: KronosRun['status'] | 'failed';
+  failureReason?: string;
 }
 
 async function runCompletionCallback(
@@ -605,7 +614,7 @@ export async function dispatchClaudeSession(
   ticket?: string,
   onCompleteOrOpts?: ((code: number) => void) | DispatchOptions,
   customPrompt?: string
-): Promise<void> {
+): Promise<DispatchLaunchResult> {
   const opts: DispatchOptions = typeof onCompleteOrOpts === 'function'
     ? { onComplete: onCompleteOrOpts }
     : (onCompleteOrOpts || {});
@@ -631,9 +640,10 @@ export async function dispatchClaudeSession(
   try {
     model = validateModel(config.get<string>('dispatchModel', 'claude-opus-4-6'));
   } catch (e: unknown) {
-    vscode.window.showErrorMessage(unknownErrorMessage(e, 'Invalid dispatch model.'));
+    const failureReason = unknownErrorMessage(e, 'Invalid dispatch model.');
+    vscode.window.showErrorMessage(failureReason);
     panel.dispose();
-    return;
+    return { launched: false, status: 'failed', failureReason };
   }
 
   let cwd = opts.workspaceCwd || projectPath;
@@ -693,7 +703,7 @@ export async function dispatchClaudeSession(
     panel.webview.html = withWebviewCsp(buildProgressHtml(projectName, skill, ticket || '', events));
     saveSession(projectName, skill, ticket || '', events);
     await runCompletionCallback(opts, 1, run, { projectName, skill, ticket: ticket || '', events, panel });
-    return;
+    return launchResult(run, false);
   }
 
   if (opts.parallel) {
@@ -769,7 +779,7 @@ export async function dispatchClaudeSession(
       panel.webview.html = withWebviewCsp(buildProgressHtml(projectName, skill, ticket || '', events));
       saveSession(projectName, skill, ticket || '', events);
       await runCompletionCallback(opts, 1, run, { projectName, skill, ticket: ticket || '', events, panel });
-      return;
+      return launchResult(run, false);
     }
   }
 
@@ -834,7 +844,7 @@ export async function dispatchClaudeSession(
     panel.webview.html = withWebviewCsp(buildProgressHtml(projectName, skill, ticket || '', events));
     saveSession(projectName, skill, ticket || '', events);
     await runCompletionCallback(opts, 1, run, { projectName, skill, ticket: ticket || '', events, panel });
-    return;
+    return launchResult(run, false);
   }
   const runningPatch: Partial<KronosRun> = { status: 'running', cwd };
   if (proc.pid !== undefined) { runningPatch.processPid = proc.pid; }
@@ -981,6 +991,17 @@ export async function dispatchClaudeSession(
       }
     }
   });
+  return launchResult(run, true);
+}
+
+function launchResult(run: KronosRun, launched: boolean): DispatchLaunchResult {
+  const result: DispatchLaunchResult = {
+    runId: run.id,
+    launched,
+    status: run.status,
+  };
+  if (run.failureReason) { result.failureReason = run.failureReason; }
+  return result;
 }
 
 export async function openInClaude(projectPath: string): Promise<void> {

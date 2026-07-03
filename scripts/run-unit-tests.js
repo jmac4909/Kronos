@@ -149,6 +149,7 @@ const combinedVerification = require('../out/services/combinedVerification.js');
 const changedFiles = require('../out/services/changedFiles.js');
 const reviewWork = require('../out/services/reviewWork.js');
 const reviewMonitor = require('../out/services/reviewMonitor.js');
+const deployMonitorHandoff = require('../out/services/deployMonitorHandoff.js');
 const sonarReportView = require('../out/services/sonarReportView.js');
 const agingReportView = require('../out/services/agingReportView.js');
 const webviewHtml = require('../out/services/webviewHtml.js');
@@ -1267,6 +1268,78 @@ test('review monitor decisions route merged, closed, comment, and no-op MR polls
   assert.deepEqual(reviewMonitor.decideReviewMonitorAction('K-5', baseUpdate), {
     kind: 'none',
   });
+});
+
+test('deploy monitor handoff resolves projects and only suppresses handled runs', () => {
+  const state = baseState({});
+  state.projects.api = {
+    path: '/repo/api',
+    priority: 1,
+    config: {},
+    health: 'green',
+    summary: '',
+    last_polled: null,
+    open_mr_count: 0,
+  };
+  const merged = ticket({
+    projects: ['app'],
+    next_action: 'deploy_monitor',
+    mr: { iid: 13, state: 'merged', review_status: 'approved', url: 'https://gitlab.example/mr/13' },
+  });
+
+  assert.deepEqual(deployMonitorHandoff.resolveDeployMonitorProject(state, 'K-13', merged), {
+    kind: 'ok',
+    projectName: 'app',
+    projectPath: '/repo/app',
+  });
+  assert.match(
+    deployMonitorHandoff.resolveDeployMonitorProject(state, 'K-NO-PROJECT', ticket({ projects: [], mr: merged.mr })).reason,
+    /no linked project/,
+  );
+  assert.match(
+    deployMonitorHandoff.resolveDeployMonitorProject(state, 'K-MULTI', ticket({ projects: ['app', 'api'], mr: merged.mr })).reason,
+    /multiple projects \(app, api\)/,
+  );
+  assert.match(
+    deployMonitorHandoff.resolveDeployMonitorProject(state, 'K-MISSING', ticket({ projects: ['missing'], mr: merged.mr })).reason,
+    /missing has no registered path/,
+  );
+
+  const match = { projectName: 'app', projectPath: '/repo/app', ticketKey: 'K-13', mrIid: 13 };
+  assert.equal(deployMonitorHandoff.hasHandledDeployMonitorRun([
+    { skill: 'deploy-monitor', ticket: 'K-13', project: 'app', status: 'running', promptMetadata: { mergeRequestIid: 13 } },
+  ], match), true);
+  assert.equal(deployMonitorHandoff.hasHandledDeployMonitorRun([
+    { skill: 'deploy-monitor', ticket: 'K-13', project: 'app', status: 'completed', promptMetadata: { mergeRequestIid: 13 } },
+  ], match), true);
+  assert.equal(deployMonitorHandoff.hasHandledDeployMonitorRun([
+    { skill: 'deploy-monitor', ticket: 'K-13', project: 'app', status: 'failed', promptMetadata: { mergeRequestIid: 13 } },
+    { skill: 'deploy-monitor', ticket: 'K-13', project: 'app', status: 'needs_human', promptMetadata: { mergeRequestIid: 13 } },
+    { skill: 'deploy-monitor', ticket: 'K-13', project: 'app', status: 'cancelled', promptMetadata: { mergeRequestIid: 13 } },
+  ], match), false);
+  assert.equal(deployMonitorHandoff.hasHandledDeployMonitorRun([
+    { skill: 'deploy-monitor', ticket: 'K-13', project: 'app', status: 'completed', promptMetadata: { mergeRequestIid: 99 } },
+  ], match), false);
+  assert.equal(deployMonitorHandoff.hasHandledDeployMonitorRun([
+    { skill: 'deploy-monitor', ticket: 'K-13', project: 'app', status: 'completed' },
+  ], match), true);
+
+  const issueTicket = ticket({
+    mr: merged.mr,
+    evidence: {
+      checks: [{
+        id: 'check-1',
+        at: '2026-07-03T01:00:00.000Z',
+        name: 'Deploy monitor handoff MR !13',
+        result: 'fail',
+        confidence: 'high',
+        summary: 'deploy monitor did not start',
+      }],
+    },
+  });
+  assert.equal(deployMonitorHandoff.deployMonitorHandoffCheckName(issueTicket), 'Deploy monitor handoff MR !13');
+  assert.equal(deployMonitorHandoff.hasDeployMonitorHandoffIssue(issueTicket, 'deploy monitor did not start'), true);
+  assert.equal(deployMonitorHandoff.hasDeployMonitorHandoffIssue(issueTicket, 'different failure'), false);
 });
 
 test('queue mutation helpers centralize queue membership and ticket project links', () => {
@@ -6801,7 +6874,6 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'function reconcileTerminalReviewMergeRequests(state: KronosState): Promise<void>',
     'const updates = reconcileTerminalMergeRequestState();',
     'reviewTerminalMergeRequestActions',
-    'function hasDeployMonitorRunForTicket(ticketKey: string): boolean',
     'gitlabAdapter.mergeRequestStatus',
     'updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status })',
     'const decision = decideReviewMonitorAction(candidate.ticketKey, update)',
@@ -6824,19 +6896,26 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'async function startClaudeDispatch',
     '): Promise<boolean>',
     'type DispatchOptions',
-    'await dispatchClaudeSession(projectPath, skill, ticket, onCompleteOrOpts, customPrompt)',
+    'const launch = await dispatchClaudeSession(projectPath, skill, ticket, onCompleteOrOpts, customPrompt)',
+    'return launch.launched',
     'return true;',
     'return false;',
     'unknownErrorMessage(e, `Failed to start ${skill} session.`)',
+    "import { deployMonitorHandoffCheckName, hasDeployMonitorHandoffIssue, hasHandledDeployMonitorRun, resolveDeployMonitorProject } from './services/deployMonitorHandoff'",
+    'const handled = await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket)',
+    'if (handled) {',
     'console.warn(unknownErrorMessage(e, `Failed to load MR diff hints for ${ticketKey}.`))',
     "const started = await startClaudeDispatch(projectPath, 'deploy-monitor', ticketKey",
     'if (!started) {',
     'deploy monitor did not start',
     'projectNameOverride: projectName',
-    'hasActiveDeployMonitorRun(projectName, projectPath, ticketKey)',
-    'MR merged, but no linked project was found for deploy monitoring.',
-    'has no registered path for deploy monitoring.',
-    'run.project === projectName || run.projectPath === projectPath',
+    'promptMetadata.mergeRequestIid = mrIid',
+    'resolveDeployMonitorProject(state.state, ticketKey, ticket)',
+    'hasHandledDeployMonitorRun(listRuns(), { projectName, projectPath, ticketKey, mrIid })',
+    'recordDeployMonitorHandoffIssue(ticketKey, ticket, reason)',
+    'deployMonitorHandoffCheckName(ticket)',
+    "command: `kronos run deploy-monitor ${ticketKey}`",
+    "environment: 'Kronos review monitor'",
     "import { activeRunStatusBarSummary } from './services/activeRunDisplay'",
     "import { isFreshActiveRun } from './services/runStatus'",
     'const activeRunDisplay = activeRunStatusBarSummary(listRuns())',

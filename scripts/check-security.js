@@ -69,6 +69,7 @@ const postRunReadiness = readSource('src/services/postRunReadiness.ts');
 const ticketFilters = readSource('src/services/ticketFilters.ts');
 const reviewWork = readSource('src/services/reviewWork.ts');
 const reviewMonitor = readSource('src/services/reviewMonitor.ts');
+const deployMonitorHandoff = readSource('src/services/deployMonitorHandoff.ts');
 const promptManager = readSource('src/services/promptManager.ts');
 const runRecovery = readSource('src/services/runRecovery.ts');
 const providerReachability = readSource('src/services/providerReachability.ts');
@@ -219,7 +220,7 @@ for (const [idx, line] of extension.split(/\r?\n/).entries()) {
   }
 }
 const directDispatchCallCount = (extension.match(/dispatchClaudeSession\(/g) || []).length;
-if (directDispatchCallCount !== 1 || !extension.includes('await dispatchClaudeSession(projectPath, skill, ticket, onCompleteOrOpts, customPrompt)')) {
+if (directDispatchCallCount !== 1 || !extension.includes('const launch = await dispatchClaudeSession(projectPath, skill, ticket, onCompleteOrOpts, customPrompt)') || !extension.includes('return launch.launched')) {
   fail('Extension command handlers must start Claude sessions through startClaudeDispatch.');
 }
 for (const [file, source] of Object.entries({
@@ -471,14 +472,21 @@ for (const marker of [
   'startDeployMonitorForMergedTicket',
   'async function startClaudeDispatch',
   'type DispatchOptions',
-  'await dispatchClaudeSession(projectPath, skill, ticket, onCompleteOrOpts, customPrompt)',
+  'const launch = await dispatchClaudeSession(projectPath, skill, ticket, onCompleteOrOpts, customPrompt)',
+  'return launch.launched',
   'unknownErrorMessage(e, `Failed to start ${skill} session.`)',
+  "import { deployMonitorHandoffCheckName, hasDeployMonitorHandoffIssue, hasHandledDeployMonitorRun, resolveDeployMonitorProject } from './services/deployMonitorHandoff'",
+  'const handled = await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket)',
+  'if (handled) {',
   "await startClaudeDispatch(projectPath, 'deploy-monitor', ticketKey",
   'projectNameOverride: projectName',
-  'hasActiveDeployMonitorRun(projectName, projectPath, ticketKey)',
-  'MR merged, but no linked project was found for deploy monitoring.',
-  'has no registered path for deploy monitoring.',
-  'run.project === projectName || run.projectPath === projectPath',
+  'promptMetadata.mergeRequestIid = mrIid',
+  'resolveDeployMonitorProject(state.state, ticketKey, ticket)',
+  'hasHandledDeployMonitorRun(listRuns(), { projectName, projectPath, ticketKey, mrIid })',
+  'recordDeployMonitorHandoffIssue(ticketKey, ticket, reason)',
+  'deployMonitorHandoffCheckName(ticket)',
+  "command: `kronos run deploy-monitor ${ticketKey}`",
+  "environment: 'Kronos review monitor'",
   'kronos.collisionReport',
   'openCollisionReportPanel',
   'loadMrFileHints',
@@ -693,6 +701,21 @@ for (const marker of [
 ]) {
   if (!reviewMonitor.includes(marker)) {
     fail(`Missing review monitor marker: ${marker}`);
+  }
+}
+for (const marker of [
+  'export function resolveDeployMonitorProject',
+  'linkedProjects.length > 1',
+  'export function hasHandledDeployMonitorRun',
+  'isHandledDeployMonitorRun(run)',
+  'HANDLED_DEPLOY_MONITOR_STATUSES',
+  "'completed', 'waiting_for_review'",
+  'promptMetadataMergeRequestIid',
+  'DEPLOY_MONITOR_HANDOFF_CHECK_PREFIX',
+  'hasDeployMonitorHandoffIssue',
+]) {
+  if (!deployMonitorHandoff.includes(marker)) {
+    fail(`Missing deploy monitor handoff marker: ${marker}`);
   }
 }
 for (const marker of [

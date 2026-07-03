@@ -67,6 +67,7 @@ import { buildRunCompletionNotification } from './services/runCompletionNotifica
 import { openReviewTicketEntries, reviewBranchTickets as buildReviewBranchTickets, type ReviewBranchTicket, type TicketWithOpenMergeRequest } from './services/reviewWork';
 import { decideReviewMonitorAction, type ReviewMonitorDecision } from './services/reviewMonitor';
 import { decideQueueRemoval } from './services/queueRemovalPolicy';
+import { deployMonitorHandoffCheckName, hasDeployMonitorHandoffIssue, hasHandledDeployMonitorRun, resolveDeployMonitorProject } from './services/deployMonitorHandoff';
 import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss, normalizeActionPanelMessage, operatorCommandRow, type ActionPanelMessage } from './services/operatorPanel';
 import { buildPromptHistoryHtml, buildPromptManagerHtml, buildPromptSmokeTestsHtml } from './services/promptPanelView';
 import { buildRecoveryHtml, buildStateAuditLogHtml } from './services/recoveryPanelView';
@@ -295,8 +296,8 @@ async function startClaudeDispatch(
   if (!canDispatch) { return false; }
 
   try {
-    await dispatchClaudeSession(projectPath, skill, ticket, onCompleteOrOpts, customPrompt);
-    return true;
+    const launch = await dispatchClaudeSession(projectPath, skill, ticket, onCompleteOrOpts, customPrompt);
+    return launch.launched;
   } catch (e: unknown) {
     vscode.window.showErrorMessage(unknownErrorMessage(e, `Failed to start ${skill} session.`));
     return false;
@@ -5281,12 +5282,10 @@ async function reconcileTerminalReviewMergeRequests(state: KronosState): Promise
     const actionKey = `${update.ticketKey}:${mrIid}:${update.action}`;
     if (reviewTerminalMergeRequestActions.has(actionKey)) { continue; }
     if (update.action === 'deploy_monitor') {
-      if (hasDeployMonitorRunForTicket(update.ticketKey)) {
+      const handled = await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket);
+      if (handled) {
         reviewTerminalMergeRequestActions.add(actionKey);
-        continue;
       }
-      await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket);
-      reviewTerminalMergeRequestActions.add(actionKey);
     } else if (update.action === 'blocked') {
       reviewTerminalMergeRequestActions.add(actionKey);
       void vscode.window.showWarningMessage(`${update.ticketKey} ${update.message}`);
@@ -5339,38 +5338,53 @@ function reviewBranchTickets(state: KronosState): ReviewBranchTicket[] {
   return buildReviewBranchTickets(state.state?.tickets);
 }
 
-async function startDeployMonitorForMergedTicket(state: KronosState, ticketKey: string, ticket: Ticket): Promise<void> {
-  const projectName = ticket.projects?.[0];
-  if (!projectName) {
-    void vscode.window.showWarningMessage(`${ticketKey} MR merged, but no linked project was found for deploy monitoring.`);
-    return;
+async function startDeployMonitorForMergedTicket(state: KronosState, ticketKey: string, ticket: Ticket): Promise<boolean> {
+  const project = resolveDeployMonitorProject(state.state, ticketKey, ticket);
+  if (project.kind !== 'ok' || !project.projectName || !project.projectPath) {
+    const reason = project.reason || `${ticketKey} MR merged, but deploy monitoring could not resolve a project.`;
+    recordDeployMonitorHandoffIssue(ticketKey, ticket, reason);
+    void vscode.window.showWarningMessage(reason);
+    return false;
   }
-  const projectPath = getProjectPath(state, projectName);
-  if (!projectPath) {
-    void vscode.window.showWarningMessage(`${ticketKey} MR merged, but ${projectName} has no registered path for deploy monitoring.`);
-    return;
-  }
-  if (hasActiveDeployMonitorRun(projectName, projectPath, ticketKey)) { return; }
+  const projectName = project.projectName;
+  const projectPath = project.projectPath;
+  const mrIid = ticket.mr?.iid;
+  if (hasHandledDeployMonitorRun(listRuns(), { projectName, projectPath, ticketKey, mrIid })) { return true; }
+  const promptMetadata: PromptRunMetadata = {
+    source: 'slash',
+    handoff: 'review-monitor',
+  };
+  if (mrIid !== undefined) { promptMetadata.mergeRequestIid = mrIid; }
   const started = await startClaudeDispatch(projectPath, 'deploy-monitor', ticketKey, {
     onComplete: refreshAfterDispatch(state, projectName, ticketKey),
     projectNameOverride: projectName,
+    promptMetadata,
   });
   if (!started) {
-    void vscode.window.showWarningMessage(`${ticketKey} merged, but deploy monitor did not start. Start deploy monitor manually from the Review view or ticket details.`);
-    return;
+    const reason = `${ticketKey} merged, but deploy monitor did not start. Start deploy monitor manually from the Review view or ticket details.`;
+    recordDeployMonitorHandoffIssue(ticketKey, ticket, reason);
+    state.reloadAndNotify();
+    void vscode.window.showWarningMessage(reason);
+    return false;
   }
   void vscode.window.showInformationMessage(`${ticketKey} merged - deploy monitor started.`);
+  return true;
 }
 
-function hasActiveDeployMonitorRun(projectName: string, projectPath: string, ticketKey: string): boolean {
-  return listRuns().some(run => isFreshActiveRun(run)
-    && run.skill === 'deploy-monitor'
-    && (run.project === projectName || run.projectPath === projectPath)
-    && (!run.ticket || run.ticket === ticketKey));
-}
-
-function hasDeployMonitorRunForTicket(ticketKey: string): boolean {
-  return listRuns().some(run => run.skill === 'deploy-monitor' && run.ticket === ticketKey);
+function recordDeployMonitorHandoffIssue(ticketKey: string, ticket: Ticket, summary: string): void {
+  if (hasDeployMonitorHandoffIssue(ticket, summary)) { return; }
+  try {
+    addTicketEvidenceCheck(ticketKey, {
+      name: deployMonitorHandoffCheckName(ticket),
+      result: 'fail',
+      environment: 'Kronos review monitor',
+      command: `kronos run deploy-monitor ${ticketKey}`,
+      summary,
+      confidence: 'high',
+    });
+  } catch (e: unknown) {
+    console.warn(unknownErrorMessage(e, `Failed to record deploy-monitor handoff issue for ${ticketKey}.`));
+  }
 }
 
 async function pickProjectFromTickets<T extends { key: string; projects: string[] }>(
