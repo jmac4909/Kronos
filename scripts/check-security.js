@@ -2812,8 +2812,8 @@ for (const marker of [
 }
 
 for (const marker of [
-  "const ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused'])",
-  "const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running'])",
+  "const ACTIVE_RUN_STATUSES = new Set(['preflight', 'running', 'paused'])",
+  "const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['preflight', 'running'])",
   'const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
   'interface RunStatusLike',
   'export function isActiveRunStatus',
@@ -2829,7 +2829,7 @@ for (const marker of [
   "hasDateLikeValue(run['endedAt'])",
   "label.startsWith('Session exited with code')",
   'export function activeRunSummary',
-  "['running', 'preflight', 'queued', 'paused']",
+  "['running', 'preflight', 'paused']",
 ]) {
   if (!runStatus.includes(marker)) {
     fail(`Missing run status marker: ${marker}`);

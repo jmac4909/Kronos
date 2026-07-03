@@ -1,5 +1,5 @@
-const ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused']);
-const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running']);
+const ACTIVE_RUN_STATUSES = new Set(['preflight', 'running', 'paused']);
+const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['preflight', 'running']);
 const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000;
 
 interface RunStatusLike {
@@ -52,7 +52,7 @@ export function activeRunSummary(runs: Array<RunStatusLike | unknown>, now = new
     if (!isFreshActiveRun(run, now)) { continue; }
     counts.set(status, (counts.get(status) || 0) + 1);
   }
-  return ['running', 'preflight', 'queued', 'paused']
+  return ['running', 'preflight', 'paused']
     .filter(status => counts.has(status))
     .map(status => `${counts.get(status)} ${status}`)
     .join(', ');

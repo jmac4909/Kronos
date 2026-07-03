@@ -192,7 +192,7 @@ export interface KronosRun {
   projectPath: string;
   skill: string;
   ticket: string;
-  status: 'queued' | 'preflight' | 'running' | 'paused' | 'waiting_for_review' | 'completed' | 'failed' | 'cancelled' | 'needs_human';
+  status: 'preflight' | 'running' | 'paused' | 'waiting_for_review' | 'completed' | 'failed' | 'cancelled' | 'needs_human';
   model: string;
   promptHash: string;
   promptPreview: string;

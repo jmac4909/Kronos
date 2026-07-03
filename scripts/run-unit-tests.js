@@ -4689,10 +4689,10 @@ test('ticket timeline combines queue, runs, evidence, MR, build, and ticket even
 test('run status helper centralizes active persisted run semantics', () => {
   assert.equal(runStatus.isActiveRunStatus('running'), true);
   assert.equal(runStatus.isActiveRunStatus('preflight'), true);
-  assert.equal(runStatus.isActiveRunStatus('queued'), true);
+  assert.equal(runStatus.isActiveRunStatus('queued'), false);
   assert.equal(runStatus.isActiveRunStatus('paused'), true);
   assert.equal(runStatus.isActiveRunStatus('completed'), false);
-  assert.equal(runStatus.isActiveRun({ status: 'queued' }), true);
+  assert.equal(runStatus.isActiveRun({ status: 'queued' }), false);
   assert.equal(runStatus.isActiveRun({ status: 'running' }), true);
   assert.equal(runStatus.isFreshActiveRun({ status: 'running', startedAt: '2026-07-01T11:00:00.000Z' }, new Date('2026-07-01T12:00:00.000Z')), true);
   assert.equal(runStatus.isFreshActiveRun({ status: 'running', startedAt: '2026-06-30T23:00:00.000Z' }, new Date('2026-07-01T12:00:00.000Z')), false);
@@ -4726,12 +4726,12 @@ test('run status helper centralizes active persisted run semantics', () => {
     { status: 'paused' },
     { status: 'running', startedAt: '2000-01-01T00:00:00.000Z' },
     { status: 'completed' },
-  ]), '2 running, 1 preflight, 1 queued, 1 paused');
+  ]), '2 running, 1 preflight, 1 paused');
 
   const source = readSourceFixture('src', 'services', 'runStatus.ts');
   for (const marker of [
-    "const ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused'])",
-    "const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running'])",
+    "const ACTIVE_RUN_STATUSES = new Set(['preflight', 'running', 'paused'])",
+    "const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['preflight', 'running'])",
     'const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
     'interface RunStatusLike',
     'export function isActiveRunStatus',
@@ -4747,7 +4747,7 @@ test('run status helper centralizes active persisted run semantics', () => {
     "hasDateLikeValue(run['endedAt'])",
     'label.startsWith(\'Session exited with code\')',
     'export function activeRunSummary',
-    "['running', 'preflight', 'queued', 'paused']",
+    "['running', 'preflight', 'paused']",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -4953,17 +4953,17 @@ test('run center sort orders active work first and failed or cancelled runs last
 
   assert.deepEqual(ordered, [
     'active-new',
-    'queued-new',
     'active-old',
     'review-ready',
     'needs-human',
     'completed-latest',
+    'queued-new',
     'unknown-new',
     'running-terminal',
     'failed-newer',
     'cancelled-old',
   ]);
-  assert.equal(runCenterSort.runCenterStatusPriority({ status: 'queued' }), 0);
+  assert.equal(runCenterSort.runCenterStatusPriority({ status: 'queued' }), 4);
   assert.equal(runCenterSort.runCenterStatusPriority({ status: 'running', startedAt: '2000-01-01T00:00:00.000Z' }), 4);
   assert.equal(runCenterSort.runCenterStatusPriority({ status: 'running', endedAt: '2026-07-02T00:00:00.000Z' }), 4);
   assert.equal(runCenterSort.runCenterStatusPriority({ status: 'running' }), 0);
@@ -5100,7 +5100,7 @@ test('collision detector flags active runs, duplicate queue work, and open MRs',
 
   assert.equal(collisions[0].severity, 'high');
   assert.ok(collisions.some(c => c.kind === 'active_run' && c.id.includes('run-ticket')));
-  assert.ok(collisions.some(c => c.kind === 'active_run' && c.id.includes('queued-ticket')));
+  assert.equal(collisions.some(c => c.kind === 'active_run' && c.id.includes('queued-ticket')), false);
   assert.ok(collisions.some(c => c.kind === 'active_run' && c.id.includes('paused-run')));
   assert.equal(collisions.some(c => c.id.includes('stale-running')), false);
   assert.equal(collisions.some(c => c.id.includes('stale-queued')), false);
@@ -5138,7 +5138,7 @@ test('collision detector flags active runs, duplicate queue work, and open MRs',
     staleActiveRunHours: 0,
   });
   assert.ok(staleThresholdDisabled.some(c => c.id.includes('stale-running')));
-  assert.ok(staleThresholdDisabled.some(c => c.id.includes('stale-queued')));
+  assert.equal(staleThresholdDisabled.some(c => c.id.includes('stale-queued')), false);
 
   const source = readSourceFixture('src', 'services', 'collisionDetector.ts');
   for (const marker of [
