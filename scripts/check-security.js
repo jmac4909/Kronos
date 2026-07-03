@@ -1936,6 +1936,8 @@ for (const marker of [
   'function injectWebviewScriptDiagnostic(html: string): string',
   'injectWebviewScriptDiagnostic(value)',
   'export function webviewActionPostScript',
+  'function closestKronosActionTarget(target)',
+  'target.parentElement',
   'function postKronosAction(event)',
   "document.addEventListener('click', postKronosAction, true)",
   "document.addEventListener('DOMContentLoaded', attachKronosActionHandler, { once: true })",

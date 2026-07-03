@@ -2009,7 +2009,8 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(actionScript, /DOMContentLoaded/);
   assert.match(actionScript, /data-kronos-actions-ready/);
   assert.match(actionScript, /message\[field\.messageKey\]/);
-  assert.match(actionScript, /typeof event\.target\.closest === 'function'/);
+  assert.match(actionScript, /function closestKronosActionTarget/);
+  assert.match(actionScript, /target\.parentElement/);
   assert.doesNotMatch(actionScript, /instanceof Element/);
   assert.doesNotMatch(actionScript, /__kronosWebviewReady/);
   const postedMessages = [];
@@ -2049,6 +2050,14 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.equal(postedMessages[0].command, 'openRunRecord');
   assert.equal(postedMessages[0].ticket, 'K-1');
   assert.equal(postedMessages[0].runId, 'run-1');
+  defaultPrevented = false;
+  const fakeTextTarget = { parentElement: fakeButton };
+  documentListeners.click({ target: fakeTextTarget, preventDefault() { defaultPrevented = true; } });
+  assert.equal(defaultPrevented, true);
+  assert.equal(postedMessages.length, 2);
+  assert.equal(postedMessages[1].command, 'openRunRecord');
+  assert.equal(postedMessages[1].ticket, 'K-1');
+  assert.equal(postedMessages[1].runId, 'run-1');
   const diagnosticActionScript = webviewSecurity.webviewActionPostScript('Kronos Actions', [
     { messageKey: 'ticket', dataAttribute: 'data-ticket' },
   ], { readyCommand: webviewSecurity.WEBVIEW_READY_COMMAND });
