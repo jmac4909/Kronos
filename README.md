@@ -8,6 +8,8 @@ This build is ready for local human feedback, not marketplace release. The core 
 
 The extension expects local operator state under `~/.claude/kronos` and optional integration scripts under `~/.claude/scripts`. Missing integrations should be surfaced through Kronos Doctor instead of crashing the UI.
 
+Windows webview execution has been smoke-tested in the EC2 lab on VS Code 1.127.0. Jira Board, Run Center, Evidence Gate, and Human Review Inbox reported script readiness and accepted click actions without CSP or runtime errors. The human feedback checklist remains the operator UX gate.
+
 ## Quick Start
 
 ```bash
@@ -40,7 +42,7 @@ npm run feedback:ready
 ```
 
 `npm test` runs the manifest check, security invariants, prompt governance, TypeScript compile, and the unit/regression harness.
-`npm run feedback:ready` runs the full validation/package path, verifies the VSIX contains the expected user-facing files and compiled extension output, and reminds the tester that the VS Code smoke flow is still a manual gate.
+`npm run feedback:ready` runs the full validation/package path, verifies the VSIX contains the expected user-facing files and compiled extension output, and reminds the tester that human operator feedback is still required before broader release.
 
 ## Feedback Target
 

@@ -111,6 +111,8 @@ requireFile('WINDOWS_FEEDBACK_2026-07-02.md', [
   'gcloud.cmd',
   'Run records can remain `running`',
   'Webview buttons are dead',
+  'latest CDP smoke',
+  'ready=true',
 ]);
 requireFile('LICENSE', ['All rights reserved']);
 requireFile('.vscode/launch.json', ['Run Kronos Extension']);
@@ -165,4 +167,5 @@ if (codePath || codiumPath) {
 } else {
   console.log('- VS Code CLI not found on this host; install/test the VSIX on a machine with VS Code.');
 }
-console.log('- Remaining manual gate: run the VS Code smoke flow in HUMAN_FEEDBACK_CHECKLIST.md and capture human feedback.');
+console.log('- Windows VS Code 1.127 webview smoke evidence is recorded in WINDOWS_FEEDBACK_2026-07-02.md.');
+console.log('- Remaining manual gate: run HUMAN_FEEDBACK_CHECKLIST.md with a human operator and capture UX feedback.');
