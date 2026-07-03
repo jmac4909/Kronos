@@ -308,6 +308,11 @@ function mergeRequestStatus(target: MergeRequest, status: Partial<MergeRequest>)
   changed = setMergeRequestNumber(target, 'comment_count', status.comment_count) || changed;
   changed = setMergeRequestString(target, 'last_comment_at', status.last_comment_at) || changed;
   changed = setMergeRequestComments(target, status.comments) || changed;
+  changed = setMergeRequestNumber(target, 'discussion_count', status.discussion_count) || changed;
+  changed = setMergeRequestNumber(target, 'unresolved_discussion_count', status.unresolved_discussion_count) || changed;
+  changed = setMergeRequestNumber(target, 'resolved_discussion_count', status.resolved_discussion_count) || changed;
+  changed = setMergeRequestString(target, 'last_discussion_at', status.last_discussion_at) || changed;
+  changed = setMergeRequestBoolean(target, 'discussions_resolved', status.discussions_resolved) || changed;
   return changed;
 }
 
@@ -325,6 +330,11 @@ function setMergeRequestString<K extends keyof MergeRequest>(target: MergeReques
 function setMergeRequestNumber<K extends keyof MergeRequest>(target: MergeRequest, key: K, value: unknown): boolean {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) { return false; }
   return setMergeRequestField(target, key, Math.floor(value) as MergeRequest[K]);
+}
+
+function setMergeRequestBoolean<K extends keyof MergeRequest>(target: MergeRequest, key: K, value: unknown): boolean {
+  if (typeof value !== 'boolean') { return false; }
+  return setMergeRequestField(target, key, value as MergeRequest[K]);
 }
 
 function setMergeRequestComments(target: MergeRequest, value: unknown): boolean {

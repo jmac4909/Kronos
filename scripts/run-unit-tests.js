@@ -405,6 +405,11 @@ test('state store validates queue and ticket evidence shapes', () => {
           review_status: 'pending_review',
           url: 'https://gitlab.example/3',
           comments: [{ id: 'n1', author: 'Reviewer', created: '2026-07-02T01:00:00.000Z', body: 'Please update tests.' }],
+          discussion_count: 2,
+          unresolved_discussion_count: 1,
+          resolved_discussion_count: 1,
+          last_discussion_at: '2026-07-02T01:00:00.000Z',
+          discussions_resolved: false,
         },
         build: { number: 4, status: 'SUCCESS', url: 'https://jenkins.example/4' },
       }),
@@ -926,6 +931,11 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
       source_branch: 'feature/K-5',
       comment_count: 2,
       last_comment_at: '2026-07-02T01:00:00.000Z',
+      discussion_count: 2,
+      unresolved_discussion_count: 1,
+      resolved_discussion_count: 1,
+      last_discussion_at: '2026-07-02T01:00:00.000Z',
+      discussions_resolved: false,
       comments: [
         { id: '1', author: 'Reviewer', created: '2026-07-02T00:30:00.000Z', body: 'Looks close.' },
         { id: '2', author: 'Reviewer', created: '2026-07-02T01:00:00.000Z', body: 'Please add a Windows check.' },
@@ -942,6 +952,8 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
   assert.equal(updatedMrTicket.mr.state, 'merged');
   assert.equal(updatedMrTicket.mr.review_status, 'approved');
   assert.equal(updatedMrTicket.mr.comment_count, 2);
+  assert.equal(updatedMrTicket.mr.unresolved_discussion_count, 1);
+  assert.equal(updatedMrTicket.mr.discussions_resolved, false);
   assert.deepEqual(updatedMrTicket.mr.comments.map(comment => comment.body), ['Looks close.', 'Please add a Windows check.']);
   assert.equal(updatedMrTicket.next_action, 'deploy_monitor');
   const noChange = ticketMutations.updateTicketMergeRequestStatus({
@@ -953,6 +965,11 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
       source_branch: 'feature/K-5',
       comment_count: 2,
       last_comment_at: '2026-07-02T01:00:00.000Z',
+      discussion_count: 2,
+      unresolved_discussion_count: 1,
+      resolved_discussion_count: 1,
+      last_discussion_at: '2026-07-02T01:00:00.000Z',
+      discussions_resolved: false,
       comments: [
         { id: '1', author: 'Reviewer', created: '2026-07-02T00:30:00.000Z', body: 'Looks close.' },
         { id: '2', author: 'Reviewer', created: '2026-07-02T01:00:00.000Z', body: 'Please add a Windows check.' },
@@ -1035,6 +1052,26 @@ test('merge request notifications summarize review status and new comment change
   }), {
     severity: 'info',
     message: 'K-4B: MR !41 new MR comment.',
+  });
+  assert.deepEqual(mergeRequestNotifications.describeMergeRequestStatusChange('K-4C', {
+    ...baseUpdate,
+    previousMr: { iid: 42, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/42', unresolved_discussion_count: 1 },
+    ticket: ticket({
+      mr: { iid: 42, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/42', unresolved_discussion_count: 3 },
+    }),
+  }), {
+    severity: 'warning',
+    message: 'K-4C: MR !42 2 new unresolved MR discussions.',
+  });
+  assert.deepEqual(mergeRequestNotifications.describeMergeRequestStatusChange('K-4D', {
+    ...baseUpdate,
+    previousMr: { iid: 43, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/43', unresolved_discussion_count: 2 },
+    ticket: ticket({
+      mr: { iid: 43, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/43', unresolved_discussion_count: 0 },
+    }),
+  }), {
+    severity: 'info',
+    message: 'K-4D: MR !43 all MR discussions resolved.',
   });
   assert.equal(mergeRequestNotifications.describeMergeRequestStatusChange('K-5', {
     ...baseUpdate,
@@ -4436,6 +4473,10 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
             { id: 1, body: 'approved', created_at: '2026-07-02T01:00:00.000Z', author: { username: 'ada' } },
             { id: '2', note: 'merged', created_at: '2026-07-02T02:00:00.000Z' },
           ],
+          discussions: [
+            { id: 'd1', notes: [{ body: 'fixed', created_at: '2026-07-02T02:30:00.000Z', resolvable: true, resolved: true }] },
+            { id: 'd2', notes: [{ body: 'still failing', created_at: '2026-07-02T03:00:00.000Z', resolvable: true, resolved: false }] },
+          ],
           files: [{ path: 'src/app.ts' }],
         });
       }
@@ -4458,6 +4499,11 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
   assert.equal(status.source_branch, 'feature/K-7');
   assert.equal(status.comment_count, 2);
   assert.equal(status.last_comment_at, '2026-07-02T02:00:00.000Z');
+  assert.equal(status.discussion_count, 2);
+  assert.equal(status.resolved_discussion_count, 1);
+  assert.equal(status.unresolved_discussion_count, 1);
+  assert.equal(status.last_discussion_at, '2026-07-02T03:00:00.000Z');
+  assert.equal(status.discussions_resolved, false);
   assert.deepEqual(status.comments.map(comment => comment.id), ['1', '2']);
   assert.deepEqual(calls, [
     ['--ticket-comments', 'K-7'],
@@ -4483,15 +4529,26 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
   assert.deepEqual(integrationAdapters.normalizeJiraComments({ comments: 'bad' }), []);
   assert.deepEqual(integrationAdapters.normalizeMergeRequestStatus({
     mr: { state: 'open', approved: true, author: { name: 'Ada' }, branch: ' feature/K-8 ' },
-    discussions: [{ notes: [{ body: 'Looks good', created_at: '2026-07-02T03:00:00.000Z' }] }],
+    discussions: [
+      { id: 'd1', notes: [{ body: 'Looks good', created_at: '2026-07-02T03:00:00.000Z', resolvable: true, resolved: true }] },
+      { id: 'd2', notes: [{ body: 'Needs tests', created_at: '2026-07-02T04:00:00.000Z', resolvable: true, resolved: false }] },
+    ],
   }), {
     state: 'opened',
     review_status: 'approved',
     author: 'Ada',
     branch: 'feature/K-8',
-    comment_count: 1,
-    last_comment_at: '2026-07-02T03:00:00.000Z',
-    comments: [{ created: '2026-07-02T03:00:00.000Z', body: 'Looks good' }],
+    comment_count: 2,
+    last_comment_at: '2026-07-02T04:00:00.000Z',
+    comments: [
+      { created: '2026-07-02T03:00:00.000Z', body: 'Looks good' },
+      { created: '2026-07-02T04:00:00.000Z', body: 'Needs tests' },
+    ],
+    discussion_count: 2,
+    unresolved_discussion_count: 1,
+    resolved_discussion_count: 1,
+    last_discussion_at: '2026-07-02T04:00:00.000Z',
+    discussions_resolved: false,
   });
   assert.deepEqual(integrationAdapters.normalizeMergeRequestStatus({
     mr: {
@@ -4505,6 +4562,25 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
     review_status: 'pending_review',
     comment_count: 3,
     last_comment_at: '2026-07-02T04:00:00.000Z',
+  });
+  assert.deepEqual(integrationAdapters.normalizeMergeRequestStatus({
+    mr: {
+      state: 'opened',
+      review_status: 'pending_review',
+      discussions_count: '3',
+      unresolved_discussions_count: '0',
+      resolved_discussions_count: '3',
+      last_discussion_updated_at: '2026-07-02T06:00:00.000Z',
+      blocking_discussions_resolved: true,
+    },
+  }), {
+    state: 'opened',
+    review_status: 'pending_review',
+    discussion_count: 3,
+    unresolved_discussion_count: 0,
+    resolved_discussion_count: 3,
+    last_discussion_at: '2026-07-02T06:00:00.000Z',
+    discussions_resolved: true,
   });
   assert.deepEqual(integrationAdapters.normalizeMergeRequestStatus({
     mr: {
@@ -6527,6 +6603,8 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
     'function mergeRequestComments(record: object | null | undefined)',
     'const comments = mergeRequestComments(mr).slice(-5).reverse()',
     'class="mr-comments"',
+    "const discussionCount = ticketStringField(mr, 'discussion_count')",
+    'Discussions: ${esc(discussionCount ||',
     'function existingAcceptanceCriterion(record: object)',
     'export type EvidenceRecord = object',
     'Reflect.get(record, key)',
@@ -6691,6 +6769,8 @@ test('tree providers share action labels and icons', () => {
     'private seedInitialReviewKeys(): void',
     'this.seenReviewKeys = new Set(initialKeys)',
     "this.description = `${isNew ? 'NEW · ' : ''}",
+    'const unresolvedSuffix = mr.unresolved_discussion_count !== undefined',
+    'Unresolved discussions: ${mr.unresolved_discussion_count}',
     "new vscode.ThemeIcon('sync~spin', new vscode.ThemeColor('charts.yellow'))",
     "new vscode.ThemeIcon('circle-filled'",
     "new vscode.ThemeIcon('git-pull-request', color)",

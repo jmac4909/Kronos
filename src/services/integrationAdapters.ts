@@ -35,7 +35,19 @@ export interface MergeRequestStatusResult {
   comment_count?: number;
   last_comment_at?: string;
   comments?: MergeRequestComment[];
+  discussion_count?: number;
+  unresolved_discussion_count?: number;
+  resolved_discussion_count?: number;
+  last_discussion_at?: string;
+  discussions_resolved?: boolean;
   [key: string]: unknown;
+}
+
+interface MergeRequestDiscussionStats {
+  discussion_count: number;
+  unresolved_discussion_count: number;
+  resolved_discussion_count: number;
+  last_discussion_at?: string;
 }
 
 export interface SonarBranch {
@@ -151,8 +163,10 @@ export function normalizeMergeRequestStatus(value: unknown): MergeRequestStatusR
   const data = isRecord(value) ? value : {};
   const mr = isRecord(data['mr']) ? data['mr'] : data;
   const commentsSource = firstDefined(data['comments'], data['notes'], data['discussions'], mr['comments'], mr['notes'], mr['discussions']);
+  const discussionsSource = firstDefined(data['discussions'], mr['discussions']);
   const comments = commentsSource === undefined ? [] : normalizeMergeRequestComments(commentsSource);
   const latestComment = latestCommentAt(comments);
+  const discussionStats = normalizeMergeRequestDiscussionStats(discussionsSource);
   const providedCommentCount = numberField(firstDefined(
     mr['comment_count'],
     data['comment_count'],
@@ -161,11 +175,35 @@ export function normalizeMergeRequestStatus(value: unknown): MergeRequestStatusR
     mr['notes_count'],
     data['notes_count'],
   ));
+  const providedDiscussionCount = numberField(firstDefined(
+    mr['discussion_count'],
+    data['discussion_count'],
+    mr['discussions_count'],
+    data['discussions_count'],
+  ));
+  const providedUnresolvedDiscussionCount = numberField(firstDefined(
+    mr['unresolved_discussion_count'],
+    data['unresolved_discussion_count'],
+    mr['unresolved_discussions_count'],
+    data['unresolved_discussions_count'],
+  ));
+  const providedResolvedDiscussionCount = numberField(firstDefined(
+    mr['resolved_discussion_count'],
+    data['resolved_discussion_count'],
+    mr['resolved_discussions_count'],
+    data['resolved_discussions_count'],
+  ));
   const providedLastCommentAt = stringField(firstDefined(
     mr['last_comment_at'],
     data['last_comment_at'],
     mr['last_note_at'],
     data['last_note_at'],
+  ));
+  const providedLastDiscussionAt = stringField(firstDefined(
+    mr['last_discussion_at'],
+    data['last_discussion_at'],
+    mr['last_discussion_updated_at'],
+    data['last_discussion_updated_at'],
   ));
   const status: MergeRequestStatusResult = {};
 
@@ -203,6 +241,29 @@ export function normalizeMergeRequestStatus(value: unknown): MergeRequestStatusR
   }
   const lastCommentAt = latestComment || providedLastCommentAt;
   if (lastCommentAt) { status.last_comment_at = lastCommentAt; }
+  if (discussionStats) {
+    status.discussion_count = discussionStats.discussion_count;
+    status.unresolved_discussion_count = discussionStats.unresolved_discussion_count;
+    status.resolved_discussion_count = discussionStats.resolved_discussion_count;
+    if (discussionStats.last_discussion_at) { status.last_discussion_at = discussionStats.last_discussion_at; }
+    status.discussions_resolved = discussionStats.unresolved_discussion_count === 0;
+  } else {
+    if (providedDiscussionCount !== undefined) { status.discussion_count = providedDiscussionCount; }
+    if (providedUnresolvedDiscussionCount !== undefined) { status.unresolved_discussion_count = providedUnresolvedDiscussionCount; }
+    if (providedResolvedDiscussionCount !== undefined) { status.resolved_discussion_count = providedResolvedDiscussionCount; }
+    if (providedLastDiscussionAt) { status.last_discussion_at = providedLastDiscussionAt; }
+    const providedDiscussionsResolved = booleanField(firstDefined(
+      mr['discussions_resolved'],
+      data['discussions_resolved'],
+      mr['blocking_discussions_resolved'],
+      data['blocking_discussions_resolved'],
+    ));
+    if (providedDiscussionsResolved !== undefined) {
+      status.discussions_resolved = providedDiscussionsResolved;
+    } else if (providedUnresolvedDiscussionCount !== undefined) {
+      status.discussions_resolved = providedUnresolvedDiscussionCount === 0;
+    }
+  }
   return status;
 }
 
@@ -317,6 +378,47 @@ function latestCommentAt(comments: MergeRequestComment[]): string | undefined {
     .at(-1);
 }
 
+function normalizeMergeRequestDiscussionStats(value: unknown): MergeRequestDiscussionStats | null {
+  if (!Array.isArray(value)) { return null; }
+  let unresolved = 0;
+  let resolved = 0;
+  const timestamps: string[] = [];
+  for (const discussion of value) {
+    if (!isRecord(discussion)) { continue; }
+    const notes = Array.isArray(discussion['notes']) ? discussion['notes'].filter(isRecord) : [];
+    const discussionResolved = booleanField(discussion['resolved']);
+    const noteResolvedValues = notes
+      .map(note => booleanField(note['resolved']))
+      .filter((result): result is boolean => result !== undefined);
+    const hasResolvableNotes = notes.some(note => note['resolvable'] === true || booleanField(note['resolved']) !== undefined);
+    if (discussionResolved === false || noteResolvedValues.some(result => !result)) {
+      unresolved += 1;
+    } else if (discussionResolved === true || (hasResolvableNotes && noteResolvedValues.length > 0 && noteResolvedValues.every(Boolean))) {
+      resolved += 1;
+    }
+    addDiscussionTimestamp(timestamps, discussion['updated_at']);
+    addDiscussionTimestamp(timestamps, discussion['created_at']);
+    for (const note of notes) {
+      addDiscussionTimestamp(timestamps, note['updated_at']);
+      addDiscussionTimestamp(timestamps, note['created_at']);
+      addDiscussionTimestamp(timestamps, note['created']);
+    }
+  }
+  const stats: MergeRequestDiscussionStats = {
+    discussion_count: value.length,
+    unresolved_discussion_count: unresolved,
+    resolved_discussion_count: resolved,
+  };
+  const lastDiscussionAt = timestamps.sort().at(-1);
+  if (lastDiscussionAt) { stats.last_discussion_at = lastDiscussionAt; }
+  return stats;
+}
+
+function addDiscussionTimestamp(target: string[], value: unknown): void {
+  const timestamp = stringField(value);
+  if (timestamp) { target.push(timestamp); }
+}
+
 function stringField(value: unknown): string | undefined {
   if (typeof value !== 'string') { return undefined; }
   const trimmed = value.trim();
@@ -330,4 +432,13 @@ function numberField(value: unknown): number | undefined {
       ? Number(value.trim())
       : NaN;
   return Number.isFinite(numeric) && numeric >= 0 ? Math.floor(numeric) : undefined;
+}
+
+function booleanField(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') { return value; }
+  if (typeof value !== 'string') { return undefined; }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true') { return true; }
+  if (normalized === 'false') { return false; }
+  return undefined;
 }

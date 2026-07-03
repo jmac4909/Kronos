@@ -31,6 +31,14 @@ export function describeMergeRequestStatusChange(
     details.push(commentDetail);
   }
 
+  const discussionDetail = discussionResolutionDetail(previous, current);
+  if (discussionDetail) {
+    details.push(discussionDetail.message);
+    if (discussionDetail.severity === 'warning') {
+      severity = 'warning';
+    }
+  }
+
   if (details.length === 0) {
     return null;
   }
@@ -58,6 +66,28 @@ function newCommentDetail(previous: MergeRequest, current: MergeRequest): string
     return 'new MR comment';
   }
   return null;
+}
+
+function discussionResolutionDetail(previous: MergeRequest, current: MergeRequest): MergeRequestStatusNotification | null {
+  const previousUnresolved = finiteCommentCount(previous.unresolved_discussion_count);
+  const currentUnresolved = finiteCommentCount(current.unresolved_discussion_count);
+  if (previousUnresolved === undefined || currentUnresolved === undefined || previousUnresolved === currentUnresolved) {
+    return null;
+  }
+  if (currentUnresolved > previousUnresolved) {
+    const added = currentUnresolved - previousUnresolved;
+    return {
+      severity: 'warning',
+      message: `${added} new unresolved MR discussion${added === 1 ? '' : 's'}`,
+    };
+  }
+  const resolved = previousUnresolved - currentUnresolved;
+  return {
+    severity: 'info',
+    message: currentUnresolved === 0
+      ? 'all MR discussions resolved'
+      : `${resolved} MR discussion${resolved === 1 ? '' : 's'} resolved`,
+  };
 }
 
 function finiteCommentCount(value: unknown): number | undefined {

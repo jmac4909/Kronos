@@ -447,7 +447,44 @@ function repairMergeRequest(ticket: MutableStateRecord, key: string, issues: Sta
     mr['url'] = String(mr['url']);
     addStateIssue(issues, `ticket ${key} mr.url was coerced to a string.`);
   }
+  repairMergeRequestMetadata(mr, key, issues);
   repairMergeRequestComments(mr, key, issues);
+}
+
+function repairMergeRequestMetadata(mr: MutableStateRecord, key: string, issues: StateFileLoadIssue[]): void {
+  for (const field of ['comment_count', 'discussion_count', 'unresolved_discussion_count', 'resolved_discussion_count']) {
+    if (mr[field] === undefined) { continue; }
+    if (typeof mr[field] === 'number' && Number.isFinite(mr[field]) && mr[field] >= 0) {
+      mr[field] = Math.floor(mr[field]);
+      continue;
+    }
+    const numeric = Number(mr[field]);
+    if (Number.isFinite(numeric) && numeric >= 0) {
+      mr[field] = Math.floor(numeric);
+      addStateIssue(issues, `ticket ${key} mr.${field} was coerced to a number.`);
+    } else {
+      delete mr[field];
+      addStateIssue(issues, `ticket ${key} mr.${field} was invalid and was ignored.`);
+    }
+  }
+  for (const field of ['last_comment_at', 'last_discussion_at']) {
+    if (mr[field] !== undefined && typeof mr[field] !== 'string') {
+      mr[field] = String(mr[field]);
+      addStateIssue(issues, `ticket ${key} mr.${field} was coerced to a string.`);
+    }
+  }
+  if (mr['discussions_resolved'] !== undefined && typeof mr['discussions_resolved'] !== 'boolean') {
+    if (mr['discussions_resolved'] === 'true') {
+      mr['discussions_resolved'] = true;
+      addStateIssue(issues, `ticket ${key} mr.discussions_resolved was coerced to a boolean.`);
+    } else if (mr['discussions_resolved'] === 'false') {
+      mr['discussions_resolved'] = false;
+      addStateIssue(issues, `ticket ${key} mr.discussions_resolved was coerced to a boolean.`);
+    } else {
+      delete mr['discussions_resolved'];
+      addStateIssue(issues, `ticket ${key} mr.discussions_resolved was invalid and was ignored.`);
+    }
+  }
 }
 
 function repairMergeRequestComments(mr: MutableStateRecord, key: string, issues: StateFileLoadIssue[]): void {
@@ -736,6 +773,19 @@ function validateMergeRequest(mr: unknown, label: string): void {
     throw new Error(`${label}.review_status is invalid`);
   }
   requireString(value['url'], `${label}.url`);
+  for (const field of ['comment_count', 'discussion_count', 'unresolved_discussion_count', 'resolved_discussion_count']) {
+    if (value[field] !== undefined) {
+      requireFiniteNumber(value[field], `${label}.${field}`);
+    }
+  }
+  for (const field of ['last_comment_at', 'last_discussion_at']) {
+    if (value[field] !== undefined) {
+      requireString(value[field], `${label}.${field}`);
+    }
+  }
+  if (value['discussions_resolved'] !== undefined && typeof value['discussions_resolved'] !== 'boolean') {
+    throw new Error(`${label}.discussions_resolved must be a boolean`);
+  }
   if (value['comments'] !== undefined) {
     if (!Array.isArray(value['comments'])) {
       throw new Error(`${label}.comments must be an array`);

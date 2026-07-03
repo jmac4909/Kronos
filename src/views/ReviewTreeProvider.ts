@@ -203,13 +203,17 @@ class ReviewItem extends vscode.TreeItem {
     const projs = ticket.projects?.join(', ') || 'unlinked';
     const latestComment = latestMergeRequestCommentSummary(ticket);
     const commentSuffix = mr.comment_count !== undefined ? ` · ${mr.comment_count} comment${mr.comment_count === 1 ? '' : 's'}` : '';
+    const unresolvedSuffix = mr.unresolved_discussion_count !== undefined && mr.unresolved_discussion_count > 0
+      ? ` · ${mr.unresolved_discussion_count} unresolved`
+      : '';
 
-    this.description = `${isNew ? 'NEW · ' : ''}${projs} · MR !${mr.iid} · ${reviewStatus}${commentSuffix}`;
+    this.description = `${isNew ? 'NEW · ' : ''}${projs} · MR !${mr.iid} · ${reviewStatus}${commentSuffix}${unresolvedSuffix}`;
     this.label = `${ticketKey} — ${ticket.summary}`;
     this.tooltip = new vscode.MarkdownString(
       `**${ticketKey}**: ${ticket.summary}\n\n` +
       (isNew ? `New since you last opened the Review view.\n\n` : '') +
       `Projects: ${projs}\n\nMR: !${mr.iid} — ${reviewStatus}\n\n` +
+      (mr.unresolved_discussion_count !== undefined ? `Unresolved discussions: ${mr.unresolved_discussion_count}\n\n` : '') +
       (latestComment ? `Latest MR comment: ${latestComment}\n\n` : '') +
       `_Click to view diff_`
     );

@@ -134,6 +134,11 @@ export interface MergeRequest {
   comment_count?: number;
   last_comment_at?: string;
   comments?: MergeRequestComment[];
+  discussion_count?: number;
+  unresolved_discussion_count?: number;
+  resolved_discussion_count?: number;
+  last_discussion_at?: string;
+  discussions_resolved?: boolean;
   source_branch?: string;
   target_branch?: string;
   sourceBranch?: string;

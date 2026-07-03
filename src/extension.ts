@@ -6100,6 +6100,10 @@ function buildTicketHtml(key: string, ticket: Ticket, state: KronosState, nonce?
     const mrUrl = safeHttpHref(ticketStringField(mr, 'url'));
     const commentCount = ticketStringField(mr, 'comment_count');
     const lastCommentAt = ticketStringField(mr, 'last_comment_at');
+    const discussionCount = ticketStringField(mr, 'discussion_count');
+    const unresolvedDiscussions = ticketStringField(mr, 'unresolved_discussion_count');
+    const lastDiscussionAt = ticketStringField(mr, 'last_discussion_at');
+    const discussionsResolved = ticketStringField(mr, 'discussions_resolved');
     const comments = mergeRequestComments(mr).slice(-5).reverse();
     const commentsHtml = comments.length > 0
       ? `<div class="mr-comments">${comments.map(comment => {
@@ -6118,6 +6122,7 @@ function buildTicketHtml(key: string, ticket: Ticket, state: KronosState, nonce?
         <div><strong>MR !${esc(ticketStringField(mr, 'iid', '?'))}</strong> — <span style="color:${reviewColor}">${esc(reviewStatus.replace(/_/g, ' '))}</span></div>
         <div>State: ${esc(ticketStringField(mr, 'state', 'unknown'))}</div>
         ${commentCount ? `<div>Comments: ${esc(commentCount)}${lastCommentAt ? ` · latest ${esc(formatWebviewDateTime(lastCommentAt))}` : ''}</div>` : ''}
+        ${discussionCount || unresolvedDiscussions ? `<div>Discussions: ${esc(discussionCount || '?')}${unresolvedDiscussions ? ` · ${esc(unresolvedDiscussions)} unresolved` : ''}${discussionsResolved ? ` · ${discussionsResolved === 'true' ? 'resolved' : 'open'}` : ''}${lastDiscussionAt ? ` · latest ${esc(formatWebviewDateTime(lastDiscussionAt))}` : ''}</div>` : ''}
         ${commentsHtml}
         ${mrUrl ? `<a href="${mrUrl}" class="link">Open in GitLab &rarr;</a>` : ''}
       </div>
