@@ -81,6 +81,11 @@ export function runAttentionDetail(run: unknown): string {
   return summarizeRunAttention(run).detail;
 }
 
+export function runAttentionLine(run: unknown, maxLength = 140): string {
+  const text = runAttentionDetail(run).replace(/\s+/g, ' ').trim();
+  return text.length > maxLength ? `${text.substring(0, maxLength - 3)}...` : text;
+}
+
 function runFailureKindLabel(kind: RunFailureKind, status = ''): string {
   const label = FAILURE_KIND_LABELS[kind];
   if (label) { return label; }

@@ -60,7 +60,7 @@ import { escapeAttr, escapeClass, escapeHtml, kronosWebviewBaseCss, safeHttpHref
 import { kronosTerminalOptions } from './services/terminalProfiles';
 import { unknownErrorCode, unknownErrorMessage } from './services/errorUtils';
 import { activeRunSummary, isActiveRun } from './services/runStatus';
-import { isAttentionRunStatus, runAttentionDetail } from './services/runAttention';
+import { isAttentionRunStatus, runAttentionDetail, runAttentionLine } from './services/runAttention';
 import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss, operatorCommandRow } from './services/operatorPanel';
 import { buildPromptHistoryHtml, buildPromptManagerHtml, buildPromptSmokeTestsHtml } from './services/promptPanelView';
 import { buildRecoveryHtml, buildStateAuditLogHtml } from './services/recoveryPanelView';
@@ -756,13 +756,8 @@ function runQuickPickDescription(run: KronosRun): string {
   if (!isAttentionRunStatus(status)) {
     return status;
   }
-  const detail = singleLineRunSummary(runAttentionDetail(run));
+  const detail = runAttentionLine(run);
   return detail ? `${status} - ${detail}` : status;
-}
-
-function singleLineRunSummary(value: string, maxLength = 140): string {
-  const text = value.replace(/\s+/g, ' ').trim();
-  return text.length > maxLength ? `${text.substring(0, maxLength - 3)}...` : text;
 }
 
 function runProcessPid(run: KronosRun): number | undefined {
@@ -4951,7 +4946,7 @@ async function showRunCompletionToast(ticketKey: string, ticket: Ticket | undefi
     return;
   }
   if (!isAttentionRunStatus(status)) { return; }
-  const detail = singleLineRunSummary(runAttentionDetail(run), 180);
+  const detail = runAttentionLine(run, 180);
   const statusLabel = status.replace(/_/g, ' ');
   const action = await vscode.window.showWarningMessage(
     `${ticketKey} ${skill} ${statusLabel}${detail ? ` - ${detail}` : ''}.`,

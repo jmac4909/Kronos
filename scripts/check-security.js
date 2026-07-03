@@ -273,9 +273,8 @@ for (const marker of [
   'function refreshAfterDispatch(state: KronosState, projectName?: string, ticketKey?: string): (code: number, run: KronosRun) => Promise<void>',
   'return async (_code: number, run: KronosRun)',
   'await refreshAfterDispatch(state, projectName)(code, run)',
-  "import { isAttentionRunStatus, runAttentionDetail } from './services/runAttention'",
+  "import { isAttentionRunStatus, runAttentionDetail, runAttentionLine } from './services/runAttention'",
   'function runQuickPickDescription(run: KronosRun)',
-  'function singleLineRunSummary(value: string, maxLength = 140): string',
   'description: runQuickPickDescription(run)',
   'const refreshWarning = await reloadStateAfterDispatch(state, projectName);',
   'run.warnings = [...(run.warnings || []), refreshWarning];',
@@ -560,7 +559,7 @@ for (const marker of [
   "status === 'waiting_for_review'",
   '!isAttentionRunStatus(status)',
   'vscode.window.showWarningMessage',
-  'singleLineRunSummary(runAttentionDetail(run), 180)',
+  'runAttentionLine(run, 180)',
   "'Open Review'",
   "'Run Center'",
   "vscode.commands.executeCommand('kronos.openMrDiff'",
@@ -1746,6 +1745,9 @@ if (extension.includes('function evidenceCountForTicket')) {
 }
 if (extension.includes('function isAttentionRunStatus')) {
   fail('Extension must use the shared run attention status helper.');
+}
+if (extension.includes('function singleLineRunSummary')) {
+  fail('Extension must use the shared run attention line formatter.');
 }
 
 for (const marker of [

@@ -3793,6 +3793,14 @@ test('run attention summarizes actionable failure reasons', () => {
   assert.equal(runAttention.isAttentionRunStatus('needs_human'), true);
   assert.equal(runAttention.isAttentionRunStatus('cancelled'), true);
   assert.equal(runAttention.isAttentionRunStatus('completed'), false);
+  assert.equal(runAttention.runAttentionLine({
+    status: 'failed',
+    failureReason: 'First line\nSecond line',
+  }), 'Run failed: First line Second line');
+  assert.equal(runAttention.runAttentionLine({
+    status: 'failed',
+    failureReason: 'x'.repeat(200),
+  }, 20), 'Run failed: xxxxx...');
 });
 
 test('recovery center prioritizes failed runs, unsafe worktrees, doctor failures, and backups', () => {
@@ -6072,7 +6080,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "status === 'waiting_for_review'",
     '!isAttentionRunStatus(status)',
     'vscode.window.showWarningMessage',
-    'singleLineRunSummary(runAttentionDetail(run), 180)',
+    'runAttentionLine(run, 180)',
     "'Open Review'",
     "'Run Center'",
     "vscode.commands.executeCommand('kronos.openMrDiff'",
@@ -6396,10 +6404,9 @@ test('extension run recovery helpers use typed run records', () => {
     'async function openRunDiffArtifact(run: KronosRun)',
     'async function markSelectedRunNeedsHuman(run: KronosRun)',
     'function runLastEventLabel(run: KronosRun)',
-    "import { isAttentionRunStatus, runAttentionDetail } from './services/runAttention'",
+    "import { isAttentionRunStatus, runAttentionDetail, runAttentionLine } from './services/runAttention'",
     'function runQuickPickDetail(run: KronosRun)',
     'function runQuickPickDescription(run: KronosRun)',
-    'function singleLineRunSummary(value: string, maxLength = 140): string',
     'description: runQuickPickDescription(run)',
     'function runProcessPid(run: KronosRun)',
     "Reflect.get(run, 'pid')",
@@ -6951,6 +6958,7 @@ test('tree providers share action labels and icons', () => {
   assert.equal(queueTree.includes('function actionIcon'), false, 'queue tree should not duplicate action icons');
   assert.equal(extensionSource.includes('function evidenceCountForTicket'), false, 'extension should call shared evidenceRecordCount directly');
   assert.equal(extensionSource.includes('function isAttentionRunStatus'), false, 'extension should use shared run attention status helper');
+  assert.equal(extensionSource.includes('function singleLineRunSummary'), false, 'extension should use shared run attention line formatter');
 });
 
 test('queue tree polling clears active-run decorations after runs finish', async () => {
