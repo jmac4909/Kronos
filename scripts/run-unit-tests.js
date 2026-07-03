@@ -3596,7 +3596,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     'export { getAggregateStats, listSavedSessions, listSessionStoreIssues }',
     'const id = safeSessionId',
     "from '../services/webviewSecurity'",
-    "import { isActiveRun } from '../services/runStatus'",
+    "import { isFreshActiveRun } from '../services/runStatus'",
     "import { runProgressSummary } from '../services/runProgress'",
     'createWebviewNonce',
     'webviewScriptCspOptions',
@@ -3647,7 +3647,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     'const sortedRuns = sortedRunCenterRuns(runs)',
     'sorted by status and time',
     "const pausable = status === 'running' || status === 'preflight'",
-    "const stoppable = isActiveRun(run) && status !== 'paused'",
+    "const stoppable = isFreshActiveRun(run) && status !== 'paused'",
     'if (stoppable) {',
     "if (pausable) { buttons.push(runCenterActionButton('pauseRun', 'Pause', runId)); }",
     "runCenterActionButton('cancelRun', 'Stop'",
@@ -4286,6 +4286,10 @@ test('run status helper centralizes active persisted run semantics', () => {
   assert.equal(runStatus.isActiveRunStatus('completed'), false);
   assert.equal(runStatus.isActiveRun({ status: 'queued' }), true);
   assert.equal(runStatus.isActiveRun({ status: 'running' }), true);
+  assert.equal(runStatus.isFreshActiveRun({ status: 'running', startedAt: '2026-07-01T11:00:00.000Z' }, new Date('2026-07-01T12:00:00.000Z')), true);
+  assert.equal(runStatus.isFreshActiveRun({ status: 'running', startedAt: '2026-06-30T23:00:00.000Z' }, new Date('2026-07-01T12:00:00.000Z')), false);
+  assert.equal(runStatus.isStaleActiveRun({ status: 'running', startedAt: '2026-06-30T23:00:00.000Z' }, new Date('2026-07-01T12:00:00.000Z')), true);
+  assert.equal(runStatus.isFreshActiveRun({ status: 'paused', startedAt: '2026-06-30T23:00:00.000Z' }, new Date('2026-07-01T12:00:00.000Z')), true);
   assert.equal(runStatus.isActiveRun({ status: 'running', endedAt: '2026-07-01T10:00:00.000Z' }), false);
   assert.equal(runStatus.isActiveRun({ status: 'running', exitCode: 0 }), false);
   assert.equal(runStatus.isActiveRun({ status: 'running', events: [{ type: 'done', label: 'Complete - 1.0s' }] }), false);
@@ -4308,14 +4312,19 @@ test('run status helper centralizes active persisted run semantics', () => {
     { status: 'preflight' },
     { status: 'queued' },
     { status: 'paused' },
+    { status: 'running', startedAt: '2000-01-01T00:00:00.000Z' },
     { status: 'completed' },
   ]), '2 running, 1 preflight, 1 queued, 1 paused');
 
   const source = readSourceFixture('src', 'services', 'runStatus.ts');
   for (const marker of [
     "ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused'])",
+    "STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running'])",
+    'DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
     'export function isActiveRunStatus',
     'export function isActiveRun',
+    'export function isStaleActiveRun',
+    'export function isFreshActiveRun',
     'export function effectiveRunStatus',
     'export function hasTerminalRunSignal',
     'export function terminalRunOutcome',
@@ -4413,14 +4422,15 @@ test('interval config helpers clamp invalid polling values and parse settings in
 });
 
 test('run center sort orders active work first and failed or cancelled runs last', () => {
+  const recentIso = (minutesAgo) => new Date(Date.now() - minutesAgo * 60 * 1000).toISOString();
   const ordered = runCenterSort.sortedRunCenterRuns([
-    { id: 'queued-new', status: 'queued', startedAt: '2026-07-02T10:00:00.000Z' },
+    { id: 'queued-new', status: 'queued', startedAt: recentIso(10) },
     { id: 'unknown-new', status: 'unknown', startedAt: '2026-07-02T10:00:00.000Z' },
     { id: 'failed-newer', status: 'failed', startedAt: '2026-07-02T09:00:00.000Z', endedAt: '2026-07-02T09:30:00.000Z' },
     { id: 'completed-latest', status: 'completed', startedAt: '2026-07-02T08:00:00.000Z', endedAt: '2026-07-02T12:00:00.000Z' },
     { id: 'running-terminal', status: 'running', startedAt: '2026-07-02T07:00:00.000Z', endedAt: '2026-07-02T07:30:00.000Z' },
-    { id: 'active-old', status: 'running', startedAt: '2026-07-02T06:00:00.000Z' },
-    { id: 'active-new', status: 'preflight', startedAt: '2026-07-02T11:00:00.000Z' },
+    { id: 'active-old', status: 'running', startedAt: recentIso(60) },
+    { id: 'active-new', status: 'preflight', startedAt: recentIso(5) },
     { id: 'review-ready', status: 'waiting_for_review', startedAt: '2026-07-02T05:00:00.000Z', endedAt: '2026-07-02T05:30:00.000Z' },
     { id: 'needs-human', status: 'needs_human', startedAt: '2026-07-02T04:00:00.000Z', endedAt: '2026-07-02T04:30:00.000Z' },
     { id: 'cancelled-old', status: 'cancelled', startedAt: '2026-07-02T03:00:00.000Z', endedAt: '2026-07-02T03:30:00.000Z' },
@@ -4439,6 +4449,7 @@ test('run center sort orders active work first and failed or cancelled runs last
     'cancelled-old',
   ]);
   assert.equal(runCenterSort.runCenterStatusPriority({ status: 'queued' }), 0);
+  assert.equal(runCenterSort.runCenterStatusPriority({ status: 'running', startedAt: '2000-01-01T00:00:00.000Z' }), 4);
   assert.equal(runCenterSort.runCenterStatusPriority({ status: 'running', endedAt: '2026-07-02T00:00:00.000Z' }), 4);
   assert.equal(runCenterSort.runCenterStatusPriority({ status: 'running' }), 0);
   assert.equal(runCenterSort.runCenterStatusPriority({ status: 'failed' }), 5);
@@ -4616,12 +4627,11 @@ test('collision detector flags active runs, duplicate queue work, and open MRs',
 
   const source = readSourceFixture('src', 'services', 'collisionDetector.ts');
   for (const marker of [
-    "STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running'])",
     'staleActiveRunHours?: number',
     'const staleActiveRunHours = input.staleActiveRunHours ?? 12',
     'const isActive = isCollisionActiveRun(run, now, staleActiveRunHours)',
     'function isCollisionActiveRun(run: CollisionRun, now: Date, staleActiveRunHours: number): boolean',
-    'function isStaleActiveRun(run: CollisionRun, now: Date, staleActiveRunHours: number): boolean',
+    'isStaleActiveRun(run, now, staleActiveRunHours * 60 * 60 * 1000)',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -6320,8 +6330,8 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'MR merged, but no linked project was found for deploy monitoring.',
     'has no registered path for deploy monitoring.',
     'run.project === projectName || run.projectPath === projectPath',
-    "import { activeRunSummary, isActiveRun } from './services/runStatus'",
-    'const activeRuns = listRuns().filter(isActiveRun)',
+    "import { activeRunSummary, isFreshActiveRun } from './services/runStatus'",
+    'const activeRuns = listRuns().filter(run => isFreshActiveRun(run))',
     "statusBarItem.command = 'kronos.runCenter'",
     "statusBarItem.command = 'kronos.openDashboard'",
     'const activeSummary = activeRunSummary(activeRuns)',
@@ -6627,7 +6637,7 @@ test('extension activation tracks long-lived disposables', () => {
   }
   for (const marker of [
     'function startStatusBarRunRefresh(context: vscode.ExtensionContext, state: KronosState, intervalMs: number): void',
-    'const hasActiveRuns = listRuns().some(isActiveRun)',
+    'const hasActiveRuns = listRuns().some(run => isFreshActiveRun(run))',
     'if (hasActiveRuns || hadActiveRuns)',
     'context.subscriptions.push({ dispose: () => clearInterval(timer) })',
   ]) {
@@ -7130,12 +7140,12 @@ test('tree providers share action labels and icons', () => {
     "import { queueActionIcon, themeIcon } from './actionIcons'",
     'themeIcon(queueActionIcon(item.action))',
     "import { KronosRun, listRuns } from '../runners/sessionDispatcher'",
-    "import { isActiveRun } from '../services/runStatus'",
+    "import { isFreshActiveRun } from '../services/runStatus'",
     "import { formatRunProgress } from '../services/runProgress'",
-    'const activeRuns = listRuns().filter(isActiveRun)',
+    'const activeRuns = listRuns().filter(run => isFreshActiveRun(run))',
     'private hadActiveRuns = false',
     'this.hadActiveRuns = activeRuns.length > 0',
-    'const activeNow = listRuns().some(isActiveRun)',
+    'const activeNow = listRuns().some(run => isFreshActiveRun(run))',
     'if (activeNow || this.hadActiveRuns)',
     'this.hadActiveRuns = activeNow',
     'new QueueTreeItem(item, idx, activeRunForQueueItem(item, activeRuns))',
@@ -7165,7 +7175,7 @@ test('tree providers share action labels and icons', () => {
   assert.equal(actionIcons.includes("'wrench'"), false, 'shared action icons should not use the invalid wrench codicon');
   for (const marker of [
     "import { KronosRun, listRuns } from '../runners/sessionDispatcher'",
-    "import { isActiveRun } from '../services/runStatus'",
+    "import { isFreshActiveRun } from '../services/runStatus'",
     "import { formatRunProgress } from '../services/runProgress'",
     "import { unknownErrorMessage } from '../services/errorUtils'",
     'private _refreshing = false',
@@ -7177,7 +7187,7 @@ test('tree providers share action labels and icons', () => {
     'void this.refreshSessionsSafely()',
     'private async refreshSessionsSafely(): Promise<void>',
     "unknownErrorMessage(e, 'Kronos session refresh failed.')",
-    'const activeRuns = listRuns().filter(isActiveRun)',
+    'const activeRuns = listRuns().filter(run => isFreshActiveRun(run))',
     'const progress = formatRunProgress(run)',
     'Progress: ${progress}',
     "new vscode.ThemeIcon('sync~spin'",
@@ -7249,7 +7259,7 @@ test('queue tree polling clears active-run decorations after runs finish', async
     ticket: 'K-1',
     project: 'app',
     skill: 'implement',
-    startedAt: '2026-07-01T00:00:00.000Z',
+    startedAt: new Date().toISOString(),
   }];
   const vscodeStub = createVscodeTestModule();
   await withPatchedModuleLoad(request => {
@@ -7444,9 +7454,9 @@ test('dashboard worklist builds command-center lanes from review, run, gate, and
   assert.equal(lane('stale_items').items[0].ticketKey, 'K-OLD');
 
   const source = readSourceFixture('src', 'services', 'dashboardWorklist.ts');
-  assert.ok(source.includes("import { isActiveRun } from './runStatus'"));
+  assert.ok(source.includes("import { isFreshActiveRun } from './runStatus'"));
   assert.ok(source.includes('function isDashboardActiveRun'));
-  assert.ok(source.includes('return isActiveRun(run);'));
+  assert.ok(source.includes('return isFreshActiveRun(run);'));
   assert.ok(source.includes('type DashboardRunRecord = RunRecord & Record<string, unknown>'));
   assert.equal(source.includes('type DashboardRunRecord = RunRecord & Record<string, any>'), false);
 });

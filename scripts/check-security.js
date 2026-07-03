@@ -1354,7 +1354,7 @@ for (const marker of [
   "unknownErrorMessage(e, 'Invalid dispatch model.')",
   "unknownErrorMessage(e, 'Failed to parse Claude stream event.')",
   "label: 'Failed to parse Claude stream event'",
-  "import { isActiveRun } from '../services/runStatus'",
+  "import { isFreshActiveRun } from '../services/runStatus'",
   "import { runProgressSummary } from '../services/runProgress'",
   "'refreshPanel'",
   "'archiveFinishedRuns'",
@@ -1374,7 +1374,7 @@ for (const marker of [
   'const sortedRuns = sortedRunCenterRuns(runs)',
   'sorted by status and time',
   "const pausable = status === 'running' || status === 'preflight'",
-  "const stoppable = isActiveRun(run) && status !== 'paused'",
+  "const stoppable = isFreshActiveRun(run) && status !== 'paused'",
   'if (stoppable) {',
   "if (pausable) { buttons.push(runCenterActionButton('pauseRun', 'Pause', runId)); }",
   'writeSavedSession(session)',
@@ -1424,7 +1424,7 @@ if (extension.includes('description: run.status')) {
 }
 
 for (const marker of [
-  "import { isActiveRun } from './runStatus'",
+  "import { isFreshActiveRun } from './runStatus'",
   'export function sortedRunCenterRuns',
   'export function compareRunCenterRuns',
   'export function runCenterStatusPriority',
@@ -1776,7 +1776,7 @@ if (processTree.includes('} catch {}')) {
 
 for (const marker of [
   "import { KronosRun, listRuns } from '../runners/sessionDispatcher'",
-  "import { isActiveRun } from '../services/runStatus'",
+  "import { isFreshActiveRun } from '../services/runStatus'",
   "import { formatRunProgress } from '../services/runProgress'",
   "import { unknownErrorMessage } from '../services/errorUtils'",
   'private _refreshing = false',
@@ -1784,7 +1784,7 @@ for (const marker of [
   'void this.refreshSessionsSafely()',
   'private async refreshSessionsSafely(): Promise<void>',
   "unknownErrorMessage(e, 'Kronos session refresh failed.')",
-  'const activeRuns = listRuns().filter(isActiveRun)',
+  'const activeRuns = listRuns().filter(run => isFreshActiveRun(run))',
   'const progress = formatRunProgress(run)',
   'Progress: ${progress}',
   "new vscode.ThemeIcon('sync~spin'",
@@ -1800,10 +1800,10 @@ if (sessionTreeProvider.includes('setInterval(async () =>')) {
 
 for (const marker of [
   "import { KronosRun, listRuns } from '../runners/sessionDispatcher'",
-  "import { isActiveRun } from '../services/runStatus'",
+  "import { isFreshActiveRun } from '../services/runStatus'",
   "import { skillForAction } from '../services/nextActionContext'",
   "import { formatRunProgress } from '../services/runProgress'",
-  'const activeRuns = listRuns().filter(isActiveRun)',
+  'const activeRuns = listRuns().filter(run => isFreshActiveRun(run))',
   'new QueueTreeItem(item, idx, activeRunForQueueItem(item, activeRuns))',
   'startPolling(intervalMs: number): void',
   'queueTree.startPolling(sessionPollMs)',
@@ -2422,8 +2422,12 @@ for (const marker of [
 
 for (const marker of [
   "ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused'])",
+  "STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running'])",
+  'DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
   'export function isActiveRunStatus',
   'export function isActiveRun',
+  'export function isStaleActiveRun',
+  'export function isFreshActiveRun',
   'export function effectiveRunStatus',
   'export function hasTerminalRunSignal',
   'export function terminalRunOutcome',
@@ -2492,11 +2496,10 @@ for (const marker of [
 for (const marker of [
   'recent_file',
   "import { isCodeAction } from './actionSemantics'",
-  "import { isActiveRun } from './runStatus'",
+  "import { isActiveRun, isStaleActiveRun } from './runStatus'",
   'ticket_area',
   'mr_file',
   'const codeAction = isCodeAction(input.action)',
-  "STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running'])",
   'staleActiveRunHours?: number',
   'const staleActiveRunHours = input.staleActiveRunHours ?? 12',
   'const isActive = isCollisionActiveRun(run, now, staleActiveRunHours)',
@@ -2506,7 +2509,7 @@ for (const marker of [
   'ticketAreaTokens',
   'isRecentRun',
   'function isCollisionActiveRun(run: CollisionRun, now: Date, staleActiveRunHours: number): boolean',
-  'function isStaleActiveRun(run: CollisionRun, now: Date, staleActiveRunHours: number): boolean',
+  'isStaleActiveRun(run, now, staleActiveRunHours * 60 * 60 * 1000)',
   'sharedFilePaths',
 ]) {
   if (!collisionDetector.includes(marker)) {
@@ -2813,9 +2816,9 @@ for (const marker of [
   'recent_completed',
   'stale_items',
   'evidenceStatusForRun',
-  "import { isActiveRun } from './runStatus'",
+  "import { isFreshActiveRun } from './runStatus'",
   'function isDashboardActiveRun',
-  'return isActiveRun(run);',
+  'return isFreshActiveRun(run);',
   'type DashboardRunRecord = RunRecord & Record<string, unknown>',
   'const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunRecord)',
   "runString(run, 'status')",

@@ -1,4 +1,6 @@
 export const ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused']);
+export const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running']);
+export const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000;
 
 export interface RunStatusLike {
   status?: unknown;
@@ -21,6 +23,20 @@ export function isActiveRun(run: RunStatusLike | unknown): boolean {
   return isActiveRunStatus(runStatus(run)) && !hasTerminalRunSignal(run);
 }
 
+export function isStaleActiveRun(run: RunStatusLike | unknown, now = new Date(), staleMs = DEFAULT_STALE_ACTIVE_RUN_MS): boolean {
+  if (!isActiveRun(run)) { return false; }
+  const status = runStatus(run);
+  if (!STALEABLE_ACTIVE_RUN_STATUSES.has(status)) { return false; }
+  if (staleMs <= 0 || !isRecord(run)) { return false; }
+  const startedAt = dateValue(run['startedAt']);
+  if (!startedAt) { return false; }
+  return now.getTime() - startedAt.getTime() >= staleMs;
+}
+
+export function isFreshActiveRun(run: RunStatusLike | unknown, now = new Date(), staleMs = DEFAULT_STALE_ACTIVE_RUN_MS): boolean {
+  return isActiveRun(run) && !isStaleActiveRun(run, now, staleMs);
+}
+
 export function effectiveRunStatus(run: RunStatusLike | unknown): string {
   const status = runStatus(run);
   if (!isActiveRunStatus(status) || isActiveRun(run)) {
@@ -33,7 +49,7 @@ export function activeRunSummary(runs: Array<RunStatusLike | unknown>): string {
   const counts = new Map<string, number>();
   for (const run of runs) {
     const status = runStatus(run);
-    if (!isActiveRun(run)) { continue; }
+    if (!isFreshActiveRun(run)) { continue; }
     counts.set(status, (counts.get(status) || 0) + 1);
   }
   return ['running', 'preflight', 'queued', 'paused']
@@ -96,6 +112,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function hasDateLikeValue(value: unknown): boolean {
   if (typeof value !== 'string' && typeof value !== 'number') { return false; }
   return Number.isFinite(new Date(value).getTime());
+}
+
+function dateValue(value: unknown): Date | null {
+  const date = typeof value === 'string' || typeof value === 'number' || value instanceof Date
+    ? new Date(value)
+    : null;
+  return date && Number.isFinite(date.getTime()) ? date : null;
 }
 
 function stringValue(value: unknown): string {

@@ -1,7 +1,7 @@
 import { MergeRequestChangedFile, QueueState, Ticket } from '../state/types';
 import { isCodeAction } from './actionSemantics';
 import { changedFilePaths } from './changedFiles';
-import { isActiveRun } from './runStatus';
+import { isActiveRun, isStaleActiveRun } from './runStatus';
 
 export type CollisionSeverity = 'high' | 'medium' | 'low';
 export type CollisionKind = 'active_run' | 'queued_ticket' | 'queued_project' | 'open_mr' | 'recent_file' | 'ticket_area' | 'mr_file';
@@ -38,8 +38,6 @@ export interface DispatchCollision {
   title: string;
   detail: string;
 }
-
-const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running']);
 
 export function detectDispatchCollisions(input: DispatchCollisionInput): DispatchCollision[] {
   const targetProjects = new Set((input.projects || []).filter(Boolean));
@@ -242,15 +240,7 @@ function isRecentRun(run: CollisionRun, now: Date, recentRunHours: number): bool
 }
 
 function isCollisionActiveRun(run: CollisionRun, now: Date, staleActiveRunHours: number): boolean {
-  return isActiveRun(run) && !isStaleActiveRun(run, now, staleActiveRunHours);
-}
-
-function isStaleActiveRun(run: CollisionRun, now: Date, staleActiveRunHours: number): boolean {
-  if (!STALEABLE_ACTIVE_RUN_STATUSES.has(run.status || '')) { return false; }
-  if (staleActiveRunHours <= 0 || !run.startedAt) { return false; }
-  const started = new Date(run.startedAt).getTime();
-  if (!Number.isFinite(started)) { return false; }
-  return now.getTime() - started >= staleActiveRunHours * 60 * 60 * 1000;
+  return isActiveRun(run) && !isStaleActiveRun(run, now, staleActiveRunHours * 60 * 60 * 1000);
 }
 
 function ticketAreaTokens(ticket: Ticket): Set<string> {

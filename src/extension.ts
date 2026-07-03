@@ -59,7 +59,7 @@ import { createWebviewNonce, webviewReadyPostScript, webviewScriptCspOptions, we
 import { escapeAttr, escapeClass, escapeHtml, kronosWebviewBaseCss, safeHttpHref } from './services/webviewHtml';
 import { kronosTerminalOptions } from './services/terminalProfiles';
 import { unknownErrorCode, unknownErrorMessage } from './services/errorUtils';
-import { activeRunSummary, isActiveRun } from './services/runStatus';
+import { activeRunSummary, isFreshActiveRun } from './services/runStatus';
 import { isAttentionRunStatus, runAttentionDetail, runAttentionLine } from './services/runAttention';
 import { buildRunCompletionNotification } from './services/runCompletionNotification';
 import { openReviewTicketEntries, reviewBranchTickets as buildReviewBranchTickets, type ReviewBranchTicket, type TicketWithOpenMergeRequest } from './services/reviewWork';
@@ -207,10 +207,10 @@ function startActiveRunPanelRefresh(
   render: () => void | Promise<void>,
 ): void {
   const pollIntervalMs = configIntervalMs(vscode.workspace.getConfiguration('kronos').get<number>('sessionPollIntervalMs', 5000), 5000, 1000);
-  let wasActive = listRuns().some(isActiveRun);
+  let wasActive = listRuns().some(run => isFreshActiveRun(run));
   let rendering = false;
   const pollTimer = setInterval(() => {
-    const hasActive = listRuns().some(isActiveRun);
+    const hasActive = listRuns().some(run => isFreshActiveRun(run));
     if (!hasActive && !wasActive) { return; }
     if (rendering) { return; }
     rendering = true;
@@ -230,7 +230,7 @@ function startStatusBarRunRefresh(context: vscode.ExtensionContext, state: Krono
   const safeIntervalMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 5000;
   let hadActiveRuns = false;
   const timer = setInterval(() => {
-    const hasActiveRuns = listRuns().some(isActiveRun);
+    const hasActiveRuns = listRuns().some(run => isFreshActiveRun(run));
     if (hasActiveRuns || hadActiveRuns) {
       updateStatusBar(state);
     }
@@ -5172,7 +5172,7 @@ async function startDeployMonitorForMergedTicket(state: KronosState, ticketKey: 
 }
 
 function hasActiveDeployMonitorRun(projectName: string, projectPath: string, ticketKey: string): boolean {
-  return listRuns().some(run => isActiveRun(run)
+  return listRuns().some(run => isFreshActiveRun(run)
     && run.skill === 'deploy-monitor'
     && (run.project === projectName || run.projectPath === projectPath)
     && (!run.ticket || run.ticket === ticketKey));
@@ -5232,7 +5232,7 @@ function updateStatusBar(state: KronosState): void {
   const projects = state.state.projects;
   const count = Object.keys(projects).length;
   const sessions = state.sessions.length;
-  const activeRuns = listRuns().filter(isActiveRun);
+  const activeRuns = listRuns().filter(run => isFreshActiveRun(run));
   if (activeRuns.length > 0) {
     const activeSummary = activeRunSummary(activeRuns) || `${activeRuns.length} active`;
     statusBarItem.text = `$(sync~spin) Kronos: ${activeSummary}`;
@@ -5295,7 +5295,7 @@ function buildDashboardHtml(state: KronosState, brief: unknown, nonce?: string, 
 
   const allTickets = state.state?.tickets || {};
   const runs = listRuns();
-  const activeRuns = runs.filter(isActiveRun).length;
+  const activeRuns = runs.filter(run => isFreshActiveRun(run)).length;
   const failedRuns = runs.filter(r => r.status === 'failed' || r.status === 'cancelled').length;
   const needsHumanRuns = runs.filter(r => r.status === 'needs_human').length;
   const waitingForReviewRuns = runs.filter(r => r.status === 'waiting_for_review').length;

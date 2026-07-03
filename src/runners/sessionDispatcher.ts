@@ -19,7 +19,7 @@ import { SavedSession, SessionStats, safeSessionId, writeSavedSession } from '..
 import { ACTIVE_WORKTREES_FILE, ActiveWorktreeEntry, loadActiveWorktreeRegistry, trackActiveWorktree, untrackActiveWorktree } from '../services/worktreeRegistry';
 import { gcloudApplicationDefaultLoginCommand, kronosLoginShellTerminalOptions, kronosTerminalOptions } from '../services/terminalProfiles';
 import { unknownErrorMessage } from '../services/errorUtils';
-import { isActiveRun } from '../services/runStatus';
+import { isFreshActiveRun } from '../services/runStatus';
 import { runProgressSummary } from '../services/runProgress';
 import { runAttentionDetail } from '../services/runAttention';
 import { sortedRunCenterRuns } from '../services/runCenterSort';
@@ -546,14 +546,14 @@ export function openRunCenter(options: RunCenterOptions = {}): void {
       buildRunCenterHtml(runs, interactive ? nonce : undefined),
       interactive ? webviewScriptCspOptions(panel.webview.cspSource, nonce) : {},
     );
-    return runs.some(isActiveRun);
+    return runs.some(run => isFreshActiveRun(run));
   };
   let wasActive = false;
   if (interactive && options.onAction) {
     const pollIntervalMs = Math.max(1000, options.pollIntervalMs || 5000);
     const logReady = createWebviewReadyMonitor(panel, 'Kronos Run Center');
     const pollTimer = setInterval(() => {
-      const hasActive = listRuns().some(isActiveRun);
+      const hasActive = listRuns().some(run => isFreshActiveRun(run));
       if (hasActive || wasActive) {
         wasActive = render();
       }
@@ -1220,7 +1220,7 @@ function runCenterActionButtons(run: KronosRun): string {
   }
   const status = stringOrDefault(run.status, 'unknown');
   const pausable = status === 'running' || status === 'preflight';
-  const stoppable = isActiveRun(run) && status !== 'paused';
+  const stoppable = isFreshActiveRun(run) && status !== 'paused';
   const paused = status === 'paused';
   const hasWorkspace = Boolean(run.worktreePath || run.cwd || run.projectPath);
   const hasPrompt = Boolean(run.promptPath);

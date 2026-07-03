@@ -1,4 +1,4 @@
-import { isActiveRun } from './runStatus';
+import { isFreshActiveRun } from './runStatus';
 
 export interface RunCenterSortableRun {
   id?: unknown;
@@ -21,7 +21,7 @@ export function compareRunCenterRuns(a: RunCenterSortableRun, b: RunCenterSortab
 }
 
 export function runCenterStatusPriority(run: RunCenterSortableRun): number {
-  if (isActiveRun(run)) { return 0; }
+  if (isFreshActiveRun(run)) { return 0; }
   const status = stringOrDefault(run.status, 'unknown');
   if (status === 'waiting_for_review') { return 1; }
   if (status === 'needs_human') { return 2; }
@@ -32,7 +32,7 @@ export function runCenterStatusPriority(run: RunCenterSortableRun): number {
 
 export function runCenterSortTimestamp(run: RunCenterSortableRun): number {
   const status = stringOrDefault(run.status, 'unknown');
-  const preferred = isActiveRun(run) ? run.startedAt : run.endedAt || run.startedAt;
+  const preferred = isFreshActiveRun(run) ? run.startedAt : run.endedAt || run.startedAt;
   const fallback = status === 'completed' || status === 'failed' || status === 'cancelled' ? run.startedAt : run.endedAt;
   return toValidDate(preferred)?.getTime() || toValidDate(fallback)?.getTime() || 0;
 }

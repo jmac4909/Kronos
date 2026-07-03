@@ -3,7 +3,7 @@ import * as path from 'path';
 import { KronosState } from '../state/KronosState';
 import { ClaudeSession } from '../state/types';
 import { KronosRun, listRuns } from '../runners/sessionDispatcher';
-import { isActiveRun } from '../services/runStatus';
+import { isFreshActiveRun } from '../services/runStatus';
 import { formatRunProgress } from '../services/runProgress';
 import { unknownErrorMessage } from '../services/errorUtils';
 
@@ -45,7 +45,7 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<SessionTreeI
 
   getChildren(): SessionTreeItem[] {
     const sessions = this.kronosState.sessions;
-    const activeRuns = listRuns().filter(isActiveRun);
+    const activeRuns = listRuns().filter(run => isFreshActiveRun(run));
     if (sessions.length === 0 && activeRuns.length === 0) {
       return [new SessionTreeItem('No active sessions', { kind: 'empty' })];
     }

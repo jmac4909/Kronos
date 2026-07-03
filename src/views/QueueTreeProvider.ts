@@ -5,7 +5,7 @@ import { KronosRun, listRuns } from '../runners/sessionDispatcher';
 import { actionToLabel } from '../services/actionLabels';
 import { skillForAction } from '../services/nextActionContext';
 import { formatRunProgress } from '../services/runProgress';
-import { isActiveRun } from '../services/runStatus';
+import { isFreshActiveRun } from '../services/runStatus';
 import { queueActionIcon, themeIcon } from './actionIcons';
 
 export class QueueTreeProvider implements vscode.TreeDataProvider<QueueTreeItem> {
@@ -36,7 +36,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<QueueTreeItem>
       return [empty];
     }
 
-    const activeRuns = listRuns().filter(isActiveRun);
+    const activeRuns = listRuns().filter(run => isFreshActiveRun(run));
     this.hadActiveRuns = activeRuns.length > 0;
     return queue.items.map((item, idx) => new QueueTreeItem(item, idx, activeRunForQueueItem(item, activeRuns)));
   }
@@ -45,7 +45,7 @@ export class QueueTreeProvider implements vscode.TreeDataProvider<QueueTreeItem>
     this.stopPolling();
     const safeIntervalMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 5000;
     this._timer = setInterval(() => {
-      const activeNow = listRuns().some(isActiveRun);
+      const activeNow = listRuns().some(run => isFreshActiveRun(run));
       if (activeNow || this.hadActiveRuns) {
         this._onDidChangeTreeData.fire(undefined);
       }

@@ -2,7 +2,7 @@ import { AgingReport } from './agingAnalyzer';
 import { EvidenceGateResult } from './evidenceGate';
 import { HumanReviewInbox } from './humanReviewInbox';
 import { RunRecord } from './runStore';
-import { isActiveRun } from './runStatus';
+import { isFreshActiveRun } from './runStatus';
 
 export type DashboardWorklistKind = 'needs_human' | 'active_runs' | 'failing_gates' | 'recent_completed' | 'stale_items';
 export type DashboardWorklistSeverity = 'critical' | 'warning' | 'info' | 'ok';
@@ -129,7 +129,7 @@ function sortRuns(runs: DashboardRunRecord[], timestampField: 'startedAt' | 'end
 }
 
 function isDashboardActiveRun(run: DashboardRunRecord): boolean {
-  return isActiveRun(run);
+  return isFreshActiveRun(run);
 }
 
 function timestampValue(value: unknown): number {
