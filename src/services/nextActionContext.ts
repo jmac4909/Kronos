@@ -1,4 +1,5 @@
 import { KronosState, QueueState, Ticket } from '../state/types';
+import { actionSkill } from './actionCatalog';
 import { actionToLabel } from './actionLabels';
 import { isCodeAction, isProofSensitiveAction } from './actionSemantics';
 import { evidenceRecordCount } from './evidenceData';
@@ -101,18 +102,7 @@ export function buildNextActionStartDecision(plan: PlannedAction, context: NextA
 }
 
 export function skillForAction(action: string): string {
-  switch (action) {
-    case 'implement':
-    case 'in_progress':
-    case 'fix_build':
-      return 'implement';
-    case 'deploy_monitor':
-      return 'deploy-monitor';
-    case 'verify':
-      return 'verify-fix';
-    default:
-      return 'implement';
-  }
+  return actionSkill(action);
 }
 
 function risksForPlan(plan: PlannedAction): SafetyRisk[] {

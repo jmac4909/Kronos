@@ -4,6 +4,7 @@ import * as os from 'os';
 import { KronosState, QueueDecision, QueueItem, QueueState, Ticket, TicketEvidence } from '../state/types';
 import { unknownErrorCode, unknownErrorMessage } from './errorUtils';
 import { readJsonFile } from './jsonFiles';
+import { QUEUE_ACTIONS, TICKET_ACTIONS } from './actionCatalog';
 
 export const KRONOS_DIR = process.env['KRONOS_DIR'] || path.join(os.homedir(), '.claude', 'kronos');
 export const STATE_FILE = path.join(KRONOS_DIR, 'state.json');
@@ -58,18 +59,9 @@ const DEFAULT_OVERNIGHT = {
   vpn_check_interval_sec: 60,
 };
 
-export const VALID_TICKET_ACTIONS = [
-  'implement',
-  'in_progress',
-  'fix_build',
-  'await_review',
-  'verify',
-  'deploy_monitor',
-  'blocked',
-  'done',
-] as const;
+export const VALID_TICKET_ACTIONS = TICKET_ACTIONS;
 
-export const VALID_QUEUE_ACTIONS = [...VALID_TICKET_ACTIONS, 'refresh'] as const;
+export const VALID_QUEUE_ACTIONS = QUEUE_ACTIONS;
 
 const VALID_TICKET_ACTION_SET = new Set<string>(VALID_TICKET_ACTIONS);
 const VALID_QUEUE_ACTION_SET = new Set<string>(VALID_QUEUE_ACTIONS);

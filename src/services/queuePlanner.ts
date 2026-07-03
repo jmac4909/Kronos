@@ -1,4 +1,5 @@
 import { KronosState as KronosStateType, QueueDecision, QueueItem, QueueState, Ticket } from '../state/types';
+import { actionEstimateMinutes, actionPlanningScore } from './actionCatalog';
 import { actionToLabel } from './actionLabels';
 import { isCodeAction } from './actionSemantics';
 import { evidenceRecordCount } from './evidenceData';
@@ -113,7 +114,7 @@ export function planNextActions(input: PlannerInput): PlannedAction[] {
     const planId = planIdFor(ticketKey, ticket.next_action || 'implement');
     if (isPlanSuppressed(decisions[planId], now)) { continue; }
 
-    const actionScore = scoreAction(ticket.next_action);
+    const actionScore = actionPlanningScore(ticket.next_action);
     const priorityScore = scorePriority(ticket.priority);
     const buildScore = ticket.build?.status === 'FAILURE' ? 25 : ticket.build?.status === 'SUCCESS' ? 5 : 0;
     const mrScore = ticket.mr?.review_status === 'changes_requested' ? 20 : ticket.mr?.review_status === 'approved' ? 10 : 0;
@@ -240,7 +241,7 @@ export function buildBacklogTriageReport(input: PlannerInput): BacklogTriageRepo
     if (ageDays !== undefined && ageDays >= 7) {
       items.push(triageItem(ticketKey, ticket, 'stale', ageDays >= 14 ? 'critical' : 'warning', 'Re-triage', `Ticket has not changed for ${ageDays} day(s).`, ageDays));
     }
-    if (items.length === issueCountBeforeTicket && !queuedTickets.has(ticketKey) && projects.length > 0 && ticket.next_action !== 'blocked' && scoreAction(ticket.next_action) >= 60) {
+    if (items.length === issueCountBeforeTicket && !queuedTickets.has(ticketKey) && projects.length > 0 && ticket.next_action !== 'blocked' && actionPlanningScore(ticket.next_action) >= 60) {
       items.push(triageItem(ticketKey, ticket, 'ready_to_plan', 'info', actionToLabel(ticket.next_action), 'Linked ticket is ready for queue planning.', ageDays));
     }
   }
@@ -449,25 +450,7 @@ export function clearQueueDecision(queue: QueueState | null, plan: PlannedAction
 }
 
 export function estimatePlanMinutes(plan: PlannedAction): number {
-  switch (plan.action) {
-    case 'implement':
-    case 'in_progress':
-    case 'fix_build':
-      return 45;
-    case 'verify':
-    case 'verify-local':
-      return 30;
-    case 'await_review':
-      return 20;
-    case 'deploy_monitor':
-      return 20;
-    case 'blocked':
-      return 15;
-    case 'refresh':
-      return 10;
-    default:
-      return 30;
-  }
+  return actionEstimateMinutes(plan.action);
 }
 
 export function planForMinutes(plans: PlannedAction[], minutes: number): { plans: PlannedAction[]; estimatedMinutes: number } {
@@ -499,19 +482,6 @@ function isPlanSuppressed(decision: QueueDecision | undefined, now: Date): boole
     return !!until && Number.isFinite(until.getTime()) && until > now;
   }
   return false;
-}
-
-function scoreAction(action: string): number {
-  switch (action) {
-    case 'fix_build': return 95;
-    case 'verify': return 85;
-    case 'await_review': return 80;
-    case 'deploy_monitor': return 70;
-    case 'in_progress': return 65;
-    case 'implement': return 60;
-    case 'blocked': return 15;
-    default: return 40;
-  }
 }
 
 function scorePriority(priority: string): number {

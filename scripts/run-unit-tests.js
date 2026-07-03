@@ -89,6 +89,7 @@ async function withPatchedModuleLoad(resolveReplacement, callback) {
 const promptManager = require('../out/services/promptManager.js');
 const stateStore = require('../out/services/stateStore.js');
 const queuePlanner = require('../out/services/queuePlanner.js');
+const actionCatalog = require('../out/services/actionCatalog.js');
 const actionSemantics = require('../out/services/actionSemantics.js');
 const evidenceStore = require('../out/services/evidenceStore.js');
 const evidenceHandoff = require('../out/services/evidenceHandoff.js');
@@ -2751,6 +2752,24 @@ test('queue planner records decisions, filters suppressed plans, and selects pla
 });
 
 test('action semantics centralize code and handoff action groups', () => {
+  assert.deepEqual(actionCatalog.TICKET_ACTIONS, [
+    'implement',
+    'in_progress',
+    'fix_build',
+    'await_review',
+    'verify',
+    'deploy_monitor',
+    'blocked',
+    'done',
+  ]);
+  assert.deepEqual(actionCatalog.QUEUE_ACTIONS, [...actionCatalog.TICKET_ACTIONS, 'refresh']);
+  assert.equal(actionCatalog.actionDisplayLabel('fix_build'), 'Build Failed');
+  assert.equal(actionCatalog.actionDisplayLabel('custom_action'), 'custom action');
+  assert.equal(actionCatalog.actionSkill('deploy_monitor'), 'deploy-monitor');
+  assert.equal(actionCatalog.actionSkill('verify'), 'verify-fix');
+  assert.equal(actionCatalog.actionSkill('unknown'), 'implement');
+  assert.equal(actionCatalog.actionEstimateMinutes('refresh'), 10);
+  assert.equal(actionCatalog.actionPlanningScore('fix_build'), 95);
   assert.equal(actionSemantics.isCodeAction('implement'), true);
   assert.equal(actionSemantics.isCodeAction('in_progress'), true);
   assert.equal(actionSemantics.isCodeAction('fix_build'), true);
@@ -7621,6 +7640,7 @@ test('tree providers share action labels and icons', () => {
   const taskTree = readSourceFixture('src', 'views', 'TaskTreeProvider.ts');
   const extensionSource = readSourceFixture('src', 'extension.ts');
   const nextActionContext = readSourceFixture('src', 'services', 'nextActionContext.ts');
+  const actionCatalog = readSourceFixture('src', 'services', 'actionCatalog.ts');
   const actionIcons = readSourceFixture('src', 'views', 'actionIcons.ts');
   const actionLabels = readSourceFixture('src', 'services', 'actionLabels.ts');
   const queuePlanner = readSourceFixture('src', 'services', 'queuePlanner.ts');
@@ -7690,7 +7710,8 @@ test('tree providers share action labels and icons', () => {
     'queue active-run matching should not mark a row active from ticket-only or project-only fallbacks',
   );
 
-  assert.ok(actionIcons.includes("in_progress: { id: 'tools'"), 'shared icons should use the valid tools codicon');
+  assert.ok(actionIcons.includes("import { queueActionIconSpec, ticketActionIconSpec, type ActionIconSpec } from '../services/actionCatalog'"));
+  assert.ok(actionCatalog.includes("ticketIcon: { id: 'tools'"), 'shared icons should use the valid tools codicon');
   assert.equal(actionIcons.includes("'wrench'"), false, 'shared action icons should not use the invalid wrench codicon');
   for (const marker of [
     "import { KronosRun, listRuns } from '../runners/sessionDispatcher'",

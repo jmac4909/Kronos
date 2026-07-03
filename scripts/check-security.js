@@ -51,6 +51,7 @@ const runCompletionNotification = readSource('src/services/runCompletionNotifica
 const runCenterSort = readSource('src/services/runCenterSort.ts');
 const attentionBadge = readSource('src/services/attentionBadge.ts');
 const queuePlanner = readSource('src/services/queuePlanner.ts');
+const actionCatalog = readSource('src/services/actionCatalog.ts');
 const actionSemantics = readSource('src/services/actionSemantics.ts');
 const queuePlannerPanelView = sources['src/services/queuePlannerPanelView.ts'];
 const operationsReportPanelView = sources['src/services/operationsReportPanelView.ts'];
@@ -1690,8 +1691,9 @@ if (scriptClient.includes('} catch {}')) {
 }
 
 for (const marker of [
-  "const CODE_ACTIONS = new Set(['implement', 'in_progress', 'fix_build'])",
-  "const PROOF_SENSITIVE_ACTIONS = new Set(['await_review', 'verify', 'deploy_monitor', 'done'])",
+  "import { isActionCode, isActionProofSensitive } from './actionCatalog'",
+  'return isActionCode(action)',
+  'return isActionProofSensitive(action)',
   'export function isCodeAction',
   'export function isProofSensitiveAction',
   'export function isReviewReadyAction',
@@ -1699,6 +1701,27 @@ for (const marker of [
 ]) {
   if (!actionSemantics.includes(marker)) {
     fail(`Missing action semantics marker: ${marker}`);
+  }
+}
+
+for (const marker of [
+  'export const TICKET_ACTIONS',
+  'export const QUEUE_ACTIONS',
+  'export function actionDisplayLabel',
+  'export function actionSkill',
+  'export function actionEstimateMinutes',
+  'export function actionPlanningScore',
+  'export function isActionCode',
+  'export function isActionProofSensitive',
+  'export function ticketActionIconSpec',
+  'export function queueActionIconSpec',
+  "fix_build: {",
+  "skill: 'deploy-monitor'",
+  "planningScore: 95",
+  "queueIcon: { id: 'refresh' }",
+]) {
+  if (!actionCatalog.includes(marker)) {
+    fail(`Missing action catalog marker: ${marker}`);
   }
 }
 
@@ -1713,6 +1736,9 @@ for (const [name, source, marker] of [
   ['src/services/humanReviewInbox.ts', humanReviewInbox, 'const REVIEW_READY_ACTIONS'],
   ['src/services/postRunReadiness.ts', postRunReadiness, 'const HANDOFF_ACTIONS'],
   ['src/services/queuePlanner.ts', queuePlanner, 'const overnightActions'],
+  ['src/services/queuePlanner.ts', queuePlanner, 'function scoreAction'],
+  ['src/services/queuePlanner.ts', queuePlanner, "case 'fix_build': return 95"],
+  ['src/services/queuePlanner.ts', queuePlanner, "case 'refresh':"],
   ['src/services/ticketMutations.ts', ticketMutations, "['await_review', 'verify', 'deploy_monitor', 'done'].includes"],
   ['src/services/agentQualityScore.ts', agentQualityScore, "['await_review', 'verify', 'deploy_monitor', 'done'].includes"],
 ]) {
@@ -1784,7 +1810,9 @@ for (const marker of [
   'export function buildNextActionContext',
   'export function buildNextActionStartDecision',
   'export function skillForAction',
+  "import { actionSkill } from './actionCatalog'",
   "import { isCodeAction, isProofSensitiveAction } from './actionSemantics'",
+  'return actionSkill(action)',
   'commandLabel',
   'risks',
   'preflight',
@@ -2295,6 +2323,7 @@ for (const marker of [
   'STATE_AUDIT_FILE',
   'VALID_TICKET_ACTIONS',
   'VALID_QUEUE_ACTIONS',
+  "import { QUEUE_ACTIONS, TICKET_ACTIONS } from './actionCatalog'",
   'function validateProjectRecord',
   'function validateProjectConfig',
   'function validateMergeRequest',
@@ -2704,8 +2733,11 @@ for (const marker of [
   'planByRelease',
   'releaseFromLabel',
   'summarizePlanActions',
+  "import { actionEstimateMinutes, actionPlanningScore } from './actionCatalog'",
   "import { isCodeAction } from './actionSemantics'",
   'isCodeAction(plan.action)',
+  'actionEstimateMinutes(plan.action)',
+  'actionPlanningScore(ticket.next_action)',
   "import { evidenceRecordCount } from './evidenceData'",
   'evidenceRecordCount(ticket)',
 ]) {
