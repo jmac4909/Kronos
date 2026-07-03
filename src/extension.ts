@@ -5793,7 +5793,7 @@ function formatAttachment(a) {
 }
 function showModal(key) {
   const t = ticketData[key]; if (!t) return;
-  lastFocusedEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  lastFocusedEl = document.activeElement && typeof document.activeElement.focus === 'function' ? document.activeElement : null;
   currentModalKey = key;
   setText('modal-key', key);
   setText('modal-summary', t.summary);
@@ -5853,7 +5853,7 @@ function showModal(key) {
 }
 function closeModal() {
   byId('modal-overlay').classList.remove('show');
-  if (lastFocusedEl && document.contains(lastFocusedEl)) {
+  if (lastFocusedEl && typeof lastFocusedEl.focus === 'function' && document.contains(lastFocusedEl)) {
     lastFocusedEl.focus();
   }
   lastFocusedEl = null;
@@ -5885,7 +5885,7 @@ function applyBoardFilter() {
   }
 }
 function handleBoardClick(e) {
-  const target = e.target instanceof Element ? e.target : null;
+  const target = e.target && typeof e.target.closest === 'function' ? e.target : null;
   if (!target) { return; }
   const actionEl = target.closest('[data-action]');
   if (actionEl) {
@@ -5907,7 +5907,7 @@ function handleBoardClick(e) {
 }
 document.querySelector('.board').addEventListener('click', handleBoardClick);
 document.querySelector('.board').addEventListener('keydown', function(e) {
-  const target = e.target instanceof Element ? e.target : null;
+  const target = e.target && typeof e.target.matches === 'function' ? e.target : null;
   if (!target || !target.matches('.card[data-ticket]')) { return; }
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();

@@ -5,6 +5,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
 
 process.env.KRONOS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-home-'));
 process.env.KRONOS_SCRIPTS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-scripts-'));
@@ -1887,7 +1888,46 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(actionScript, /DOMContentLoaded/);
   assert.match(actionScript, /data-kronos-actions-ready/);
   assert.match(actionScript, /message\[field\.messageKey\]/);
+  assert.match(actionScript, /typeof event\.target\.closest === 'function'/);
+  assert.doesNotMatch(actionScript, /instanceof Element/);
   assert.doesNotMatch(actionScript, /__kronosWebviewReady/);
+  const postedMessages = [];
+  const documentListeners = {};
+  const documentElementAttributes = {};
+  const sandbox = {
+    acquireVsCodeApi: () => ({ postMessage: message => postedMessages.push(message) }),
+    console: { info() {}, warn() {}, error() {} },
+    navigator: { userAgent: 'Kronos Windows Webview Test' },
+    window: { addEventListener() {} },
+    document: {
+      readyState: 'complete',
+      documentElement: {
+        setAttribute(name, value) { documentElementAttributes[name] = value; },
+      },
+      addEventListener(type, handler) { documentListeners[type] = handler; },
+    },
+  };
+  vm.runInNewContext(actionScript, sandbox);
+  assert.equal(documentElementAttributes['data-kronos-script-ready'], 'true');
+  assert.equal(documentElementAttributes['data-kronos-actions-ready'], 'true');
+  assert.equal(typeof documentListeners.click, 'function');
+  let defaultPrevented = false;
+  const fakeButton = {
+    closest(selector) { return selector === '[data-action]' ? this : null; },
+    getAttribute(name) {
+      return {
+        'data-action': 'openRunRecord',
+        'data-ticket': 'K-1',
+        'data-run-id': 'run-1',
+      }[name] || '';
+    },
+  };
+  documentListeners.click({ target: fakeButton, preventDefault() { defaultPrevented = true; } });
+  assert.equal(defaultPrevented, true);
+  assert.equal(postedMessages.length, 1);
+  assert.equal(postedMessages[0].command, 'openRunRecord');
+  assert.equal(postedMessages[0].ticket, 'K-1');
+  assert.equal(postedMessages[0].runId, 'run-1');
   const diagnosticActionScript = webviewSecurity.webviewActionPostScript('Kronos Actions', [
     { messageKey: 'ticket', dataAttribute: 'data-ticket' },
   ], { readyCommand: webviewSecurity.WEBVIEW_READY_COMMAND });
@@ -6120,6 +6160,8 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     false,
     'extension webview CSP options should come from the shared webview security helper',
   );
+  assert.equal(source.includes('instanceof Element'), false, 'webview handlers should not depend on sandbox-exposed Element constructors');
+  assert.equal(source.includes('instanceof HTMLElement'), false, 'webview handlers should not depend on sandbox-exposed HTMLElement constructors');
   assert.equal(
     source.includes('run.events[run.events.length - 1]'),
     false,
