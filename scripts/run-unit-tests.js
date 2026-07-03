@@ -8064,15 +8064,19 @@ test('dashboard worklist builds command-center lanes from review, run, gate, and
   assert.equal(lane('needs_human').items[0].title, 'web verify needs review');
   assert.equal(lane('active_runs').items[0].runId, 'active-new');
   assert.equal(lane('active_runs').items[0].severity, 'warning');
+  assert.match(lane('active_runs').items[0].detail, /paused for K-2; 0 tools \| 0 changed \| /);
   assert.equal(lane('active_runs').items.some(item => item.runId === 'terminal-active'), false);
   assert.equal(lane('failing_gates').items[0].ticketKey, 'K-FAIL');
   assert.match(lane('recent_completed').items[0].detail, /evidence gate pass/);
   assert.equal(lane('stale_items').items[0].ticketKey, 'K-OLD');
 
   const source = readSourceFixture('src', 'services', 'dashboardWorklist.ts');
+  assert.ok(source.includes("import { formatRunProgress } from './runProgress'"));
   assert.ok(source.includes("import { isFreshActiveRun } from './runStatus'"));
   assert.ok(source.includes('function isDashboardActiveRun'));
   assert.ok(source.includes('return isFreshActiveRun(run);'));
+  assert.ok(source.includes('function activeRunDetail(run: DashboardRunRecord, status: string, ticketKey: string): string'));
+  assert.ok(source.includes('formatRunProgress(run)'));
   assert.ok(source.includes('type DashboardRunRecord = RunRecord & Record<string, unknown>'));
   assert.equal(source.includes('type DashboardRunRecord = RunRecord & Record<string, any>'), false);
 });

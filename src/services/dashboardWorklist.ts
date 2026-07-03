@@ -2,6 +2,7 @@ import { AgingReport } from './agingAnalyzer';
 import { EvidenceGateResult } from './evidenceGate';
 import { HumanReviewInbox } from './humanReviewInbox';
 import { RunRecord } from './runStore';
+import { formatRunProgress } from './runProgress';
 import { isFreshActiveRun } from './runStatus';
 
 export type DashboardWorklistKind = 'needs_human' | 'active_runs' | 'failing_gates' | 'recent_completed' | 'stale_items';
@@ -60,7 +61,7 @@ export function buildDashboardWorklist(input: DashboardWorklistInput, limit = 5)
           return dashboardWorklistItem({
             id: `run:${runId(run)}`,
             title: `${runString(run, 'project') || 'Project'} ${runString(run, 'skill') || 'run'}`,
-            detail: `${status}${ticketKey ? ` for ${ticketKey}` : ''}`,
+            detail: activeRunDetail(run, status, ticketKey),
             severity: status === 'paused' ? 'warning' : 'info',
           }, { ticketKey, runId: runId(run), timestamp: runString(run, 'startedAt') });
         }),
@@ -130,6 +131,11 @@ function sortRuns(runs: DashboardRunRecord[], timestampField: 'startedAt' | 'end
 
 function isDashboardActiveRun(run: DashboardRunRecord): boolean {
   return isFreshActiveRun(run);
+}
+
+function activeRunDetail(run: DashboardRunRecord, status: string, ticketKey: string): string {
+  const target = ticketKey ? ` for ${ticketKey}` : '';
+  return `${status}${target}; ${formatRunProgress(run)}`;
 }
 
 function timestampValue(value: unknown): number {
