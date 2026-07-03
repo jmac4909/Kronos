@@ -235,17 +235,18 @@ export function normalizeMergeRequestStatus(value: unknown): MergeRequestStatusR
   copyString(status, 'head_branch', firstDefined(mr['head_branch'], data['head_branch']));
   if (commentsSource !== undefined) {
     status.comments = comments;
-    status.comment_count = comments.length;
+    status.comment_count = providedCommentCount ?? comments.length;
   } else if (providedCommentCount !== undefined) {
     status.comment_count = providedCommentCount;
   }
-  const lastCommentAt = latestComment || providedLastCommentAt;
+  const lastCommentAt = latestIsoTimestamp(latestComment, providedLastCommentAt);
   if (lastCommentAt) { status.last_comment_at = lastCommentAt; }
   if (discussionStats) {
     status.discussion_count = discussionStats.discussion_count;
     status.unresolved_discussion_count = discussionStats.unresolved_discussion_count;
     status.resolved_discussion_count = discussionStats.resolved_discussion_count;
-    if (discussionStats.last_discussion_at) { status.last_discussion_at = discussionStats.last_discussion_at; }
+    const lastDiscussionAt = latestIsoTimestamp(discussionStats.last_discussion_at, providedLastDiscussionAt);
+    if (lastDiscussionAt) { status.last_discussion_at = lastDiscussionAt; }
     status.discussions_resolved = discussionStats.unresolved_discussion_count === 0;
   } else {
     if (providedDiscussionCount !== undefined) { status.discussion_count = providedDiscussionCount; }
@@ -371,11 +372,22 @@ function normalizeReviewStatus(value: unknown): MergeRequest['review_status'] | 
 }
 
 function latestCommentAt(comments: MergeRequestComment[]): string | undefined {
-  return comments
-    .map(comment => comment.created)
-    .filter((created): created is string => Boolean(created))
-    .sort()
-    .at(-1);
+  return latestIsoTimestamp(...comments.map(comment => comment.created));
+}
+
+function latestIsoTimestamp(...values: Array<string | undefined>): string | undefined {
+  let latest: string | undefined;
+  let latestTime = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (!value) { continue; }
+    const time = Date.parse(value);
+    if (!Number.isFinite(time)) { continue; }
+    if (time >= latestTime) {
+      latest = value;
+      latestTime = time;
+    }
+  }
+  return latest;
 }
 
 function normalizeMergeRequestDiscussionStats(value: unknown): MergeRequestDiscussionStats | null {

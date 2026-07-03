@@ -4707,6 +4707,25 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
     comment_count: 3,
     last_comment_at: '2026-07-02T04:00:00.000Z',
   });
+  const paginatedStatus = integrationAdapters.normalizeMergeRequestStatus({
+    mr: {
+      state: 'opened',
+      review_status: 'pending_review',
+      user_notes_count: 9,
+      last_note_at: '2026-07-02T05:00:00.000Z',
+      last_discussion_updated_at: '2026-07-02T06:00:00.000Z',
+    },
+    comments: [
+      { body: 'older visible page', created_at: '2026-07-02T03:00:00.000Z' },
+    ],
+    discussions: [
+      { notes: [{ body: 'resolved earlier', created_at: '2026-07-02T04:00:00.000Z', resolvable: true, resolved: true }] },
+    ],
+  });
+  assert.equal(paginatedStatus.comment_count, 9);
+  assert.equal(paginatedStatus.comments.length, 1);
+  assert.equal(paginatedStatus.last_comment_at, '2026-07-02T05:00:00.000Z');
+  assert.equal(paginatedStatus.last_discussion_at, '2026-07-02T06:00:00.000Z');
   assert.deepEqual(integrationAdapters.normalizeMergeRequestStatus({
     mr: {
       state: 'opened',
