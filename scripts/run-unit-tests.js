@@ -3353,6 +3353,14 @@ test('run store normalizes terminal active records on read and archive', () => {
     processPid: 99999999,
     startedAt: '2026-07-02T10:15:00.000Z',
   };
+  const staleProcessless = {
+    id: 'run-stale-processless',
+    project: 'app',
+    skill: 'implement',
+    ticket: 'K-STALE',
+    status: 'running',
+    startedAt: '2000-01-01T00:00:00.000Z',
+  };
   const logCompleted = {
     id: 'run-terminal-log',
     project: 'app',
@@ -3375,6 +3383,7 @@ test('run store normalizes terminal active records on read and archive', () => {
   runStore.writeRunRecord(failed);
   runStore.writeRunRecord(timestampOnly);
   runStore.writeRunRecord(deadProcess);
+  runStore.writeRunRecord(staleProcessless);
   runStore.writeRunRecord(logCompleted);
   runStore.writeRunRecord(unsafeLog);
   runStore.appendRunLog(logCompleted.logPath, 'tool output: Session exited with code 1\n{"type":"assistant","message":{"content":[]}}\n{"type":"result","subtype":"success","result":"done"}\n');
@@ -3385,6 +3394,7 @@ test('run store normalizes terminal active records on read and archive', () => {
   const failedRead = runStore.readRunRecord(failed.id);
   const timestampOnlyRead = runStore.readRunRecord(timestampOnly.id);
   const deadProcessRead = runStore.readRunRecord(deadProcess.id);
+  const staleProcesslessRead = runStore.readRunRecord(staleProcessless.id);
   const logCompletedRead = runStore.readRunRecord(logCompleted.id);
   const unsafeLogRead = runStore.readRunRecord(unsafeLog.id);
   assert.equal(completedRead.status, 'completed');
@@ -3397,6 +3407,10 @@ test('run store normalizes terminal active records on read and archive', () => {
   assert.match(deadProcessRead.failureReason, /process 99999999 is no longer running/);
   assert.ok(deadProcessRead.endedAt);
   assert.ok(deadProcessRead.events.some(event => event.label === 'Run process no longer exists'));
+  assert.equal(staleProcesslessRead.status, 'needs_human');
+  assert.match(staleProcesslessRead.failureReason, /stale active-run threshold/);
+  assert.ok(staleProcesslessRead.endedAt);
+  assert.ok(staleProcesslessRead.events.some(event => event.label === 'Stale active run needs human review'));
   assert.equal(logCompletedRead.status, 'completed');
   assert.ok(logCompletedRead.endedAt);
   assert.equal(unsafeLogRead.status, 'running');
@@ -3404,6 +3418,7 @@ test('run store normalizes terminal active records on read and archive', () => {
   assert.equal(JSON.parse(fs.readFileSync(runStore.runRecordPath(failed.id), 'utf8')).status, 'failed');
   assert.equal(JSON.parse(fs.readFileSync(runStore.runRecordPath(timestampOnly.id), 'utf8')).status, 'needs_human');
   assert.equal(JSON.parse(fs.readFileSync(runStore.runRecordPath(deadProcess.id), 'utf8')).status, 'failed');
+  assert.equal(JSON.parse(fs.readFileSync(runStore.runRecordPath(staleProcessless.id), 'utf8')).status, 'needs_human');
   assert.equal(JSON.parse(fs.readFileSync(runStore.runRecordPath(logCompleted.id), 'utf8')).status, 'completed');
   assert.equal(JSON.parse(fs.readFileSync(runStore.runRecordPath(unsafeLog.id), 'utf8')).status, 'running');
 
@@ -3613,6 +3628,9 @@ test('run store surfaces invalid records and blocks strict mutations', () => {
     "unknownErrorMessage(e, 'Unable to parse JSON.')",
     'const PROCESS_BACKED_ACTIVE_STATUSES',
     'function terminalRunOutcomeFromDeadProcess',
+    'function terminalRunOutcomeFromStaleProcesslessRun',
+    'isStaleActiveRun(run)',
+    'Stale active run needs human review',
     'function processIsGone',
     "unknownErrorCode(e) === 'ESRCH'",
     'function normalizeRunFile',

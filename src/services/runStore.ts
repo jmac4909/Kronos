@@ -3,7 +3,7 @@ import * as path from 'path';
 import { safeFileStem } from './fileNames';
 import { KRONOS_DIR } from './stateStore';
 import { unknownErrorCode, unknownErrorMessage } from './errorUtils';
-import { effectiveRunStatus, isActiveRunStatus } from './runStatus';
+import { effectiveRunStatus, isActiveRunStatus, isStaleActiveRun } from './runStatus';
 import { readJsonFile } from './jsonFiles';
 
 export const RUNS_DIR = path.join(KRONOS_DIR, 'runs');
@@ -212,18 +212,23 @@ function normalizeTerminalActiveRun(run: RunRecord): RunRecord {
   const deadProcessStatus = effectiveStatus === status && isActiveRunStatus(status)
     ? terminalRunOutcomeFromDeadProcess(run, status)
     : undefined;
+  const staleProcesslessStatus = effectiveStatus === status && isActiveRunStatus(status)
+    ? terminalRunOutcomeFromStaleProcesslessRun(run, status)
+    : undefined;
   const repairedStatus = effectiveStatus === status && isActiveRunStatus(status)
-    ? terminalRunOutcomeFromActiveLog(run) || deadProcessStatus
+    ? terminalRunOutcomeFromActiveLog(run) || deadProcessStatus || staleProcesslessStatus
     : undefined;
   const nextStatus = repairedStatus || effectiveStatus;
   if (!status || !isActiveRunStatus(status) || !nextStatus || nextStatus === status) {
     return run;
   }
   const normalized: RunRecord = { ...run, status: nextStatus };
-  if (deadProcessStatus && !normalized.endedAt) {
+  if ((deadProcessStatus || staleProcesslessStatus) && !normalized.endedAt) {
     normalized.endedAt = new Date().toISOString();
   }
-  if (nextStatus === 'needs_human' && !normalized.failureReason) {
+  if (staleProcesslessStatus && !normalized.failureReason) {
+    normalized.failureReason = `Run record stayed ${status} past the stale active-run threshold without process metadata; inspect the run before retrying.`;
+  } else if (nextStatus === 'needs_human' && !normalized.failureReason) {
     normalized.failureReason = `Run record had terminal metadata while persisted status was ${status}; inspect the run before retrying.`;
   }
   if (repairedStatus && !normalized.endedAt) {
@@ -249,6 +254,15 @@ function normalizeTerminalActiveRun(run: RunRecord): RunRecord {
       detail: `PID ${run.processPid} disappeared before Kronos recorded a terminal event.`,
       timestamp,
     });
+  } else if (staleProcesslessStatus) {
+    const timestamp = normalized.endedAt || new Date().toISOString();
+    normalized.events = Array.isArray(normalized.events) ? [...normalized.events] : [];
+    normalized.events.push({
+      type: 'error',
+      label: 'Stale active run needs human review',
+      detail: 'No process metadata or terminal event was available before the stale active-run threshold.',
+      timestamp,
+    });
   }
   return normalized;
 }
@@ -258,6 +272,12 @@ function terminalRunOutcomeFromDeadProcess(run: RunRecord, status: string): stri
   const pid = numericPid(run.processPid);
   if (pid === undefined) { return undefined; }
   return processIsGone(pid) ? 'failed' : undefined;
+}
+
+function terminalRunOutcomeFromStaleProcesslessRun(run: RunRecord, status: string): string | undefined {
+  if (!PROCESS_BACKED_ACTIVE_STATUSES.has(status)) { return undefined; }
+  if (numericPid(run.processPid) !== undefined) { return undefined; }
+  return isStaleActiveRun(run) ? 'needs_human' : undefined;
 }
 
 function terminalRunOutcomeFromActiveLog(run: RunRecord): string | undefined {
