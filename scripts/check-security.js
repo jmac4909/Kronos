@@ -9,6 +9,7 @@ const files = [
   'src/runners/sessionDispatcher.ts',
   'src/state/KronosState.ts',
   'src/services/scriptClient.ts',
+  'src/services/queueActiveRun.ts',
   'src/services/queuePlannerPanelView.ts',
   'src/services/operationsReportPanelView.ts',
   'src/views/ProjectTreeProvider.ts',
@@ -30,6 +31,7 @@ const worktreeRegistry = readSource('src/services/worktreeRegistry.ts');
 const sessionTreeProvider = readSource('src/views/SessionTreeProvider.ts');
 const queueTreeProvider = readSource('src/views/QueueTreeProvider.ts');
 const reviewTreeProvider = readSource('src/views/ReviewTreeProvider.ts');
+const queueActiveRun = sources['src/services/queueActiveRun.ts'];
 const projectTreeProvider = sources['src/views/ProjectTreeProvider.ts'];
 const ticketTreeProvider = sources['src/views/TicketTreeProvider.ts'];
 const dispatcher = sources['src/runners/sessionDispatcher.ts'];
@@ -109,6 +111,128 @@ function fail(message) {
 function assertAbsent(pattern, message) {
   if (pattern.test(allSource)) {
     fail(message);
+  }
+}
+
+function lineNumberAt(source, offset) {
+  return source.slice(0, offset).split('\n').length;
+}
+
+function extractCallExpression(source, callStart) {
+  const openParen = source.indexOf('(', callStart);
+  if (openParen === -1) {
+    return source.slice(callStart);
+  }
+
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  for (let idx = openParen; idx < source.length; idx += 1) {
+    const char = source[idx];
+    const next = source[idx + 1];
+
+    if (inLineComment) {
+      if (char === '\n') {
+        inLineComment = false;
+      }
+      continue;
+    }
+    if (inBlockComment) {
+      if (char === '*' && next === '/') {
+        inBlockComment = false;
+        idx += 1;
+      }
+      continue;
+    }
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '/' && next === '/') {
+      inLineComment = true;
+      idx += 1;
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      inBlockComment = true;
+      idx += 1;
+      continue;
+    }
+    if (char === '\'' || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+    if (char === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(callStart, idx + 1);
+      }
+    }
+  }
+  return source.slice(callStart);
+}
+
+function listCreateWebviewPanelCalls(file, source) {
+  const calls = [];
+  const pattern = /\bvscode\.window\.createWebviewPanel\s*\(/g;
+  for (const match of source.matchAll(pattern)) {
+    calls.push({
+      file,
+      line: lineNumberAt(source, match.index),
+      text: extractCallExpression(source, match.index),
+    });
+  }
+  return calls;
+}
+
+function callHasExplicitWebviewScriptPolicy(file, source, call) {
+  if (/\benableScripts\s*:\s*(true|false|interactive)\b/.test(call.text)) {
+    return true;
+  }
+  if (/\bkronosScriptableWebviewOptions\s*\(/.test(call.text)) {
+    return true;
+  }
+  if (
+    file === 'src/runners/sessionDispatcher.ts'
+    && /\bwebviewOptions\b/.test(call.text)
+    && source.includes('const webviewOptions: vscode.WebviewOptions')
+    && source.includes("{ enableScripts: interactive, localResourceRoots: [vscode.Uri.joinPath(options.extensionUri, 'media')] }")
+    && source.includes('{ enableScripts: interactive }')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function assertExplicitWebviewScriptPolicy(file, source) {
+  for (const call of listCreateWebviewPanelCalls(file, source)) {
+    if (!callHasExplicitWebviewScriptPolicy(file, source, call)) {
+      fail(`${file}:${call.line} createWebviewPanel must declare enableScripts or use kronosScriptableWebviewOptions.`);
+    }
+  }
+}
+
+function assertPanelUsesScriptableWebviewOptions(file, source, panelId) {
+  const matches = listCreateWebviewPanelCalls(file, source).filter(call => call.text.includes(`'${panelId}'`));
+  if (matches.length !== 1) {
+    fail(`${file} must have exactly one ${panelId} webview panel, found ${matches.length}.`);
+    return;
+  }
+  if (!/\bkronosScriptableWebviewOptions\s*\(/.test(matches[0].text)) {
+    fail(`${file}:${matches[0].line} ${panelId} must use kronosScriptableWebviewOptions for media-backed scripts.`);
   }
 }
 
@@ -203,9 +327,10 @@ if (unitTests.includes("const joined = [command, ...args].join(' ');")) {
   fail('Unit test command mocks must normalize command names so gcloud.cmd works on Windows.');
 }
 
-const enableScriptsTrue = [...extension.matchAll(/enableScripts:\s*true/g)].length;
-if (enableScriptsTrue !== 27) {
-  fail(`Expected exactly 27 literal script-enabled webviews, found ${enableScriptsTrue}.`);
+assertExplicitWebviewScriptPolicy('src/extension.ts', extension);
+assertExplicitWebviewScriptPolicy('src/runners/sessionDispatcher.ts', dispatcher);
+for (const panelId of ['kronosJiraBoard', 'kronosHumanReviewInbox', 'kronosEvidenceGate']) {
+  assertPanelUsesScriptableWebviewOptions('src/extension.ts', extension, panelId);
 }
 for (const [file, source] of Object.entries({ 'src/extension.ts': extension, 'src/runners/sessionDispatcher.ts': dispatcher })) {
   for (const [idx, line] of source.split(/\r?\n/).entries()) {
@@ -1946,8 +2071,8 @@ if (sessionTreeProvider.includes('setInterval(async () =>')) {
 for (const marker of [
   "import { KronosRun, listRuns } from '../runners/sessionDispatcher'",
   "import { isFreshActiveRun } from '../services/runStatus'",
-  "import { skillForAction } from '../services/nextActionContext'",
   "import { formatRunProgress } from '../services/runProgress'",
+  "import { activeRunForQueueItem } from '../services/queueActiveRun'",
   'const activeRuns = listRuns().filter(run => isFreshActiveRun(run))',
   'new QueueTreeItem(item, idx, activeRunForQueueItem(item, activeRuns))',
   'startPolling(intervalMs: number): void',
@@ -1956,20 +2081,29 @@ for (const marker of [
   'const progress = activeRun ? formatRunProgress(activeRun) :',
   'Active run: ${activeRun.id}',
   "new vscode.ThemeIcon('sync~spin'",
-  'function activeRunForQueueItem(item: QueueItem, activeRuns: KronosRun[]): KronosRun | undefined',
-  'return activeRuns.find(run => runMatchesQueueItem(run, item));',
-  'function runMatchesQueueItem(run: KronosRun, item: QueueItem): boolean',
-  'function runMatchesQueueTicket(run: KronosRun, item: QueueItem): boolean',
-  'function runMatchesQueueProject(run: KronosRun, item: QueueItem): boolean',
-  'function runMatchesQueueProjectScope(run: KronosRun, item: QueueItem): boolean',
-  'function runMatchesQueueAction(run: KronosRun, item: QueueItem): boolean',
-  'run.skill === skillForAction(item.action)',
 ]) {
   if (!queueTreeProvider.includes(marker) && !extension.includes(marker)) {
     fail(`Missing queue tree active-run marker: ${marker}`);
   }
 }
-if (queueTreeProvider.includes('activeRuns.find(run => runMatchesQueueTicket(run, item))\n    || activeRuns.find')) {
+for (const marker of [
+  "import { skillForAction } from './nextActionContext'",
+  "import { isFreshActiveRun } from './runStatus'",
+  'export interface QueueActiveRunLike',
+  'export function activeRunForQueueItem<T extends QueueActiveRunLike>',
+  'return runs.find(run => isFreshActiveRun(run, now) && runMatchesQueueItem(run, item));',
+  'export function runMatchesQueueItem(run: QueueActiveRunLike, item: QueueItem): boolean',
+  'function runMatchesQueueTicket(run: QueueActiveRunLike, item: QueueItem): boolean',
+  'function runMatchesQueueProject(run: QueueActiveRunLike, item: QueueItem): boolean',
+  'function runMatchesQueueProjectScope(run: QueueActiveRunLike, item: QueueItem): boolean',
+  'function runMatchesQueueAction(run: QueueActiveRunLike, item: QueueItem): boolean',
+  'runString(run.skill) === skillForAction(item.action)',
+]) {
+  if (!queueActiveRun.includes(marker)) {
+    fail(`Missing queue active-run service marker: ${marker}`);
+  }
+}
+if (`${queueTreeProvider}\n${queueActiveRun}`.includes('activeRuns.find(run => runMatchesQueueTicket(run, item))\n    || activeRuns.find')) {
   fail('Queue active-run matching must not use broad ticket-only or project-only fallbacks.');
 }
 if (queueTreeProvider.includes('export class QueueTreeItem')) {

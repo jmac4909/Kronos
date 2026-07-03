@@ -137,6 +137,7 @@ const operationsReportPanelView = require('../out/services/operationsReportPanel
 const runStatus = require('../out/services/runStatus.js');
 const runProgress = require('../out/services/runProgress.js');
 const activeRunDisplay = require('../out/services/activeRunDisplay.js');
+const queueActiveRun = require('../out/services/queueActiveRun.js');
 const relativeTime = require('../out/services/relativeTime.js');
 const runAttention = require('../out/services/runAttention.js');
 const runCompletionNotification = require('../out/services/runCompletionNotification.js');
@@ -4783,6 +4784,59 @@ test('active run display summarizes status bar text and tooltip progress', () =>
   }
 });
 
+test('queue active-run helper matches active runs without broad fallbacks', () => {
+  const queueItem = (overrides = {}) => ({
+    id: 'q-1',
+    projects: ['app'],
+    project_path: '/repo/app',
+    ticket: 'APP-123',
+    action: 'implement',
+    priority_score: 90,
+    reason: 'fixture',
+    ...overrides,
+  });
+  const run = (overrides = {}) => ({
+    id: 'run-1',
+    project: 'app',
+    projectPath: '/repo/app',
+    ticket: 'APP-123',
+    skill: 'implement',
+    status: 'running',
+    startedAt: '2026-07-03T10:00:00.000Z',
+    events: [],
+    ...overrides,
+  });
+
+  assert.equal(queueActiveRun.runMatchesQueueItem(run(), queueItem()), true);
+  assert.equal(queueActiveRun.runMatchesQueueItem(run({ ticket: 'APP-999' }), queueItem()), false);
+  assert.equal(queueActiveRun.runMatchesQueueItem(run({ skill: 'verify-local' }), queueItem()), false);
+  assert.equal(queueActiveRun.runMatchesQueueItem(run({ project: 'other', projectPath: '/repo/other' }), queueItem()), false);
+  assert.equal(queueActiveRun.runMatchesQueueItem(run({ project: 'other', projectPath: '/repo/other' }), queueItem({ projects: [], project_path: '' })), true);
+
+  const now = new Date('2026-07-03T23:00:00.000Z');
+  const stale = run({ id: 'stale', startedAt: '2026-07-03T10:00:00.000Z' });
+  const completed = run({ id: 'completed', exitCode: 0 });
+  const fresh = run({ id: 'fresh', startedAt: '2026-07-03T22:59:00.000Z' });
+  assert.equal(queueActiveRun.activeRunForQueueItem(queueItem(), [stale, completed, fresh], now), fresh);
+
+  const source = readSourceFixture('src', 'services', 'queueActiveRun.ts');
+  for (const marker of [
+    "import { skillForAction } from './nextActionContext'",
+    "import { isFreshActiveRun } from './runStatus'",
+    'export interface QueueActiveRunLike',
+    'export function activeRunForQueueItem<T extends QueueActiveRunLike>',
+    'return runs.find(run => isFreshActiveRun(run, now) && runMatchesQueueItem(run, item));',
+    'export function runMatchesQueueItem(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'function runMatchesQueueTicket(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'function runMatchesQueueProject(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'function runMatchesQueueProjectScope(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'function runMatchesQueueAction(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'runString(run.skill) === skillForAction(item.action)',
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+});
+
 test('relative time formatter handles invalid, past, and future timestamps', () => {
   const now = new Date('2026-07-02T12:00:00.000Z');
 
@@ -7235,6 +7289,28 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   }
 });
 
+test('security check validates semantic webview script policy', () => {
+  const source = readSourceFixture('scripts', 'check-security.js');
+  for (const marker of [
+    'function listCreateWebviewPanelCalls',
+    'function assertExplicitWebviewScriptPolicy',
+    'function assertPanelUsesScriptableWebviewOptions',
+    "assertExplicitWebviewScriptPolicy('src/extension.ts', extension)",
+    "assertExplicitWebviewScriptPolicy('src/runners/sessionDispatcher.ts', dispatcher)",
+    "for (const panelId of ['kronosJiraBoard', 'kronosHumanReviewInbox', 'kronosEvidenceGate'])",
+    'kronosScriptableWebviewOptions for media-backed scripts',
+    'const webviewOptions: vscode.WebviewOptions',
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    'enableScriptsTrue !== 27',
+    'Expected exactly 27 literal script-enabled webviews',
+  ]) {
+    assert.equal(source.includes(marker), false, marker);
+  }
+});
+
 test('extension activation tracks long-lived disposables', () => {
   const source = readSourceFixture('src', 'extension.ts');
   const activateStart = source.indexOf('export function activate');
@@ -7811,6 +7887,7 @@ test('tree providers share action labels and icons', () => {
   const actionIcons = readSourceFixture('src', 'views', 'actionIcons.ts');
   const actionLabels = readSourceFixture('src', 'services', 'actionLabels.ts');
   const queuePlanner = readSourceFixture('src', 'services', 'queuePlanner.ts');
+  const queueActiveRunSource = readSourceFixture('src', 'services', 'queueActiveRun.ts');
 
   for (const marker of [
     "import { actionToLabel } from '../services/actionLabels'",
@@ -7842,12 +7919,12 @@ test('tree providers share action labels and icons', () => {
 
   for (const marker of [
     "import { actionToLabel } from '../services/actionLabels'",
-    "import { skillForAction } from '../services/nextActionContext'",
     "import { queueActionIcon, themeIcon } from './actionIcons'",
     'themeIcon(queueActionIcon(item.action))',
     "import { KronosRun, listRuns } from '../runners/sessionDispatcher'",
     "import { isFreshActiveRun } from '../services/runStatus'",
     "import { formatRunProgress } from '../services/runProgress'",
+    "import { activeRunForQueueItem } from '../services/queueActiveRun'",
     'const activeRuns = listRuns().filter(run => isFreshActiveRun(run))',
     'private hadActiveRuns = false',
     'this.hadActiveRuns = activeRuns.length > 0',
@@ -7860,19 +7937,26 @@ test('tree providers share action labels and icons', () => {
     'const progress = activeRun ? formatRunProgress(activeRun) :',
     'Active run: ${activeRun.id}',
     "new vscode.ThemeIcon('sync~spin'",
-    'function activeRunForQueueItem(item: QueueItem, activeRuns: KronosRun[]): KronosRun | undefined',
-    'return activeRuns.find(run => runMatchesQueueItem(run, item));',
-    'function runMatchesQueueItem(run: KronosRun, item: QueueItem): boolean',
-    'function runMatchesQueueTicket(run: KronosRun, item: QueueItem): boolean',
-    'function runMatchesQueueProject(run: KronosRun, item: QueueItem): boolean',
-    'function runMatchesQueueProjectScope(run: KronosRun, item: QueueItem): boolean',
-    'function runMatchesQueueAction(run: KronosRun, item: QueueItem): boolean',
-    'run.skill === skillForAction(item.action)',
   ]) {
     assert.ok(queueTree.includes(marker), marker);
   }
+  for (const marker of [
+    "import { skillForAction } from './nextActionContext'",
+    "import { isFreshActiveRun } from './runStatus'",
+    'export interface QueueActiveRunLike',
+    'export function activeRunForQueueItem<T extends QueueActiveRunLike>',
+    'return runs.find(run => isFreshActiveRun(run, now) && runMatchesQueueItem(run, item));',
+    'export function runMatchesQueueItem(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'function runMatchesQueueTicket(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'function runMatchesQueueProject(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'function runMatchesQueueProjectScope(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'function runMatchesQueueAction(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'runString(run.skill) === skillForAction(item.action)',
+  ]) {
+    assert.ok(queueActiveRunSource.includes(marker), marker);
+  }
   assert.equal(
-    queueTree.includes('activeRuns.find(run => runMatchesQueueTicket(run, item))\n    || activeRuns.find'),
+    `${queueTree}\n${queueActiveRunSource}`.includes('activeRuns.find(run => runMatchesQueueTicket(run, item))\n    || activeRuns.find'),
     false,
     'queue active-run matching should not mark a row active from ticket-only or project-only fallbacks',
   );

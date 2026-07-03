@@ -3,7 +3,7 @@ import { KronosState } from '../state/KronosState';
 import { QueueItem } from '../state/types';
 import { KronosRun, listRuns } from '../runners/sessionDispatcher';
 import { actionToLabel } from '../services/actionLabels';
-import { skillForAction } from '../services/nextActionContext';
+import { activeRunForQueueItem } from '../services/queueActiveRun';
 import { formatRunProgress } from '../services/runProgress';
 import { isFreshActiveRun } from '../services/runStatus';
 import { queueActionIcon, themeIcon } from './actionIcons';
@@ -108,37 +108,4 @@ class QueueTreeItem extends vscode.TreeItem {
       ? new vscode.ThemeIcon('sync~spin', new vscode.ThemeColor('charts.blue'))
       : themeIcon(queueActionIcon(item.action));
   }
-}
-
-function activeRunForQueueItem(item: QueueItem, activeRuns: KronosRun[]): KronosRun | undefined {
-  return activeRuns.find(run => runMatchesQueueItem(run, item));
-}
-
-function runMatchesQueueItem(run: KronosRun, item: QueueItem): boolean {
-  if (item.ticket) {
-    return runMatchesQueueTicket(run, item)
-      && runMatchesQueueAction(run, item)
-      && runMatchesQueueProjectScope(run, item);
-  }
-  return runMatchesQueueProject(run, item) && runMatchesQueueAction(run, item);
-}
-
-function runMatchesQueueTicket(run: KronosRun, item: QueueItem): boolean {
-  return Boolean(item.ticket && run.ticket === item.ticket);
-}
-
-function runMatchesQueueProject(run: KronosRun, item: QueueItem): boolean {
-  const projects = item.projects || [];
-  return Boolean((run.project && projects.includes(run.project)) || (run.projectPath && run.projectPath === item.project_path));
-}
-
-function runMatchesQueueProjectScope(run: KronosRun, item: QueueItem): boolean {
-  if ((item.projects || []).length === 0 && !item.project_path) {
-    return true;
-  }
-  return runMatchesQueueProject(run, item);
-}
-
-function runMatchesQueueAction(run: KronosRun, item: QueueItem): boolean {
-  return !item.action || run.skill === skillForAction(item.action);
 }
