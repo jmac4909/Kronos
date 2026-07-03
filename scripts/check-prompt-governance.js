@@ -49,7 +49,7 @@ if (directLoadPromptCalls !== 1 || !extension.includes("return state.loadPrompt(
 }
 
 const customPromptLines = extension.split('\n').filter(line => line.includes('customPrompt:'));
-const metadataDispatches = extension.split('\n').filter(line => line.includes('promptMetadata:')).length;
+const metadataDispatches = extension.split('\n').filter(line => /^\s+promptMetadata:/.test(line)).length;
 if (metadataDispatches < 10) {
   fail(`Expected prompt metadata on template dispatches, found ${metadataDispatches}.`);
 }

@@ -61,6 +61,12 @@ export function readRuns(limit = 100): RunRecord[] {
     .filter((r): r is RunRecord => Boolean(r));
 }
 
+export function readArchivedRuns(limit = 100): RunRecord[] {
+  return listRunRecordFiles(ARCHIVED_RUNS_DIR, limit)
+    .map(filePath => readRunFile(filePath, 'archived'))
+    .filter((r): r is RunRecord => Boolean(r));
+}
+
 export function listRunStoreIssues(limit = 100): RunStoreIssue[] {
   return [
     ...listRunRecordFiles(RUNS_DIR, limit).map(filePath => readRunFileIssue(filePath, 'active')).filter((i): i is RunStoreIssue => Boolean(i)),

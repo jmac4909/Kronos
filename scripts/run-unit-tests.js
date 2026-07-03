@@ -1197,13 +1197,26 @@ test('merge request notifications summarize review status and new comment change
     severity: 'info',
     message: 'K-4E: MR !44 new MR discussion activity.',
   });
-  assert.equal(mergeRequestNotifications.describeMergeRequestStatusChange('K-5', {
+  assert.deepEqual(mergeRequestNotifications.describeMergeRequestStatusChange('K-5', {
     ...baseUpdate,
     previousMr: { iid: 5, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/5' },
     ticket: ticket({
       mr: { iid: 5, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/5', comment_count: 3 },
     }),
-  }), null);
+  }), {
+    severity: 'info',
+    message: 'K-5: MR !5 3 MR comments now tracked.',
+  });
+  assert.deepEqual(mergeRequestNotifications.describeMergeRequestStatusChange('K-5B', {
+    ...baseUpdate,
+    previousMr: { iid: 51, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/51' },
+    ticket: ticket({
+      mr: { iid: 51, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/51', last_comment_at: '2026-07-02T02:00:00.000Z' },
+    }),
+  }), {
+    severity: 'info',
+    message: 'K-5B: MR !51 new MR comment.',
+  });
   assert.equal(mergeRequestNotifications.describeMergeRequestStatusChange('K-6', { ...baseUpdate, mergedNow: true }), null);
   assert.equal(mergeRequestNotifications.describeMergeRequestStatusChange('K-7', { ...baseUpdate, closedNow: true }), null);
 });
@@ -3582,6 +3595,7 @@ test('run store archives run record, log, and prompt artifacts', () => {
   assert.equal(fs.existsSync(archived.promptPath), true);
   assert.equal(fs.readFileSync(archived.promptPath, 'utf8'), 'saved prompt');
   assert.equal(runStore.readRuns().some(r => r.id === run.id), false);
+  assert.equal(runStore.readArchivedRuns().some(r => r.id === run.id), true);
   assert.equal(JSON.parse(fs.readFileSync(archived.runPath, 'utf8')).id, run.id);
 });
 
@@ -7150,7 +7164,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'projectNameOverride: projectName',
     'promptMetadata.mergeRequestIid = mrIid',
     'resolveDeployMonitorProject(state.state, ticketKey, ticket)',
-    'hasHandledDeployMonitorRun(listRuns(), { projectName, projectPath, ticketKey, mrIid })',
+    'hasHandledDeployMonitorRun([...listRuns(), ...readArchivedRuns()], { projectName, projectPath, ticketKey, mrIid })',
     'deploy monitor already handled',
     'recordDeployMonitorHandoffIssue(state, ticketKey, ticket, reason)',
     'const currentTicket = state.state?.tickets?.[ticketKey] || ticket',
@@ -7735,6 +7749,10 @@ test('extension dispatch command handlers normalize tree payloads before use', (
     "vscode.commands.registerCommand('kronos.refreshProject', async (item: unknown)",
     "vscode.commands.registerCommand('kronos.implement', async (item: unknown)",
     "vscode.commands.registerCommand('kronos.deployMonitor', async (item: unknown)",
+    "handoff: 'manual-deploy-monitor'",
+    "const mrIid = ticketKey ? state.state?.tickets?.[ticketKey]?.mr?.iid : undefined",
+    'promptMetadata.mergeRequestIid = mrIid',
+    'promptMetadata,',
     "vscode.commands.registerCommand('kronos.verifyFix', async (item: unknown)",
     "vscode.commands.registerCommand('kronos.completeTask', async (item: unknown)",
     "vscode.commands.registerCommand('kronos.openProject', async (item: unknown)",

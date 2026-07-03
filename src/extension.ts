@@ -20,7 +20,7 @@ import { writeEvidenceExport } from './services/evidenceStore';
 import { evidenceAcceptanceCriteria, evidenceChecked, evidenceChecks, evidenceEnvironmentResults, evidenceNotes, evidenceRecordCount, evidenceString } from './services/evidenceData';
 import { EvidenceHandoffPlan, buildEvidenceHandoffPlan } from './services/evidenceHandoff';
 import { EvidencePublishDestination, EvidencePublishResult, buildEvidencePublishPlan, publishEvidencePlan, readyPublishDestinations } from './services/evidencePublisher';
-import { RUNS_DIR, archiveRun, listRunStoreIssues, markRunCancelled, markRunContinued, markRunNeedsHuman, markRunPaused, runRecordPath, writeRunRecord } from './services/runStore';
+import { RUNS_DIR, archiveRun, listRunStoreIssues, markRunCancelled, markRunContinued, markRunNeedsHuman, markRunPaused, readArchivedRuns, runRecordPath, writeRunRecord } from './services/runStore';
 import { RecoveryInventory, RecoveryItem, buildRecoveryInventory, type RecoveryInventoryInput } from './services/recoveryCenter';
 import { TimelineEvent, buildTicketTimeline } from './services/ticketTimeline';
 import { DispatchCollision, detectDispatchCollisions, type DispatchCollisionInput } from './services/collisionDetector';
@@ -1670,8 +1670,15 @@ export function activate(context: vscode.ExtensionContext) {
       const ticketKey = resolveTicketKey(item);
       const projectPath = getProjectPath(state, projectName);
       if (projectPath) {
+        const promptMetadata: PromptRunMetadata = {
+          source: 'slash',
+          handoff: 'manual-deploy-monitor',
+        };
+        const mrIid = ticketKey ? state.state?.tickets?.[ticketKey]?.mr?.iid : undefined;
+        if (mrIid !== undefined) { promptMetadata.mergeRequestIid = mrIid; }
         const dispatchOptions: DispatchOptions = {
           onComplete: refreshAfterDispatch(state, projectName, ticketKey),
+          promptMetadata,
         };
         if (projectName) { dispatchOptions.projectNameOverride = projectName; }
         await startClaudeDispatch(projectPath, 'deploy-monitor', ticketKey, dispatchOptions);
@@ -5553,7 +5560,7 @@ async function startDeployMonitorForMergedTicket(state: KronosState, ticketKey: 
   const projectName = project.projectName;
   const projectPath = project.projectPath;
   const mrIid = ticket.mr?.iid;
-  if (hasHandledDeployMonitorRun(listRuns(), { projectName, projectPath, ticketKey, mrIid })) {
+  if (hasHandledDeployMonitorRun([...listRuns(), ...readArchivedRuns()], { projectName, projectPath, ticketKey, mrIid })) {
     void vscode.window.showInformationMessage(`${ticketKey} merged - deploy monitor already handled.`);
     return true;
   }
