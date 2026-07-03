@@ -34,8 +34,8 @@ const FAILURE_KIND_LABELS: Record<RunFailureKind, string> = {
 
 export function summarizeRunAttention(run: unknown): RunAttentionSummary {
   const record = runRecord(run);
-  const status = runText(record.status) || 'unknown';
-  const failureKind = coerceRunFailureKind(runText(record.failureKind)) || classifyRunFailure(run);
+  const status = runText(record['status']) || 'unknown';
+  const failureKind = coerceRunFailureKind(runText(record['failureKind'])) || classifyRunFailure(run);
   const label = runFailureKindLabel(failureKind, status);
   const reason = firstRunAttentionReason(record);
 
@@ -87,13 +87,13 @@ export function runFailureKindLabel(kind: RunFailureKind, status = ''): string {
 }
 
 function firstRunAttentionReason(record: Record<string, unknown>): { value: string; source: RunAttentionSource } | undefined {
-  const readiness = runRecord(record.readiness);
+  const readiness = runRecord(record['readiness']);
   const candidates: Array<{ value: unknown; source: RunAttentionSource }> = [
-    { value: record.failureReason, source: 'failureReason' },
-    { value: readiness.summary, source: 'readiness' },
-    { value: record.error, source: 'error' },
-    { value: latestEventField(record.events, 'detail'), source: 'eventDetail' },
-    { value: latestEventField(record.events, 'label'), source: 'eventLabel' },
+    { value: record['failureReason'], source: 'failureReason' },
+    { value: readiness['summary'], source: 'readiness' },
+    { value: record['error'], source: 'error' },
+    { value: latestEventField(record['events'], 'detail'), source: 'eventDetail' },
+    { value: latestEventField(record['events'], 'label'), source: 'eventLabel' },
   ];
   for (const candidate of candidates) {
     const value = runText(candidate.value);

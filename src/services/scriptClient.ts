@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { unknownErrorField, unknownErrorMessage } from './errorUtils';
 
-export const SCRIPTS_DIR = process.env.KRONOS_SCRIPTS_DIR || path.join(os.homedir(), '.claude', 'scripts');
+export const SCRIPTS_DIR = process.env['KRONOS_SCRIPTS_DIR'] || path.join(os.homedir(), '.claude', 'scripts');
 const PYTHON = findPython();
 
 export type RequiredScriptName = 'kronos_state.py' | 'pipeline_monitor.py' | 'gitlab_api.py';
@@ -93,13 +93,13 @@ function assertScriptAvailable(scriptName: RequiredScriptName): string {
 }
 
 function findPython(): string {
-  const candidates = [process.env.PYTHON, 'python', 'python3'].filter(Boolean) as string[];
+  const candidates = [process.env['PYTHON'], 'python', 'python3'].filter(Boolean) as string[];
   for (const candidate of candidates) {
     if (pythonCandidateAvailable(candidate)) {
       return candidate;
     }
   }
-  return process.env.PYTHON || 'python';
+  return process.env['PYTHON'] || 'python';
 }
 
 function pythonCandidateAvailable(candidate: string): boolean {

@@ -44,19 +44,19 @@ export function formatRunProgress(run: unknown, now = new Date()): string {
 
 function elapsedRunSeconds(record: Record<string, unknown>, events: Array<Record<string, unknown>>, now: Date): number {
   const eventDates = events
-    .map(event => validDate(event.timestamp))
+    .map(event => validDate(event['timestamp']))
     .filter((date): date is Date => Boolean(date));
-  const started = validDate(record.startedAt) || eventDates[0];
+  const started = validDate(record['startedAt']) || eventDates[0];
   if (!started) { return 0; }
-  const ended = validDate(record.endedAt)
-    || (isActiveRunStatus(record.status) ? validDate(now) : eventDates[eventDates.length - 1])
+  const ended = validDate(record['endedAt'])
+    || (isActiveRunStatus(record['status']) ? validDate(now) : eventDates[eventDates.length - 1])
     || started;
   return Math.max(0, Math.round((ended.getTime() - started.getTime()) / 1000));
 }
 
 function runEvents(record: Record<string, unknown>): Array<Record<string, unknown>> {
-  return Array.isArray(record.events)
-    ? record.events.filter(objectRecordOrNull)
+  return Array.isArray(record['events'])
+    ? record['events'].filter(objectRecordOrNull)
     : [];
 }
 

@@ -49,32 +49,32 @@ export function hasTerminalRunSignal(run: RunStatusLike | unknown): boolean {
 export function terminalRunOutcome(run: RunStatusLike | unknown): string | undefined {
   if (!isRecord(run)) { return undefined; }
 
-  const events = Array.isArray(run.events)
-    ? run.events.filter(isRecord)
+  const events = Array.isArray(run['events'])
+    ? run['events'].filter(isRecord)
     : [];
   const lastEvent = events[events.length - 1];
   if (isCancellationEvent(lastEvent)) { return 'cancelled'; }
 
-  const exitCode = numericExitCode(run.exitCode);
+  const exitCode = numericExitCode(run['exitCode']);
   if (exitCode !== undefined) {
     return exitCode === 0 ? 'completed' : 'failed';
   }
   const eventOutcome = terminalEventOutcome(lastEvent);
   if (eventOutcome) { return eventOutcome; }
-  if (hasDateLikeValue(run.endedAt)) {
+  if (hasDateLikeValue(run['endedAt'])) {
     return 'needs_human';
   }
   return undefined;
 }
 
 function isCancellationEvent(event: Record<string, unknown> | undefined): boolean {
-  return stringValue(event?.label) === 'Session cancelled';
+  return stringValue(event?.['label']) === 'Session cancelled';
 }
 
 function terminalEventOutcome(event: Record<string, unknown> | undefined): string | undefined {
   if (!event) { return undefined; }
-  const eventType = stringValue(event.type);
-  const label = stringValue(event.label);
+  const eventType = stringValue(event['type']);
+  const label = stringValue(event['label']);
   if (eventType === 'done' || label.startsWith('Session complete')) { return 'completed'; }
   if (label.startsWith('Session exited with code')) {
     const code = numericExitCode(label.replace(/^Session exited with code\s*/i, ''));

@@ -3915,7 +3915,7 @@ test('run status helper centralizes active persisted run semantics', () => {
     'function isCancellationEvent',
     'function terminalEventOutcome',
     'function numericExitCode',
-    'hasDateLikeValue(run.endedAt)',
+    "hasDateLikeValue(run['endedAt'])",
     'label.startsWith(\'Session exited with code\')',
     'export function activeRunSummary',
     "['running', 'preflight', 'queued', 'paused']",
