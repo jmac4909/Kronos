@@ -265,15 +265,19 @@ interface WorktreeCleanupReport {
 }
 
 function computeStats(events: ProgressEvent[]): SessionStats {
-  const toolCalls = events.filter(e => e.type === 'tool').length;
-  const toolErrors = events.filter(e => e.type === 'error').length;
+  const progress = runProgressSummary({ events });
   const thinkingCount = events.filter(e => e.type === 'thinking').length;
-  const filesRead = new Set(events.filter(e => e.label.startsWith('Reading ')).map(e => e.label)).size;
-  const filesEdited = new Set(events.filter(e => e.label.startsWith('Editing ') || e.label.startsWith('Writing ')).map(e => e.label)).size;
-  const durationSec = progressDurationSeconds(events);
   const doneEvent = events.find(e => e.type === 'done');
   const verdict = doneEvent ? (doneEvent.label.includes('Complete') ? 'success' : 'error') : 'unknown';
-  return { toolCalls, toolErrors, thinkingCount, filesRead, filesEdited, durationSec, verdict };
+  return {
+    toolCalls: progress.toolCalls,
+    toolErrors: progress.toolErrors,
+    thinkingCount,
+    filesRead: progress.filesRead,
+    filesEdited: progress.filesChanged,
+    durationSec: progress.elapsedSeconds,
+    verdict,
+  };
 }
 
 function saveSession(project: string, skill: string, ticket: string, events: ProgressEvent[]): string {
@@ -1003,17 +1007,6 @@ function progressDateTimeLabel(value: unknown, fallback = 'Unknown'): string {
   return toValidDate(value)?.toLocaleString() || fallback;
 }
 
-function progressDurationSeconds(events: Array<{ timestamp?: unknown }>): number {
-  const dates = events
-    .map(event => toValidDate(event.timestamp))
-    .filter((date): date is Date => Boolean(date));
-  if (dates.length < 2) { return 0; }
-  const first = dates[0];
-  const last = dates[dates.length - 1];
-  if (!first || !last) { return 0; }
-  return Math.max(0, Math.round((last.getTime() - first.getTime()) / 1000));
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
@@ -1106,6 +1099,7 @@ function shortenPath(p: string): string {
 }
 
 function buildProgressHtml(project: string, skill: string, ticket: string, events: ProgressEvent[]): string {
+  const progress = runProgressSummary({ events });
   const filesEdited = new Set<string>();
   const filesRead = new Set<string>();
   let lastThinking = '';
@@ -1187,11 +1181,11 @@ function buildProgressHtml(project: string, skill: string, ticket: string, event
       <div class="section"><h3>Activity</h3><div class="activity kronos-panel">${eventRows || '<div class="kronos-empty">Waiting for Claude to start...</div>'}</div></div>
       ${isDone && events.find(e => e.type === 'done')?.detail ? `<div class="section"><h3>Result</h3><div class="done-summary kronos-panel kronos-soft">${renderResult(events.find(e => e.type === 'done')!.detail)}</div></div>` : ''}
       ${isDone ? `<div class="section"><h3>Session Stats</h3><div class="stats">
-        <span class="stat">Tools: ${events.filter(e => e.type === 'tool').length}</span>
-        <span class="stat">Errors: ${events.filter(e => e.type === 'error').length}</span>
-        <span class="stat">Files read: ${filesRead.size}</span>
-        <span class="stat">Files changed: ${filesEdited.size}</span>
-        <span class="stat">Duration: ${progressDurationSeconds(events)}s</span>
+        <span class="stat">Tools: ${progress.toolCalls}</span>
+        <span class="stat">Errors: ${progress.toolErrors}</span>
+        <span class="stat">Files read: ${progress.filesRead}</span>
+        <span class="stat">Files changed: ${progress.filesChanged}</span>
+        <span class="stat">Duration: ${progress.elapsedSeconds}s</span>
       </div></div>` : ''}
     </div>
     <div>
