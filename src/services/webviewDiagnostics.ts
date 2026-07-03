@@ -23,8 +23,9 @@ export function logWebviewReadyMessage(raw: unknown, fallbackWebviewName = 'Kron
   if (!raw || typeof raw !== 'object') { return false; }
   const message = raw as { command?: unknown; webviewName?: unknown; readyState?: unknown; userAgent?: unknown };
   if (message.command !== WEBVIEW_READY_COMMAND) { return false; }
-  const webviewName = typeof message.webviewName === 'string' && message.webviewName.trim()
-    ? message.webviewName.trim()
+  const reportedName = typeof message.webviewName === 'string' ? message.webviewName.trim() : '';
+  const webviewName = reportedName && reportedName !== 'Kronos action panel'
+    ? reportedName
     : fallbackWebviewName;
   const readyState = typeof message.readyState === 'string' ? message.readyState : 'unknown';
   const userAgent = typeof message.userAgent === 'string' && message.userAgent.trim()

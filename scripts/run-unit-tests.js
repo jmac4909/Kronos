@@ -1858,6 +1858,8 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(panelScript, /data-plan-id/);
   assert.match(panelScript, /data-item-id/);
   assert.match(panelScript, /__kronosWebviewReady/);
+  const defaultPanelScript = operatorPanel.kronosActionPanelScript('nonce-default');
+  assert.match(defaultPanelScript, /__kronosWebviewReady/);
 
   const existing = '<html><head><meta http-equiv="Content-Security-Policy" content="default-src test"></head><body></body></html>';
   assert.equal(webviewSecurity.withWebviewCsp(existing), existing);
@@ -1874,6 +1876,12 @@ test('webview diagnostics centralize host ready monitoring', () => {
       readyState: 'complete',
     }, 'Kronos Test Panel'), true);
     assert.match(infoMessages.join('\n'), /Kronos Test Panel/);
+    assert.equal(webviewDiagnostics.logWebviewReadyMessage({
+      command: webviewSecurity.WEBVIEW_READY_COMMAND,
+      webviewName: 'Kronos action panel',
+      readyState: 'complete',
+    }, 'Specific Panel'), true);
+    assert.match(infoMessages.join('\n'), /Specific Panel/);
 
     let disposeListener;
     const panel = {

@@ -30,14 +30,15 @@ export function operatorCommandRow(buttons: string[]): string {
     : '';
 }
 
-export function kronosActionPanelScript(nonce: string, webviewName = 'Kronos action panel', readyDiagnostic = false): string {
+export function kronosActionPanelScript(nonce: string, webviewName = 'Kronos action panel', readyDiagnostic = true): string {
+  const readyOptions = readyDiagnostic ? { readyCommand: WEBVIEW_READY_COMMAND } : {};
   return `<script nonce="${escapeAttr(nonce)}">
 ${webviewActionPostScript(webviewName, [
   { messageKey: 'ticket', dataAttribute: 'data-ticket' },
   { messageKey: 'runId', dataAttribute: 'data-run-id' },
   { messageKey: 'planId', dataAttribute: 'data-plan-id' },
   { messageKey: 'itemId', dataAttribute: 'data-item-id' },
-], readyDiagnostic ? { readyCommand: WEBVIEW_READY_COMMAND } : {})}
+], readyOptions)}
 </script>`;
 }
 

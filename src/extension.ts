@@ -1686,7 +1686,9 @@ export function activate(context: vscode.ExtensionContext) {
         panel.webview.html = withWebviewCsp(buildTicketHtml(ticketKey, freshTicket, state, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
       };
       render();
+      const logReady = createWebviewReadyMonitor(panel, `${ticketKey}: Ticket`);
       panel.webview.onDidReceiveMessage(async msg => {
+        if (logReady(msg)) { return; }
         const request = normalizeActionPanelMessage(msg, TICKET_DETAIL_MESSAGE_COMMANDS);
         if (!request) {
           vscode.window.showWarningMessage('Ignored invalid Kronos ticket action.');
@@ -2257,7 +2259,9 @@ export function activate(context: vscode.ExtensionContext) {
         };
         await render();
         startActiveRunPanelRefresh(panel, state, render);
+        const logReady = createWebviewReadyMonitor(panel, 'Kronos Dashboard');
         panel.webview.onDidReceiveMessage(async msg => {
+          if (logReady(msg)) { return; }
           const request = normalizeActionPanelMessage(msg, DASHBOARD_MESSAGE_COMMANDS);
           if (!request) {
             vscode.window.showWarningMessage('Ignored invalid Kronos dashboard action.');
@@ -3097,7 +3101,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
       const panel = vscode.window.createWebviewPanel('kronosStats', 'Kronos: Session Stats', vscode.ViewColumn.One, { enableScripts: true });
       const nonce = createWebviewNonce();
-      attachOperatorCommandHandler(panel);
+      attachOperatorCommandHandler(panel, 'Kronos Session Stats');
       const esc = escapeHtml;
 
       const totalSessions = sessions.length;
@@ -3590,7 +3594,7 @@ function openPromptManager(state: KronosState): void {
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildPromptManagerHtml(globalTemplates, projectOverrides, smokeResults, REQUIRED_PROMPTS, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Prompt Manager');
 }
 
 function openPromptSmokeTestsPanel(state: KronosState): void {
@@ -3610,7 +3614,7 @@ function openPromptSmokeTestsPanel(state: KronosState): void {
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildPromptSmokeTestsHtml(results, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Prompt Smoke Tests');
 }
 
 function snapshotPromptPack(state: KronosState): void {
@@ -3636,7 +3640,7 @@ function openPromptHistoryPanel(): void {
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildPromptHistoryHtml(snapshots, diff, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Prompt History');
 }
 
 async function repairPromptPack(state: KronosState): Promise<void> {
@@ -3680,7 +3684,7 @@ function openPromptHistoryDiffPanel(diff: PromptHistoryDiff): void {
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildPromptHistoryHtml(listPromptHistorySnapshots(25), diff, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Prompt History');
 }
 
 function promptHistoryTemplatesForState(state: KronosState): PromptTemplateInfo[] {
@@ -3767,7 +3771,9 @@ function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInvento
     panel.webview.html = withWebviewCsp(buildRecoveryHtml(currentInventory, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   render();
+  const logReady = createWebviewReadyMonitor(panel, 'Kronos Recovery Center');
   panel.webview.onDidReceiveMessage(async msg => {
+    if (logReady(msg)) { return; }
     const request = normalizeActionPanelMessage(msg, RECOVERY_MESSAGE_COMMANDS);
     if (!request) {
       vscode.window.showWarningMessage('Ignored invalid Kronos recovery action.');
@@ -3793,7 +3799,7 @@ function openStateAuditLogPanel(): void {
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildStateAuditLogHtml(events, STATE_AUDIT_FILE, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos State Audit Log');
 }
 
 async function executeRecoveryAction(item: RecoveryItem, state: KronosState, backups = listBackups()): Promise<void> {
@@ -4073,7 +4079,7 @@ function openEvidenceHandoffPanel(plan: EvidenceHandoffPlan): void {
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildEvidenceHandoffHtml(plan, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Evidence Handoff');
 }
 
 function openEvidencePublishPanel(results: Array<EvidencePublishResult | EvidencePublishDestination>, ticketKey: string): void {
@@ -4085,7 +4091,7 @@ function openEvidencePublishPanel(results: Array<EvidencePublishResult | Evidenc
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildEvidencePublishHtml(results, ticketKey, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Evidence Publish');
 }
 
 async function executeEvidenceGateAction(command: string, ticketKey: string): Promise<void> {
@@ -4124,8 +4130,10 @@ async function executeOperatorCommandAction(command: string, ticketKey = ''): Pr
   await vscode.commands.executeCommand(`kronos.${command}`);
 }
 
-function attachOperatorCommandHandler(panel: vscode.WebviewPanel): void {
+function attachOperatorCommandHandler(panel: vscode.WebviewPanel, webviewName = 'Kronos action panel'): void {
+  const logReady = createWebviewReadyMonitor(panel, webviewName);
   panel.webview.onDidReceiveMessage(async msg => {
+    if (logReady(msg)) { return; }
     const request = normalizeActionPanelMessage(msg, OPERATOR_COMMAND_MESSAGE_COMMANDS);
     if (!request) {
       vscode.window.showWarningMessage('Ignored invalid Kronos operator action.');
@@ -4149,7 +4157,9 @@ function openQueuePlannerPanel(state: KronosState): void {
     panel.webview.html = withWebviewCsp(buildQueuePlannerHtml(currentPlans, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   render();
+  const logReady = createWebviewReadyMonitor(panel, 'Kronos Queue Planner');
   panel.webview.onDidReceiveMessage(async msg => {
+    if (logReady(msg)) { return; }
     const request = normalizeActionPanelMessage(msg, PLAN_MESSAGE_COMMANDS);
     if (!request) {
       vscode.window.showWarningMessage('Ignored invalid Kronos queue planner action.');
@@ -4215,7 +4225,9 @@ function openBacklogTriagePanel(state: KronosState): void {
     panel.webview.html = withWebviewCsp(buildBacklogTriageHtml(report, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   render();
+  const logReady = createWebviewReadyMonitor(panel, 'Kronos Backlog Triage');
   panel.webview.onDidReceiveMessage(async msg => {
+    if (logReady(msg)) { return; }
     const request = normalizeActionPanelMessage(msg, BACKLOG_TRIAGE_MESSAGE_COMMANDS);
     if (!request) {
       vscode.window.showWarningMessage('Ignored invalid Kronos backlog triage action.');
@@ -4261,7 +4273,9 @@ function openProjectBatchPlanPanel(state: KronosState): void {
     panel.webview.html = withWebviewCsp(buildProjectBatchPlanHtml(batches, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   render();
+  const logReady = createWebviewReadyMonitor(panel, 'Kronos Project Batch Plan');
   panel.webview.onDidReceiveMessage(async msg => {
+    if (logReady(msg)) { return; }
     const request = normalizeActionPanelMessage(msg, PLAN_MESSAGE_COMMANDS);
     if (!request) {
       vscode.window.showWarningMessage('Ignored invalid Kronos project batch action.');
@@ -4287,7 +4301,9 @@ function openReleaseBatchPlanPanel(state: KronosState): void {
     panel.webview.html = withWebviewCsp(buildReleaseBatchPlanHtml(batches, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   render();
+  const logReady = createWebviewReadyMonitor(panel, 'Kronos Release Batch Plan');
   panel.webview.onDidReceiveMessage(async msg => {
+    if (logReady(msg)) { return; }
     const request = normalizeActionPanelMessage(msg, PLAN_MESSAGE_COMMANDS);
     if (!request) {
       vscode.window.showWarningMessage('Ignored invalid Kronos release batch action.');
@@ -4327,7 +4343,9 @@ async function openCollisionReportPanel(state: KronosState): Promise<void> {
     panel.webview.html = withWebviewCsp(buildCollisionReportHtml(reports, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   await render();
+  const logReady = createWebviewReadyMonitor(panel, 'Kronos Collision Report');
   panel.webview.onDidReceiveMessage(async msg => {
+    if (logReady(msg)) { return; }
     const request = normalizeActionPanelMessage(msg, PLAN_MESSAGE_COMMANDS);
     if (!request) {
       vscode.window.showWarningMessage('Ignored invalid Kronos collision report action.');
@@ -4400,7 +4418,9 @@ function openQueuePlanWindowPanel(state: KronosState): void {
     ), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   render();
+  const logReady = createWebviewReadyMonitor(panel, 'Kronos Planning Window');
   panel.webview.onDidReceiveMessage(async msg => {
+    if (logReady(msg)) { return; }
     const request = normalizeActionPanelMessage(msg, PLAN_MESSAGE_COMMANDS);
     if (!request) {
       vscode.window.showWarningMessage('Ignored invalid Kronos planning action.');
@@ -4430,7 +4450,9 @@ function openOvernightCandidatesPanel(state: KronosState): void {
     ), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   render();
+  const logReady = createWebviewReadyMonitor(panel, 'Kronos Overnight Candidates');
   panel.webview.onDidReceiveMessage(async msg => {
+    if (logReady(msg)) { return; }
     const request = normalizeActionPanelMessage(msg, PLAN_MESSAGE_COMMANDS);
     if (!request) {
       vscode.window.showWarningMessage('Ignored invalid Kronos overnight candidate action.');
@@ -4451,7 +4473,7 @@ function openAgentQualityScorePanel(state: KronosState): void {
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildAgentQualityScoreHtml(score, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Agent Quality Score');
 }
 
 function openTrendMetricsPanel(state: KronosState): void {
@@ -4468,7 +4490,7 @@ function openTrendMetricsPanel(state: KronosState): void {
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildTrendMetricsHtml(report, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Trend Metrics');
 }
 
 function openAgingReportPanel(state: KronosState): void {
@@ -4497,7 +4519,9 @@ function openAgingReportPanel(state: KronosState): void {
   };
   render();
   startActiveRunPanelRefresh(panel, state, render);
+  const logReady = createWebviewReadyMonitor(panel, 'Kronos Aging Report');
   panel.webview.onDidReceiveMessage(async msg => {
+    if (logReady(msg)) { return; }
     const request = normalizeActionPanelMessage(msg, AGING_REPORT_MESSAGE_COMMANDS);
     if (!request) {
       vscode.window.showWarningMessage('Ignored invalid Kronos aging report action.');
@@ -4523,7 +4547,7 @@ function openIntegrationManifestPanel(): void {
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildIntegrationManifestHtml(status, audit, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Integration Manifest');
 }
 
 async function snapshotIntegrationManifest(): Promise<void> {
@@ -4569,7 +4593,7 @@ function openProfilesPanel(): void {
   );
   const nonce = createWebviewNonce();
   panel.webview.html = withWebviewCsp(buildProfilesHtml(active, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Profiles');
 }
 
 function openDoctorPanel(state: KronosState): void {
@@ -4581,7 +4605,7 @@ function openDoctorPanel(state: KronosState): void {
     { enableScripts: true }
   );
   const nonce = createWebviewNonce();
-  attachOperatorCommandHandler(panel);
+  attachOperatorCommandHandler(panel, 'Kronos Doctor');
   const pendingCheck: DoctorCheck = {
     name: 'Provider network reachability',
     status: 'warn',
