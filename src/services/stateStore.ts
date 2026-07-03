@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { KronosState, QueueDecision, QueueItem, QueueState, Ticket, TicketEvidence } from '../state/types';
 import { unknownErrorCode, unknownErrorMessage } from './errorUtils';
+import { readJsonFile } from './jsonFiles';
 
 export const KRONOS_DIR = process.env.KRONOS_DIR || path.join(os.homedir(), '.claude', 'kronos');
 export const STATE_FILE = path.join(KRONOS_DIR, 'state.json');
@@ -115,14 +116,6 @@ export function readQueueFile(): QueueState | null {
   const migrated = migrateQueueFileShape(raw);
   validateQueueState(migrated);
   return migrated;
-}
-
-function readJsonFile(filePath: string): unknown {
-  return JSON.parse(stripUtf8Bom(fs.readFileSync(filePath, 'utf-8')));
-}
-
-function stripUtf8Bom(content: string): string {
-  return content.charCodeAt(0) === 0xFEFF ? content.slice(1) : content;
 }
 
 export function migrateStateFileShape(raw: unknown): KronosState {

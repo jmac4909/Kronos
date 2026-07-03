@@ -4,6 +4,7 @@ import { safeFileStem } from './fileNames';
 import { KRONOS_DIR } from './stateStore';
 import { unknownErrorMessage } from './errorUtils';
 import { effectiveRunStatus, isActiveRunStatus } from './runStatus';
+import { readJsonFile } from './jsonFiles';
 
 export const RUNS_DIR = path.join(KRONOS_DIR, 'runs');
 export const ARCHIVED_RUNS_DIR = path.join(RUNS_DIR, 'archive');
@@ -194,8 +195,8 @@ function readRunFileIssue(filePath: string, scope: RunStoreIssue['scope']): RunS
 
 function readRunFileResult(filePath: string, scope: RunStoreIssue['scope']): { run?: RunRecord; issue?: RunStoreIssue } {
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    const parsed = readJsonFile(filePath);
+    if (!isRecord(parsed)) {
       return { issue: invalidRunRecordIssue(scope, filePath, 'Run record must be a JSON object.') };
     }
     if (typeof parsed.id !== 'string' || parsed.id.trim().length === 0) {

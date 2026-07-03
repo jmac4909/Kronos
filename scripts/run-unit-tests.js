@@ -2821,6 +2821,24 @@ test('run store archives run record, log, and prompt artifacts', () => {
   assert.equal(runStore.readArchivedRuns().some(r => r.id === run.id), true);
 });
 
+test('run store reads UTF-8 BOM-prefixed JSON files from Windows tools', () => {
+  const run = {
+    id: 'run-bom',
+    project: 'app',
+    skill: 'implement',
+    ticket: 'K-BOM',
+    status: 'completed',
+  };
+  fs.mkdirSync(runStore.RUNS_DIR, { recursive: true });
+  fs.writeFileSync(runStore.runRecordPath(run.id), `\ufeff${JSON.stringify(run, null, 2)}`, 'utf8');
+
+  const runs = runStore.readRuns();
+  const issues = runStore.listRunStoreIssues();
+
+  assert.equal(runs.some(r => r.id === run.id), true);
+  assert.equal(issues.some(issue => issue.filePath === runStore.runRecordPath(run.id)), false);
+});
+
 test('run store normalizes terminal active records on read and archive', () => {
   const completed = {
     id: 'run-terminal-completed',
