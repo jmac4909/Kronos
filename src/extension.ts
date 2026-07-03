@@ -246,6 +246,19 @@ async function startClaudeDispatch(
   onCompleteOrOpts?: ((code: number) => void) | DispatchOptions,
   customPrompt?: string
 ): Promise<boolean> {
+  const canDispatch = await confirmWorkspaceTrustForAssessment(assessSafetyGate({
+    command: 'kronos.startClaudeDispatch',
+    title: `Start Claude /${skill}`,
+    target: ticket ? `${ticket} / ${projectPath}` : projectPath,
+    risks: ['repo-write'],
+    changes: [
+      `Launch a Claude /${skill} agent in the project workspace.`,
+      'Allow the agent session to inspect and modify repository files as directed by the selected workflow.',
+    ],
+    confirmationLabel: 'Start',
+  }));
+  if (!canDispatch) { return false; }
+
   try {
     await dispatchClaudeSession(projectPath, skill, ticket, onCompleteOrOpts, customPrompt);
     return true;
@@ -458,21 +471,8 @@ function trendWindowDaysFromConfig(): number {
 
 async function confirmSafetyGate(plan: SafetyPlan): Promise<boolean> {
   const assessment = assessSafetyGate(plan);
-  if (assessment.requiresWorkspaceTrust && !vscode.workspace.isTrusted) {
-    const action = await vscode.window.showWarningMessage(
-      `Kronos is running in Restricted Mode. Trust this workspace before ${assessment.title}; this action can ${assessment.workspaceTrustSummary}.`,
-      'Manage Workspace Trust',
-      'Cancel'
-    );
-    if (action === 'Manage Workspace Trust') {
-      try {
-        await vscode.commands.executeCommand('workbench.trust.manage');
-      } catch (e: unknown) {
-        vscode.window.showWarningMessage(unknownErrorMessage(e, 'Could not open Workspace Trust management.'));
-      }
-    }
-    return false;
-  }
+  const hasWorkspaceTrust = await confirmWorkspaceTrustForAssessment(assessment);
+  if (!hasWorkspaceTrust) { return false; }
   if (!assessment.requiresConfirmation) { return true; }
   const action = await vscode.window.showWarningMessage(
     assessment.message,
@@ -481,6 +481,25 @@ async function confirmSafetyGate(plan: SafetyPlan): Promise<boolean> {
     'Cancel'
   );
   return action === assessment.confirmationLabel;
+}
+
+async function confirmWorkspaceTrustForAssessment(assessment: ReturnType<typeof assessSafetyGate>): Promise<boolean> {
+  if (!assessment.requiresWorkspaceTrust || vscode.workspace.isTrusted) {
+    return true;
+  }
+  const action = await vscode.window.showWarningMessage(
+    `Kronos is running in Restricted Mode. Trust this workspace before ${assessment.title}; this action can ${assessment.workspaceTrustSummary}.`,
+    'Manage Workspace Trust',
+    'Cancel'
+  );
+  if (action === 'Manage Workspace Trust') {
+    try {
+      await vscode.commands.executeCommand('workbench.trust.manage');
+    } catch (e: unknown) {
+      vscode.window.showWarningMessage(unknownErrorMessage(e, 'Could not open Workspace Trust management.'));
+    }
+  }
+  return false;
 }
 
 async function openTextFileIfExists(filePath: string, missingMessage: string): Promise<void> {

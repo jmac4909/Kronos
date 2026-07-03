@@ -6704,7 +6704,14 @@ test('extension declares limited Restricted Mode support and blocks trust-sensit
   const source = readSourceFixture('src', 'extension.ts');
   for (const marker of [
     "import { SafetyPlan, assessSafetyGate } from './services/safetyGate'",
-    'assessment.requiresWorkspaceTrust && !vscode.workspace.isTrusted',
+    'async function confirmWorkspaceTrustForAssessment(assessment: ReturnType<typeof assessSafetyGate>): Promise<boolean>',
+    '!assessment.requiresWorkspaceTrust || vscode.workspace.isTrusted',
+    'const hasWorkspaceTrust = await confirmWorkspaceTrustForAssessment(assessment);',
+    'const canDispatch = await confirmWorkspaceTrustForAssessment(assessSafetyGate({',
+    "command: 'kronos.startClaudeDispatch'",
+    'title: `Start Claude /${skill}`',
+    "risks: ['repo-write']",
+    'if (!canDispatch) { return false; }',
     'this action can ${assessment.workspaceTrustSummary}',
     'Trust this workspace before ${assessment.title}',
     'Manage Workspace Trust',
