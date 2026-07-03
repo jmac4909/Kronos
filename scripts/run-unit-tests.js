@@ -4696,6 +4696,10 @@ test('run status helper centralizes active persisted run semantics', () => {
   assert.equal(runStatus.effectiveRunStatus({ status: 'running', exitCode: 1, events: [{ type: 'done', label: 'Complete - 1.0s' }] }), 'failed');
   assert.equal(runStatus.effectiveRunStatus({ status: 'running', exitCode: 1, events: [{ type: 'error', label: 'Session cancelled' }] }), 'cancelled');
   assert.equal(runStatus.terminalRunOutcome({ status: 'running', events: [{ label: 'Session exited with code 1' }] }), 'failed');
+  assert.equal(runStatus.ACTIVE_RUN_STATUSES, undefined);
+  assert.equal(runStatus.STALEABLE_ACTIVE_RUN_STATUSES, undefined);
+  assert.equal(runStatus.DEFAULT_STALE_ACTIVE_RUN_MS, undefined);
+  assert.equal(runStatus.hasTerminalRunSignal, undefined);
   assert.equal(runStatus.activeRunSummary([
     { status: 'running' },
     { status: 'running' },
@@ -4710,15 +4714,16 @@ test('run status helper centralizes active persisted run semantics', () => {
 
   const source = readSourceFixture('src', 'services', 'runStatus.ts');
   for (const marker of [
-    "ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused'])",
-    "STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running'])",
-    'DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
+    "const ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused'])",
+    "const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running'])",
+    'const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
+    'interface RunStatusLike',
     'export function isActiveRunStatus',
     'export function isActiveRun',
     'export function isStaleActiveRun',
     'export function isFreshActiveRun',
     'export function effectiveRunStatus',
-    'export function hasTerminalRunSignal',
+    'function hasTerminalRunSignal',
     'export function terminalRunOutcome',
     'function isCancellationEvent',
     'function terminalEventOutcome',
@@ -4729,6 +4734,15 @@ test('run status helper centralizes active persisted run semantics', () => {
     "['running', 'preflight', 'queued', 'paused']",
   ]) {
     assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    'export const ACTIVE_RUN_STATUSES',
+    'export const STALEABLE_ACTIVE_RUN_STATUSES',
+    'export const DEFAULT_STALE_ACTIVE_RUN_MS',
+    'export interface RunStatusLike',
+    'export function hasTerminalRunSignal',
+  ]) {
+    assert.equal(source.includes(marker), false, marker);
   }
 });
 

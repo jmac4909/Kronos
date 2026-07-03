@@ -2776,15 +2776,16 @@ for (const marker of [
 }
 
 for (const marker of [
-  "ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused'])",
-  "STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running'])",
-  'DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
+  "const ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused'])",
+  "const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running'])",
+  'const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
+  'interface RunStatusLike',
   'export function isActiveRunStatus',
   'export function isActiveRun',
   'export function isStaleActiveRun',
   'export function isFreshActiveRun',
   'export function effectiveRunStatus',
-  'export function hasTerminalRunSignal',
+  'function hasTerminalRunSignal',
   'export function terminalRunOutcome',
   'function isCancellationEvent',
   'function terminalEventOutcome',
@@ -2796,6 +2797,17 @@ for (const marker of [
 ]) {
   if (!runStatus.includes(marker)) {
     fail(`Missing run status marker: ${marker}`);
+  }
+}
+for (const staleMarker of [
+  'export const ACTIVE_RUN_STATUSES',
+  'export const STALEABLE_ACTIVE_RUN_STATUSES',
+  'export const DEFAULT_STALE_ACTIVE_RUN_MS',
+  'export interface RunStatusLike',
+  'export function hasTerminalRunSignal',
+]) {
+  if (runStatus.includes(staleMarker)) {
+    fail(`Run status internals should not be exported: ${staleMarker}`);
   }
 }
 

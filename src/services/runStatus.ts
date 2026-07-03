@@ -1,8 +1,8 @@
-export const ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused']);
-export const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running']);
-export const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000;
+const ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running', 'paused']);
+const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['queued', 'preflight', 'running']);
+const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000;
 
-export interface RunStatusLike {
+interface RunStatusLike {
   status?: unknown;
   endedAt?: unknown;
   exitCode?: unknown;
@@ -58,7 +58,7 @@ export function activeRunSummary(runs: Array<RunStatusLike | unknown>, now = new
     .join(', ');
 }
 
-export function hasTerminalRunSignal(run: RunStatusLike | unknown): boolean {
+function hasTerminalRunSignal(run: RunStatusLike | unknown): boolean {
   return Boolean(terminalRunOutcome(run));
 }
 
