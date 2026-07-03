@@ -91,18 +91,19 @@ export function commandNeedsCmdWrapper(command: string, platform = process.platf
 }
 
 function quoteWindowsCmdToken(value: string): string {
-  const escaped = String(value)
+  const raw = String(value);
+  const escaped = raw
     .replace(/%/g, '%%')
     .replace(/(["^&|<>()])/g, '^$1');
-  return `"${escaped}"`;
+  return /[\s"%^&|<>()]/.test(raw) ? `"${escaped}"` : escaped;
 }
 
 export function windowsCmdFileInvocation(command: string, args: string[], env: NodeJS.ProcessEnv = process.env): { command: string; args: string[] } {
   const cmd = envValue(env, ['ComSpec', 'COMSPEC']) || 'cmd.exe';
-  const shellLine = [command, ...args].map(quoteWindowsCmdToken).join(' ');
+  const shellLine = ['call', quoteWindowsCmdToken(command), ...args.map(quoteWindowsCmdToken)].join(' ');
   return {
     command: cmd,
-    args: ['/d', '/s', '/c', shellLine],
+    args: ['/d', '/c', shellLine],
   };
 }
 

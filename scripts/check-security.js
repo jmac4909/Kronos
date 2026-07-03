@@ -2017,6 +2017,8 @@ for (const marker of [
   'export function commandNeedsCmdWrapper',
   'export function windowsCmdFileInvocation',
   'export function readableGoogleApplicationCredentials',
+  "const shellLine = ['call', quoteWindowsCmdToken(command), ...args.map(quoteWindowsCmdToken)].join(' ')",
+  "args: ['/d', '/c', shellLine]",
   "execFileSync(command, args",
   "execFileSync(invocation.command, invocation.args",
   "GOOGLE_APPLICATION_CREDENTIALS file is readable",
@@ -2027,6 +2029,9 @@ for (const marker of [
   if (!cliProbes.includes(marker)) {
     fail(`Missing CLI probes marker: ${marker}`);
   }
+}
+if (cliProbes.includes("args: ['/d', '/s', '/c', shellLine]")) {
+  fail('Windows .cmd probes must not use cmd.exe /s because it can preserve quotes around bare commands like gcloud.cmd.');
 }
 
 for (const marker of [

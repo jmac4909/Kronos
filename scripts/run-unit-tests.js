@@ -2329,12 +2329,17 @@ test('CLI probes resolve gcloud.cmd on Windows', () => {
     ComSpec: 'C:\\Windows\\System32\\cmd.exe',
   });
   assert.equal(invocation.command, 'C:\\Windows\\System32\\cmd.exe');
-  assert.deepEqual(invocation.args.slice(0, 3), ['/d', '/s', '/c']);
-  assert.equal(invocation.args[3].startsWith('""'), false);
-  assert.equal(invocation.args[3].endsWith('""'), false);
-  assert.ok(invocation.args[3].startsWith('"C:\\Users\\dev\\AppData\\Local\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud.cmd"'));
-  assert.match(invocation.args[3], /"C:\\Users\\dev\\AppData\\Local\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud\.cmd"/);
-  assert.match(invocation.args[3], /"application-default"/);
+  assert.deepEqual(invocation.args.slice(0, 2), ['/d', '/c']);
+  assert.equal(invocation.args[2].startsWith('call "C:\\Users\\dev\\AppData\\Local\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud.cmd"'), true);
+  assert.match(invocation.args[2], /"C:\\Users\\dev\\AppData\\Local\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud\.cmd"/);
+  assert.match(invocation.args[2], /application-default/);
+  assert.doesNotMatch(invocation.args[2], /^call ""/);
+
+  const fallbackInvocation = cliProbes.windowsCmdFileInvocation('gcloud.cmd', ['auth', 'application-default'], {
+    ComSpec: 'C:\\Windows\\System32\\cmd.exe',
+  });
+  assert.equal(fallbackInvocation.args[2].startsWith('call gcloud.cmd auth application-default'), true);
+  assert.doesNotMatch(fallbackInvocation.args[2], /"gcloud\.cmd"/);
 });
 
 test('CLI probes accept readable GOOGLE_APPLICATION_CREDENTIALS without running gcloud', () => {
