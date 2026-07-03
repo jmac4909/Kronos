@@ -79,6 +79,7 @@ interface RunCenterOptions {
   onAction?: (request: RunCenterActionRequest) => Promise<void> | void;
   pollIntervalMs?: number;
   extensionUri?: vscode.Uri | undefined;
+  focusRunId?: string | undefined;
 }
 
 function ensureDir(dir: string): void {
@@ -558,7 +559,7 @@ export function openRunCenter(options: RunCenterOptions = {}): void {
   const render = (): boolean => {
     const runs = listRuns();
     panel.webview.html = withWebviewCsp(
-      buildRunCenterHtml(runs, interactive ? nonce : undefined, actionScriptUri),
+      buildRunCenterHtml(runs, interactive ? nonce : undefined, actionScriptUri, options.focusRunId),
       interactive ? webviewScriptCspOptions(panel.webview.cspSource, nonce) : {},
     );
     return runs.some(run => isFreshActiveRun(run));
@@ -1305,13 +1306,20 @@ function runCenterScript(nonce: string, scriptUri?: string): string {
   ], { readyCommand: WEBVIEW_READY_COMMAND, scriptUri });
 }
 
-function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?: string): string {
+function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?: string, focusRunId?: string): string {
   const interactive = Boolean(nonce);
   const actionHeader = interactive ? '<th>Actions</th>' : '';
+  const focusedRunId = focusRunId?.trim() || '';
   const sortedRuns = sortedRunCenterRuns(runs);
-  const rows = sortedRuns.map(run => {
+  const displayRuns = focusedRunId
+    ? [...sortedRuns].sort((a, b) => focusedRunSort(a, b, focusedRunId))
+    : sortedRuns;
+  const rows = displayRuns.map(run => {
+    const runId = stringOrDefault(run.id, '');
+    const focused = Boolean(focusedRunId && runId === focusedRunId);
     const status = stringOrDefault(run.status, 'unknown');
     const statusClass = escapeClass(status);
+    const rowClass = `${statusClass}${focused ? ' focused-run' : ''}`;
     const ended = run.endedAt ? progressDateTimeLabel(run.endedAt) : '';
     const started = progressDateTimeLabel(run.startedAt);
     const runEvents = Array.isArray(run.events) ? run.events : [];
@@ -1346,7 +1354,7 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
       ? `${eventLabel ? `${escapeHtml(eventLabel)}<br>` : ''}<span class="failure">${escapeHtml(attentionDetail)}</span>`
       : escapeHtml(eventLabel || attentionDetail);
     const actionCell = interactive ? `<td class="action-cell">${runCenterActionButtons(run)}</td>` : '';
-    return `<tr class="${statusClass}">
+    return `<tr class="${rowClass}"${runId ? ` data-run-id="${escapeAttr(runId)}"` : ''}${focused ? ' data-focused-run="true"' : ''}>
       <td><span class="kronos-pill status ${statusClass}">${escapeHtml(status)}</span></td>
       <td><strong>${escapeHtml(stringOrDefault(run.project, 'unknown project'))}</strong><br><span>${escapeHtml(stringOrDefault(run.skill, 'unknown skill'))} ${escapeHtml(stringOrDefault(run.ticket, ''))}</span></td>
       <td>${escapeHtml(started)}${ended ? `<br><span>${escapeHtml(ended)}</span>` : ''}</td>
@@ -1383,6 +1391,7 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
   .running, .preflight { background: rgba(33,150,243,0.18); color: #2196f3; }
   .paused { background: rgba(255,152,0,0.18); color: #ff9800; }
   .failed, .cancelled, .needs_human { background: rgba(244,67,54,0.18); color: #f44336; }
+  tr.focused-run { outline: 2px solid var(--k-accent); outline-offset: -2px; background: color-mix(in srgb, var(--k-accent) 12%, transparent); }
   .failure { color: #f44336; opacity: 1; }
   .workspace-cell { overflow-wrap: anywhere; }
   ${actionStyles}
@@ -1390,7 +1399,7 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
   <div class="kronos-header">
     <div>
       <h1 class="kronos-title">Kronos Run Center</h1>
-      <div class="kronos-subtitle">${runs.length} persisted run${runs.length === 1 ? '' : 's'} sorted by status and time</div>
+      <div class="kronos-subtitle">${runs.length} persisted run${runs.length === 1 ? '' : 's'} sorted by status and time${focusedRunId ? ` - focused on ${escapeHtml(focusedRunId)}` : ''}</div>
     </div>
     ${refreshAction}
   </div>
@@ -1399,6 +1408,12 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
     ${rows}
   </table></div>`}
 </div>${nonce ? runCenterScript(nonce, actionScriptUri) : ''}</body></html>`;
+}
+
+function focusedRunSort(a: KronosRun, b: KronosRun, focusRunId: string): number {
+  const aFocused = stringOrDefault(a.id, '') === focusRunId;
+  const bFocused = stringOrDefault(b.id, '') === focusRunId;
+  return Number(bFocused) - Number(aFocused);
 }
 
 function renderResult(text: string): string {

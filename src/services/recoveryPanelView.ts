@@ -1,7 +1,7 @@
 import type { StateAuditEvent } from './stateStore';
 import type { RecoveryInventory, RecoveryItem } from './recoveryCenter';
 import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss, operatorCommandRow } from './operatorPanel';
-import { escapeHtml } from './webviewHtml';
+import { escapeAttr, escapeHtml } from './webviewHtml';
 
 export function buildStateAuditLogHtml(events: StateAuditEvent[], stateAuditFile: string, nonce?: string): string {
   const rows = events.length === 0
@@ -46,21 +46,29 @@ export function buildStateAuditLogHtml(events: StateAuditEvent[], stateAuditFile
 </div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
 }
 
-export function buildRecoveryHtml(inventory: RecoveryInventory, nonce?: string): string {
-  const rows = inventory.items.map(item => `<tr class="${item.severity}">
+export function buildRecoveryHtml(inventory: RecoveryInventory, nonce?: string, focusRunId?: string): string {
+  const focusedRunId = focusRunId?.trim() || '';
+  const items = focusedRunId
+    ? [...inventory.items].sort((a, b) => focusedRecoveryItemSort(a, b, focusedRunId))
+    : inventory.items;
+  const rows = items.map(item => {
+    const focused = Boolean(focusedRunId && item.runId === focusedRunId);
+    return `<tr class="${item.severity}${focused ? ' focused-recovery-item' : ''}"${item.runId ? ` data-run-id="${escapeAttr(item.runId)}"` : ''}${focused ? ' data-focused-run="true"' : ''}>
     <td><span class="pill ${item.severity}">${escapeHtml(item.severity.toUpperCase())}</span></td>
     <td>${escapeHtml(item.kind)}</td>
     <td>${escapeHtml(item.title)}</td>
     <td class="detail">${escapeHtml(item.detail)}</td>
     <td class="action-cell">${recoveryActionButtons(item)}</td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
   const empty = inventory.items.length === 0 ? '<div class="empty">No active recovery items.</div>' : '';
 
   return `<!DOCTYPE html>
 <html><head><style>
   ${kronosOperatorPanelCss()}
+  .focused-recovery-item { outline: 2px solid var(--k-accent); outline-offset: -2px; background: color-mix(in srgb, var(--k-accent) 12%, transparent); }
 </style></head><body><div class="kronos-shell operator-shell">
-  <div class="kronos-header"><div><h1 class="kronos-title">Kronos Recovery Center</h1><div class="kronos-subtitle">Runs, worktrees, backups, integrations, and merge requests that need operator action</div></div></div>
+  <div class="kronos-header"><div><h1 class="kronos-title">Kronos Recovery Center</h1><div class="kronos-subtitle">Runs, worktrees, backups, integrations, and merge requests that need operator action${focusedRunId ? ` - focused on ${escapeHtml(focusedRunId)}` : ''}</div></div></div>
   <div class="operator-summary">
     <div class="summary-card"><div class="num">${inventory.summary.critical}</div><div class="lbl">Critical</div></div>
     <div class="summary-card"><div class="num">${inventory.summary.warning}</div><div class="lbl">Warnings</div></div>
@@ -69,6 +77,12 @@ export function buildRecoveryHtml(inventory: RecoveryInventory, nonce?: string):
   </div>
   ${empty || `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Severity</th><th>Kind</th><th>Item</th><th>Detail</th><th class="action-cell">Action</th></tr>${rows}</table></div>`}
 </div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+}
+
+function focusedRecoveryItemSort(a: RecoveryItem, b: RecoveryItem, focusRunId: string): number {
+  const aFocused = a.runId === focusRunId;
+  const bFocused = b.runId === focusRunId;
+  return Number(bFocused) - Number(aFocused);
 }
 
 function recoveryActionButtons(item: RecoveryItem): string {

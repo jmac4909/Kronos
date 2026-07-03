@@ -4051,6 +4051,9 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     '{ readyCommand: WEBVIEW_READY_COMMAND, scriptUri }',
     "import { sortedRunCenterRuns } from '../services/runCenterSort'",
     'const sortedRuns = sortedRunCenterRuns(runs)',
+    'focusRunId?: string | undefined',
+    'focusedRunSort',
+    'data-focused-run="true"',
     'sorted by status and time',
     'const canSuspend = supportsProcessTreeSuspend()',
     "const pausable = canSuspend && (status === 'running' || status === 'preflight')",
@@ -4062,7 +4065,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "if (canRetry) { buttons.push(runCenterActionButton('retryRun', 'Retry', runId)); }",
     "runCenterActionButton('cancelRun', 'Stop'",
     'panel.webview.onDidReceiveMessage(async msg =>',
-    'buildRunCenterHtml(runs, interactive ? nonce : undefined, actionScriptUri)',
+    'buildRunCenterHtml(runs, interactive ? nonce : undefined, actionScriptUri, options.focusRunId)',
     'const interactive = Boolean(nonce)',
     '<th>Progress</th>',
     'class="progress-cell"',
@@ -4543,8 +4546,12 @@ test('recovery panel view renders escaped recovery and state audit rows', () => 
         ticketKey: 'K-1',
       },
     ],
-  }, 'nonce-1');
+  }, 'nonce-1', 'run-1');
   assert.ok(recoveryHtml.includes('Kronos Recovery Center'));
+  assert.ok(recoveryHtml.includes('focused on run-1'));
+  assert.ok(recoveryHtml.includes('focused-recovery-item'));
+  assert.ok(recoveryHtml.includes('data-focused-run="true"'));
+  assert.ok(recoveryHtml.includes('data-run-id="run-1"'));
   assert.ok(recoveryHtml.includes('Broken &lt;run&gt;'));
   assert.ok(recoveryHtml.includes('Needs &amp; review'));
   assert.ok(recoveryHtml.includes('data-action="executeRecoveryItem"'));
@@ -7193,10 +7200,12 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'function executePlanPanelAction',
     'function executeBacklogTriageAction',
     'function executeDashboardAction',
-    'await executeDashboardAction(state, request)',
+    'await executeDashboardAction(state, request, context.extensionUri)',
     'function dashboardWorkItemActions',
     "actionButton('evidenceGate', 'Gate', { ticket, primary: true })",
     "actionButton('runCenter', 'Run Center', { runId })",
+    'openInteractiveRunCenter(state, extensionUri, runId || undefined)',
+    'await openRecoveryCenter(state, runId || undefined)',
     "actionButton('viewTicket', 'View', { ticket, primary: true })",
     "actionButton('startTicket', 'Start', { ticket })",
     'function buildRecoveryInventoryForState',

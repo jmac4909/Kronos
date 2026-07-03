@@ -341,7 +341,6 @@ const HUMAN_REVIEW_MESSAGE_COMMANDS = new Set([
   'refreshPanel',
   'addEvidence',
   'addEvidenceCheck',
-  'recordEnvironmentResult',
   'extractAcceptanceCriteria',
   'updateAcceptanceCriteria',
   'startTicket',
@@ -963,9 +962,10 @@ function kronosMediaScriptUri(panel: vscode.WebviewPanel, extensionUri: vscode.U
     : undefined;
 }
 
-function openInteractiveRunCenter(state: KronosState, extensionUri?: vscode.Uri): void {
+function openInteractiveRunCenter(state: KronosState, extensionUri?: vscode.Uri, focusRunId?: string): void {
   openRunCenter({
     extensionUri,
+    focusRunId,
     onAction: request => executeRunCenterAction(state, request),
   });
 }
@@ -2499,7 +2499,7 @@ export function activate(context: vscode.ExtensionContext) {
               await render();
               return;
             }
-            await executeDashboardAction(state, request);
+            await executeDashboardAction(state, request, context.extensionUri);
             await render();
           }, 'Kronos dashboard action failed.');
         });
@@ -3394,8 +3394,8 @@ export function activate(context: vscode.ExtensionContext) {
       openAgingReportPanel(state);
     }),
 
-    vscode.commands.registerCommand('kronos.runCenter', async () => {
-      openInteractiveRunCenter(state, context.extensionUri);
+    vscode.commands.registerCommand('kronos.runCenter', async (item: unknown) => {
+      openInteractiveRunCenter(state, context.extensionUri, resolveRunId(item));
     }),
 
     vscode.commands.registerCommand('kronos.openRunArtifact', async () => {
@@ -3594,8 +3594,8 @@ export function activate(context: vscode.ExtensionContext) {
       openHumanReviewInbox(state, context.extensionUri);
     }),
 
-    vscode.commands.registerCommand('kronos.recoveryCenter', async () => {
-      await openRecoveryCenter(state);
+    vscode.commands.registerCommand('kronos.recoveryCenter', async (item: unknown) => {
+      await openRecoveryCenter(state, resolveRunId(item));
     }),
 
     vscode.commands.registerCommand('kronos.stateAuditLog', async () => {
@@ -3950,10 +3950,10 @@ function buildPromptSmokeTests(
   return tests;
 }
 
-async function openRecoveryCenter(state: KronosState): Promise<void> {
+async function openRecoveryCenter(state: KronosState, focusRunId?: string): Promise<void> {
   const backups = listBackups();
   const inventory = buildRecoveryInventoryForState(state, backups);
-  openRecoveryPanel(state, inventory, backups);
+  openRecoveryPanel(state, inventory, backups, focusRunId);
 
   if (!inventory.items.some(item => item.action)) {
     vscode.window.showInformationMessage('Recovery Center found no active recovery items.');
@@ -3972,7 +3972,7 @@ function buildRecoveryInventoryForState(state: KronosState, backups = listBackup
   return buildRecoveryInventory(input);
 }
 
-function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInventory, initialBackups = listBackups()): void {
+function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInventory, initialBackups = listBackups(), focusRunId?: string): void {
   const panel = vscode.window.createWebviewPanel(
     'kronosRecoveryCenter',
     'Kronos Recovery Center',
@@ -3987,7 +3987,7 @@ function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInvento
       currentBackups = listBackups();
       currentInventory = buildRecoveryInventoryForState(state, currentBackups);
     }
-    panel.webview.html = withWebviewCsp(buildRecoveryHtml(currentInventory, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
+    panel.webview.html = withWebviewCsp(buildRecoveryHtml(currentInventory, nonce, focusRunId), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   render();
   const logReady = createWebviewReadyMonitor(panel, 'Kronos Recovery Center');
@@ -4028,7 +4028,7 @@ async function executeRecoveryAction(item: RecoveryItem, state: KronosState, bac
     return;
   }
   if (action === 'openRunCenter') {
-    openInteractiveRunCenter(state);
+    openInteractiveRunCenter(state, undefined, item.runId);
     return;
   }
   if (action === 'retryRun') {
@@ -4197,8 +4197,6 @@ async function executeHumanReviewAction(state: KronosState, command: string, tic
     await vscode.commands.executeCommand('kronos.addEvidence', { ticketKey });
   } else if (command === 'addEvidenceCheck' && ticketKey) {
     await vscode.commands.executeCommand('kronos.addEvidenceCheck', { ticketKey });
-  } else if (command === 'recordEnvironmentResult' && ticketKey) {
-    await vscode.commands.executeCommand('kronos.recordEnvironmentResult', { ticketKey });
   } else if (command === 'extractAcceptanceCriteria' && ticketKey) {
     await vscode.commands.executeCommand('kronos.extractAcceptanceCriteria', { ticketKey });
   } else if (command === 'updateAcceptanceCriteria' && ticketKey) {
@@ -5254,6 +5252,16 @@ function resolveProjectName(state: KronosState, item: unknown): string | undefin
   return undefined;
 }
 
+function resolveRunId(item: unknown): string | undefined {
+  if (typeof item === 'string' && item.trim()) { return item.trim(); }
+  const record = recordFromUnknown(item);
+  const runId = record['runId'];
+  if (typeof runId === 'string' && runId.trim()) { return runId.trim(); }
+  const id = record['id'];
+  if (typeof id === 'string' && id.trim()) { return id.trim(); }
+  return undefined;
+}
+
 async function pickProjectName(state: KronosState, placeHolder: string): Promise<string | undefined> {
   const projects = Object.entries(state.state?.projects || {});
   if (projects.length === 0) {
@@ -5600,9 +5608,10 @@ function dashboardBriefCount(brief: Record<string, unknown>, key: string): numbe
   return 0;
 }
 
-async function executeDashboardAction(state: KronosState, request: ActionPanelMessage): Promise<void> {
+async function executeDashboardAction(state: KronosState, request: ActionPanelMessage, extensionUri?: vscode.Uri): Promise<void> {
   const command = request.command;
   const ticketKey = request.ticket;
+  const runId = request.runId;
   if (ticketKey && !state.state?.tickets?.[ticketKey]) {
     vscode.window.showWarningMessage(`${ticketKey} is no longer in Kronos state.`);
     return;
@@ -5613,7 +5622,7 @@ async function executeDashboardAction(state: KronosState, request: ActionPanelMe
   } else if (command === 'queuePlanner') {
     await vscode.commands.executeCommand('kronos.queuePlanner');
   } else if (command === 'runCenter') {
-    await vscode.commands.executeCommand('kronos.runCenter');
+    openInteractiveRunCenter(state, extensionUri, runId || undefined);
   } else if (command === 'humanReviewInbox') {
     await vscode.commands.executeCommand('kronos.humanReviewInbox');
   } else if (command === 'evidenceGate') {
@@ -5623,7 +5632,7 @@ async function executeDashboardAction(state: KronosState, request: ActionPanelMe
       await vscode.commands.executeCommand('kronos.evidenceGate');
     }
   } else if (command === 'recoveryCenter') {
-    await vscode.commands.executeCommand('kronos.recoveryCenter');
+    await openRecoveryCenter(state, runId || undefined);
   } else if (command === 'startTicket' && ticketKey) {
     await startTicketFromActionPanel(state, ticketKey);
   } else if ((command === 'viewTicket' || command === 'addEvidence' || command === 'addEvidenceCheck') && ticketKey) {
