@@ -9,7 +9,7 @@ import { readStateFile } from '../services/stateStore';
 import { RunFailureKind, classifyRunFailure, type PostRunReadiness } from '../services/postRunReadiness';
 import { stopProcessTree } from '../services/processTree';
 import { createWebviewReadyMonitor } from '../services/webviewDiagnostics';
-import { WEBVIEW_READY_COMMAND, createWebviewNonce, webviewActionPostScript, webviewScriptCspOptions, withWebviewCsp } from '../services/webviewSecurity';
+import { WEBVIEW_ACTION_PANEL_SCRIPT, WEBVIEW_READY_COMMAND, createWebviewNonce, webviewActionScriptTag, webviewScriptCspOptions, withWebviewCsp } from '../services/webviewSecurity';
 import { currentGitCommit, currentGitRef, inspectTrackedWorktree, prepareManagedWorktree, removeWorktreeSafely } from '../services/gitWorkspace';
 import { checkGcloudApplicationDefaultAuth } from '../services/cliProbes';
 import { escapeAttr, escapeClass, escapeHtml, kronosWebviewBaseCss } from '../services/webviewHtml';
@@ -78,6 +78,7 @@ export interface RunCenterActionRequest {
 interface RunCenterOptions {
   onAction?: (request: RunCenterActionRequest) => Promise<void> | void;
   pollIntervalMs?: number;
+  extensionUri?: vscode.Uri | undefined;
 }
 
 function ensureDir(dir: string): void {
@@ -533,16 +534,22 @@ export function cleanupStaleWorktrees(options: { remove?: boolean } = {}): Workt
 export function openRunCenter(options: RunCenterOptions = {}): void {
   const interactive = Boolean(options.onAction);
   const nonce = interactive ? createWebviewNonce() : '';
+  const webviewOptions: vscode.WebviewOptions = interactive && options.extensionUri
+    ? { enableScripts: interactive, localResourceRoots: [vscode.Uri.joinPath(options.extensionUri, 'media')] }
+    : { enableScripts: interactive };
   const panel = vscode.window.createWebviewPanel(
     'kronosRunCenter',
     'Kronos Run Center',
     vscode.ViewColumn.One,
-    { enableScripts: interactive }
+    webviewOptions
   );
+  const actionScriptUri = interactive && options.extensionUri
+    ? panel.webview.asWebviewUri(vscode.Uri.joinPath(options.extensionUri, 'media', WEBVIEW_ACTION_PANEL_SCRIPT)).toString()
+    : undefined;
   const render = (): boolean => {
     const runs = listRuns();
     panel.webview.html = withWebviewCsp(
-      buildRunCenterHtml(runs, interactive ? nonce : undefined),
+      buildRunCenterHtml(runs, interactive ? nonce : undefined, actionScriptUri),
       interactive ? webviewScriptCspOptions(panel.webview.cspSource, nonce) : {},
     );
     return runs.some(run => isFreshActiveRun(run));
@@ -1265,15 +1272,13 @@ function runCenterActionButtons(run: KronosRun): string {
   return `<div class="run-actions">${buttons.join('')}</div>`;
 }
 
-function runCenterScript(nonce: string): string {
-  return `<script nonce="${escapeAttr(nonce)}">
-${webviewActionPostScript('Kronos Run Center', [
-  { messageKey: 'runId', dataAttribute: 'data-run-id' },
-], { readyCommand: WEBVIEW_READY_COMMAND })}
-</script>`;
+function runCenterScript(nonce: string, scriptUri?: string): string {
+  return webviewActionScriptTag(nonce, 'Kronos Run Center', [
+    { messageKey: 'runId', dataAttribute: 'data-run-id' },
+  ], { readyCommand: WEBVIEW_READY_COMMAND, scriptUri });
 }
 
-function buildRunCenterHtml(runs: KronosRun[], nonce?: string): string {
+function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?: string): string {
   const interactive = Boolean(nonce);
   const actionHeader = interactive ? '<th>Actions</th>' : '';
   const sortedRuns = sortedRunCenterRuns(runs);
@@ -1366,7 +1371,7 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string): string {
     <tr><th>Status</th><th>Run</th><th>Time</th><th>Progress</th><th>Model</th><th>Readiness</th><th>Workspace</th><th>Last event</th>${actionHeader}</tr>
     ${rows}
   </table></div>`}
-</div>${nonce ? runCenterScript(nonce) : ''}</body></html>`;
+</div>${nonce ? runCenterScript(nonce, actionScriptUri) : ''}</body></html>`;
 }
 
 function renderResult(text: string): string {

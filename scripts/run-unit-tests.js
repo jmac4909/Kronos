@@ -2115,6 +2115,66 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   ], { readyCommand: webviewSecurity.WEBVIEW_READY_COMMAND });
   assert.match(diagnosticActionScript, /__kronosWebviewReady/);
   assert.match(diagnosticActionScript, /Kronos webview could not post script readiness/);
+  assert.equal(webviewSecurity.WEBVIEW_ACTION_PANEL_SCRIPT, 'kronos-action-panel.js');
+  const externalScriptTag = webviewSecurity.webviewActionScriptTag('nonce<1>', 'Kronos External', [
+    { messageKey: 'runId', dataAttribute: 'data-run-id' },
+  ], { readyCommand: webviewSecurity.WEBVIEW_READY_COMMAND, scriptUri: 'vscode-resource://kronos/action.js?x=1&y=<2>' });
+  assert.match(externalScriptTag, /<script nonce="nonce&lt;1&gt;" src="vscode-resource:\/\/kronos\/action\.js\?x=1&amp;y=&lt;2&gt;"/);
+  assert.match(externalScriptTag, /data-kronos-webview-name="Kronos External"/);
+  assert.match(externalScriptTag, /data-kronos-action-fields="\[\{&quot;messageKey&quot;:&quot;runId&quot;,&quot;dataAttribute&quot;:&quot;data-run-id&quot;\}\]"/);
+  assert.match(externalScriptTag, /data-kronos-ready-command="__kronosWebviewReady"/);
+  assert.doesNotMatch(externalScriptTag, /function postKronosAction/);
+
+  const externalActionScript = readSourceFixture('media', webviewSecurity.WEBVIEW_ACTION_PANEL_SCRIPT);
+  assert.match(externalActionScript, /document\.currentScript/);
+  assert.match(externalActionScript, /data-kronos-action-fields/);
+  assert.match(externalActionScript, /function postKronosAction/);
+  assert.doesNotMatch(externalActionScript, /const vscode =/);
+  const externalPostedMessages = [];
+  const externalDocumentListeners = {};
+  const externalDocumentElementAttributes = {};
+  let externalAcquireCalls = 0;
+  const externalSandbox = {
+    acquireVsCodeApi: () => {
+      externalAcquireCalls += 1;
+      return { postMessage: message => externalPostedMessages.push(message) };
+    },
+    console: { info() {}, warn() {}, error() {} },
+    navigator: { userAgent: 'Kronos Windows Webview Test' },
+    setTimeout(handler) { handler(); },
+    window: { addEventListener() {} },
+    document: {
+      readyState: 'complete',
+      currentScript: {
+        getAttribute(name) {
+          return {
+            'data-kronos-webview-name': 'Kronos External',
+            'data-kronos-ready-command': webviewSecurity.WEBVIEW_READY_COMMAND,
+            'data-kronos-action-fields': JSON.stringify([
+              { messageKey: 'ticket', dataAttribute: 'data-ticket' },
+              { messageKey: 'runId', dataAttribute: 'data-run-id' },
+            ]),
+          }[name] || '';
+        },
+      },
+      documentElement: {
+        setAttribute(name, value) { externalDocumentElementAttributes[name] = value; },
+      },
+      addEventListener(type, handler) { externalDocumentListeners[type] = handler; },
+    },
+  };
+  vm.runInNewContext(externalActionScript, externalSandbox);
+  assert.equal(externalDocumentElementAttributes['data-kronos-script-ready'], 'true');
+  assert.equal(externalDocumentElementAttributes['data-kronos-actions-ready'], 'true');
+  assert.equal(externalDocumentElementAttributes['data-kronos-webview'], 'Kronos External');
+  assert.equal(externalPostedMessages[0].command, webviewSecurity.WEBVIEW_READY_COMMAND);
+  assert.equal(externalPostedMessages[0].webviewName, 'Kronos External');
+  assert.equal(typeof externalDocumentListeners.click, 'function');
+  externalDocumentListeners.click({ target: fakeButton, preventDefault() {} });
+  assert.equal(externalPostedMessages[1].command, 'openRunRecord');
+  assert.equal(externalPostedMessages[1].ticket, 'K-1');
+  assert.equal(externalPostedMessages[1].runId, 'run-1');
+  assert.equal(externalAcquireCalls, 1);
 
   const button = operatorPanel.actionButton('open<Thing>', 'Open & Check', {
     ticket: 'T-1',
@@ -3754,11 +3814,14 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "import { runProgressSummary } from '../services/runProgress'",
     'createWebviewNonce',
     'webviewScriptCspOptions',
-    'webviewActionPostScript',
+    'WEBVIEW_ACTION_PANEL_SCRIPT',
+    'webviewActionScriptTag',
     'webviewScriptCspOptions(panel.webview.cspSource, nonce)',
     "const nonce = interactive ? createWebviewNonce() : ''",
-    "${webviewActionPostScript('Kronos Run Center', [",
+    "webviewActionScriptTag(nonce, 'Kronos Run Center', [",
     "{ messageKey: 'runId', dataAttribute: 'data-run-id' }",
+    'extensionUri?: vscode.Uri | undefined',
+    'localResourceRoots: [vscode.Uri.joinPath(options.extensionUri,',
     "'refreshPanel'",
     "'archiveFinishedRuns'",
     'pollIntervalMs?: number',
@@ -3795,8 +3858,8 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     'function runCenterActionButtons',
     "runCenterActionButton('refreshPanel', 'Refresh')",
     "runCenterActionButton('archiveFinishedRuns', 'Archive Finished')",
-    'webviewActionPostScript',
-    '{ readyCommand: WEBVIEW_READY_COMMAND }',
+    'webviewActionScriptTag',
+    '{ readyCommand: WEBVIEW_READY_COMMAND, scriptUri }',
     "import { sortedRunCenterRuns } from '../services/runCenterSort'",
     'const sortedRuns = sortedRunCenterRuns(runs)',
     'sorted by status and time',
@@ -3806,7 +3869,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "if (pausable) { buttons.push(runCenterActionButton('pauseRun', 'Pause', runId)); }",
     "runCenterActionButton('cancelRun', 'Stop'",
     'panel.webview.onDidReceiveMessage(async msg =>',
-    'buildRunCenterHtml(runs, interactive ? nonce : undefined)',
+    'buildRunCenterHtml(runs, interactive ? nonce : undefined, actionScriptUri)',
     'const interactive = Boolean(nonce)',
     '<th>Progress</th>',
     'class="progress-cell"',
@@ -6376,7 +6439,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   assert.ok(boardHandlerStart >= 0 && boardHandlerEnd > boardHandlerStart, 'Jira board message handler should be present');
   const boardHandlerSource = source.slice(boardHandlerStart, boardHandlerEnd);
   for (const marker of [
-    "import { createWebviewNonce, webviewReadyPostScript, webviewScriptCspOptions, webviewVsCodeApiScript, withWebviewCsp } from './services/webviewSecurity'",
+    "import { WEBVIEW_ACTION_PANEL_SCRIPT, createWebviewNonce, webviewReadyPostScript, webviewScriptCspOptions, webviewVsCodeApiScript, withWebviewCsp } from './services/webviewSecurity'",
     "import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss, normalizeActionPanelMessage, operatorCommandRow } from './services/operatorPanel'",
     "import { buildPromptHistoryHtml, buildPromptManagerHtml, buildPromptSmokeTestsHtml } from './services/promptPanelView'",
     "import { buildRecoveryHtml, buildStateAuditLogHtml } from './services/recoveryPanelView'",
@@ -6458,12 +6521,15 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "unknownErrorMessage(e, 'Provider reachability checks failed.')",
     "request.command === 'refreshPanel'",
     "if (request.command === 'refreshPanel') {\n        state.reloadAndNotify();\n        render();\n        return;\n      }",
-    "openEvidenceGatePanel(state, evidenceGatePanelGatesForState(state), 'Kronos Evidence Gate', { refreshAllEvidenceGates: true })",
+    "openEvidenceGatePanel(state, evidenceGatePanelGatesForState(state), 'Kronos Evidence Gate', { refreshAllEvidenceGates: true, extensionUri: context.extensionUri })",
     'options.refreshAllEvidenceGates',
     'function evidenceGatePanelGatesForState(state: KronosState): EvidenceGateResult[]',
     'isProofSensitiveAction(currentState.tickets[gate.ticketKey]?.next_action)',
     'isCodeAction(target.action)',
     'function openInteractiveRunCenter',
+    'function kronosScriptableWebviewOptions',
+    'function kronosActionPanelScriptUri',
+    "vscode.Uri.joinPath(extensionUri, 'media', WEBVIEW_ACTION_PANEL_SCRIPT)",
     'function executeRunCenterAction',
     'async function archiveFinishedRuns',
     "const FINISHED_ARCHIVE_STATUSES = new Set<KronosRun['status']>(['completed', 'waiting_for_review', 'failed', 'cancelled'])",
@@ -6659,18 +6725,18 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'export function kronosActionPanelScript',
     'export function kronosOperatorPanelCss',
     'kronosWebviewBaseCss',
+    'webviewActionScriptTag',
     "const command = message['command']",
     'ticket: stringField(message,',
     'runId: stringField(message,',
     'planId: stringField(message,',
     'itemId: stringField(message,',
-    'webviewActionPostScript(webviewName, [',
+    'scriptUri?: string',
     'readyDiagnostic ? { readyCommand: WEBVIEW_READY_COMMAND } : {}',
     "{ messageKey: 'ticket', dataAttribute: 'data-ticket' }",
     "{ messageKey: 'runId', dataAttribute: 'data-run-id' }",
     "{ messageKey: 'planId', dataAttribute: 'data-plan-id' }",
     "{ messageKey: 'itemId', dataAttribute: 'data-item-id' }",
-    'script nonce="${escapeAttr(nonce)}"',
     "data-action=\"${escapeAttr(action)}\"",
     "data-plan-id=\"${escapeAttr(options.planId)}\"",
     "data-item-id=\"${escapeAttr(options.itemId)}\"",
@@ -6708,6 +6774,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   for (const marker of [
     'export function buildHumanReviewInboxHtml',
     'HumanReviewInboxHtmlOptions',
+    'actionScriptUri?: string | undefined',
     'Kronos Human Review Inbox',
     'humanReviewActionButtons',
     "actionButton('refreshPanel', 'Refresh')",
@@ -6718,7 +6785,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "actionButton('recoveryCenter', 'Recovery'",
     "actionButton('doctor', 'Open Doctor'",
     'kronosOperatorPanelCss',
-    'kronosActionPanelScript(options.nonce',
+    "kronosActionPanelScript(options.nonce, 'Kronos Human Review Inbox', true, options.actionScriptUri)",
   ]) {
     assert.ok(humanReviewPanelViewSource.includes(marker), marker);
   }
@@ -6740,7 +6807,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "actionButton('publishEvidence', 'Publish'",
     'safeHttpHref',
     'kronosOperatorPanelCss',
-    "kronosActionPanelScript(nonce, 'Kronos Evidence Gate', true)",
+    "kronosActionPanelScript(nonce, 'Kronos Evidence Gate', true, actionScriptUri)",
   ]) {
     assert.ok(evidencePanelViewSource.includes(marker), marker);
   }

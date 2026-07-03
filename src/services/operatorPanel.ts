@@ -1,4 +1,4 @@
-import { WEBVIEW_READY_COMMAND, webviewActionPostScript } from './webviewSecurity';
+import { WEBVIEW_READY_COMMAND, webviewActionScriptTag } from './webviewSecurity';
 import { escapeAttr, escapeHtml, kronosWebviewBaseCss } from './webviewHtml';
 
 export interface ActionButtonOptions {
@@ -51,16 +51,14 @@ export function normalizeActionPanelMessage(raw: unknown, allowed: ReadonlySet<s
   };
 }
 
-export function kronosActionPanelScript(nonce: string, webviewName = 'Kronos action panel', readyDiagnostic = true): string {
+export function kronosActionPanelScript(nonce: string, webviewName = 'Kronos action panel', readyDiagnostic = true, scriptUri?: string): string {
   const readyOptions = readyDiagnostic ? { readyCommand: WEBVIEW_READY_COMMAND } : {};
-  return `<script nonce="${escapeAttr(nonce)}">
-${webviewActionPostScript(webviewName, [
-  { messageKey: 'ticket', dataAttribute: 'data-ticket' },
-  { messageKey: 'runId', dataAttribute: 'data-run-id' },
-  { messageKey: 'planId', dataAttribute: 'data-plan-id' },
-  { messageKey: 'itemId', dataAttribute: 'data-item-id' },
-], readyOptions)}
-</script>`;
+  return webviewActionScriptTag(nonce, webviewName, [
+    { messageKey: 'ticket', dataAttribute: 'data-ticket' },
+    { messageKey: 'runId', dataAttribute: 'data-run-id' },
+    { messageKey: 'planId', dataAttribute: 'data-plan-id' },
+    { messageKey: 'itemId', dataAttribute: 'data-item-id' },
+  ], { ...readyOptions, scriptUri });
 }
 
 export function kronosOperatorPanelCss(): string {

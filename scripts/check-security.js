@@ -80,6 +80,7 @@ const gitWorkspace = readSource('src/services/gitWorkspace.ts');
 const processTree = readSource('src/services/processTree.ts');
 const webviewDiagnostics = readSource('src/services/webviewDiagnostics.ts');
 const webviewSecurity = readSource('src/services/webviewSecurity.ts');
+const webviewActionPanelScript = readSource('media/kronos-action-panel.js');
 const operatorPanel = readSource('src/services/operatorPanel.ts');
 const promptPanelView = readSource('src/services/promptPanelView.ts');
 const recoveryPanelView = readSource('src/services/recoveryPanelView.ts');
@@ -382,7 +383,7 @@ for (const marker of [
   'openEvidenceGatePanel',
   'const EVIDENCE_GATE_MESSAGE_COMMANDS = new Set',
   "if (request.command === 'refreshPanel') {\n        state.reloadAndNotify();\n        render();\n        return;\n      }",
-  "openEvidenceGatePanel(state, evidenceGatePanelGatesForState(state), 'Kronos Evidence Gate', { refreshAllEvidenceGates: true })",
+  "openEvidenceGatePanel(state, evidenceGatePanelGatesForState(state), 'Kronos Evidence Gate', { refreshAllEvidenceGates: true, extensionUri: context.extensionUri })",
   'options.refreshAllEvidenceGates',
   'function evidenceGatePanelGatesForState(state: KronosState): EvidenceGateResult[]',
   'isProofSensitiveAction(currentState.tickets[gate.ticketKey]?.next_action)',
@@ -721,13 +722,13 @@ for (const marker of [
   'runId: stringField(message,',
   'planId: stringField(message,',
   'itemId: stringField(message,',
-  'webviewActionPostScript(webviewName, [',
+  'webviewActionScriptTag',
+  'scriptUri?: string',
   'readyDiagnostic ? { readyCommand: WEBVIEW_READY_COMMAND } : {}',
   "{ messageKey: 'ticket', dataAttribute: 'data-ticket' }",
   "{ messageKey: 'runId', dataAttribute: 'data-run-id' }",
   "{ messageKey: 'planId', dataAttribute: 'data-plan-id' }",
   "{ messageKey: 'itemId', dataAttribute: 'data-item-id' }",
-  'script nonce="${escapeAttr(nonce)}"',
   "data-action=\"${escapeAttr(action)}\"",
   "data-plan-id=\"${escapeAttr(options.planId)}\"",
   "data-item-id=\"${escapeAttr(options.itemId)}\"",
@@ -1152,7 +1153,7 @@ for (const marker of [
   "actionButton('publishEvidence', 'Publish'",
   'safeHttpHref',
   'kronosOperatorPanelCss',
-  "kronosActionPanelScript(nonce, 'Kronos Evidence Gate', true)",
+  "kronosActionPanelScript(nonce, 'Kronos Evidence Gate', true, actionScriptUri)",
 ]) {
   if (!evidencePanelView.includes(marker)) {
     fail(`Missing evidence panel view marker: ${marker}`);
@@ -1426,9 +1427,12 @@ for (const marker of [
   "label: 'Failed to parse Claude stream event'",
   "import { isFreshActiveRun } from '../services/runStatus'",
   "import { runProgressSummary } from '../services/runProgress'",
+  'WEBVIEW_ACTION_PANEL_SCRIPT',
   "'refreshPanel'",
   "'archiveFinishedRuns'",
   'pollIntervalMs?: number',
+  'extensionUri?: vscode.Uri | undefined',
+  'localResourceRoots: [vscode.Uri.joinPath(options.extensionUri,',
   'const pollTimer = setInterval',
   'panel.onDidDispose(() => clearInterval(pollTimer))',
   "import { createWebviewReadyMonitor } from '../services/webviewDiagnostics'",
@@ -1437,9 +1441,9 @@ for (const marker of [
   "message.command === 'refreshPanel' || message.command === 'archiveFinishedRuns'",
   "runCenterActionButton('refreshPanel', 'Refresh')",
   "runCenterActionButton('archiveFinishedRuns', 'Archive Finished')",
-  'webviewActionPostScript',
-  "${webviewActionPostScript('Kronos Run Center', [",
-  '{ readyCommand: WEBVIEW_READY_COMMAND }',
+  'webviewActionScriptTag',
+  "webviewActionScriptTag(nonce, 'Kronos Run Center', [",
+  '{ readyCommand: WEBVIEW_READY_COMMAND, scriptUri }',
   "import { sortedRunCenterRuns } from '../services/runCenterSort'",
   'const sortedRuns = sortedRunCenterRuns(runs)',
   'sorted by status and time',
@@ -1993,6 +1997,8 @@ for (const marker of [
   "toString('hex')",
   'export function webviewScriptCspOptions',
   'return { allowScripts: true, nonce, cspSource }',
+  'export const WEBVIEW_ACTION_PANEL_SCRIPT',
+  "'kronos-action-panel.js'",
   'export function webviewVsCodeApiScript',
   'function kronosVsCodeApi() {',
   "Symbol.for('kronos.vscodeApi')",
@@ -2021,6 +2027,11 @@ for (const marker of [
   "document.documentElement.setAttribute('data-kronos-actions-ready', 'true')",
   'message[field.messageKey]',
   'options.readyCommand ? webviewReadyPostScript(webviewName, options.readyCommand) :',
+  'export function webviewActionScriptTag',
+  'data-kronos-webview-name',
+  'data-kronos-action-fields',
+  'data-kronos-ready-command',
+  'options.scriptUri',
   'cspSource?: string',
   'options.cspSource?.trim()',
   'scriptSources.join',
@@ -2043,6 +2054,39 @@ for (const marker of [
 ]) {
   if (!webviewSecurity.includes(marker)) {
     fail(`Missing webview security marker: ${marker}`);
+  }
+}
+
+for (const marker of [
+  'document.currentScript',
+  'data-kronos-webview-name',
+  'data-kronos-ready-command',
+  'data-kronos-action-fields',
+  'function kronosVsCodeApi()',
+  "Symbol.for('kronos.vscodeApi')",
+  "typeof acquireVsCodeApi !== 'function'",
+  "document.documentElement.setAttribute('data-kronos-script-ready', 'true')",
+  "document.documentElement.setAttribute('data-kronos-actions-ready', 'true')",
+  "console.info('Kronos webview script ready', webviewName, navigator.userAgent)",
+  "console.error('Kronos webview script error', webviewName",
+  "console.error('Kronos webview unhandled rejection', webviewName",
+  'function postReady()',
+  'function closestKronosActionTarget(target)',
+  'target.parentElement',
+  'function postKronosAction(event)',
+  "document.addEventListener('click', postKronosAction, true)",
+]) {
+  if (!webviewActionPanelScript.includes(marker)) {
+    fail(`Missing packaged webview action script marker: ${marker}`);
+  }
+}
+for (const marker of [
+  'const vscode =',
+  'var vscode =',
+  'window.__kronosVscodeApi',
+]) {
+  if (webviewActionPanelScript.includes(marker)) {
+    fail(`Packaged webview action script must not use stale VS Code API cache marker: ${marker}`);
   }
 }
 

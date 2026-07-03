@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto';
+import { escapeAttr } from './webviewHtml';
 
 export interface WebviewCspOptions {
   nonce?: string;
@@ -13,10 +14,15 @@ export interface WebviewActionPostField {
 }
 
 export interface WebviewActionPostOptions {
-  readyCommand?: string;
+  readyCommand?: string | undefined;
+}
+
+export interface WebviewActionScriptTagOptions extends WebviewActionPostOptions {
+  scriptUri?: string | undefined;
 }
 
 export const WEBVIEW_READY_COMMAND = '__kronosWebviewReady';
+export const WEBVIEW_ACTION_PANEL_SCRIPT = 'kronos-action-panel.js';
 
 export function createWebviewNonce(): string {
   return randomBytes(16).toString('hex');
@@ -142,6 +148,28 @@ export function webviewActionPostScript(webviewName: string, fields: WebviewActi
     '  }',
     '}());',
   ].filter(Boolean).join('\n');
+}
+
+export function webviewActionScriptTag(
+  nonce: string,
+  webviewName: string,
+  fields: WebviewActionPostField[],
+  options: WebviewActionScriptTagOptions = {},
+): string {
+  if (!options.scriptUri) {
+    return `<script nonce="${escapeAttr(nonce)}">
+${webviewActionPostScript(webviewName, fields, options)}
+</script>`;
+  }
+  const readyAttr = options.readyCommand
+    ? ` data-kronos-ready-command="${escapeAttr(options.readyCommand)}"`
+    : '';
+  return [
+    `<script nonce="${escapeAttr(nonce)}"`,
+    `src="${escapeAttr(options.scriptUri)}"`,
+    `data-kronos-webview-name="${escapeAttr(webviewName)}"`,
+    `data-kronos-action-fields="${escapeAttr(JSON.stringify(fields))}"${readyAttr}></script>`,
+  ].join(' ');
 }
 
 export function webviewCspMeta(options: WebviewCspOptions = {}): string {

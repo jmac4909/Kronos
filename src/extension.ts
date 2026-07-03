@@ -55,7 +55,7 @@ import { buildNextActionContext, buildNextActionStartDecision, skillForAction } 
 import { createWorkspaceDiffArtifact, firstRemoteBranchMatching, originProjectPath } from './services/gitWorkspace';
 import { signalProcessTree, stopProcessTree } from './services/processTree';
 import { createWebviewReadyMonitor } from './services/webviewDiagnostics';
-import { createWebviewNonce, webviewReadyPostScript, webviewScriptCspOptions, webviewVsCodeApiScript, withWebviewCsp } from './services/webviewSecurity';
+import { WEBVIEW_ACTION_PANEL_SCRIPT, createWebviewNonce, webviewReadyPostScript, webviewScriptCspOptions, webviewVsCodeApiScript, withWebviewCsp } from './services/webviewSecurity';
 import { escapeAttr, escapeClass, escapeHtml, kronosWebviewBaseCss, safeHttpHref } from './services/webviewHtml';
 import { kronosTerminalOptions } from './services/terminalProfiles';
 import { unknownErrorCode, unknownErrorMessage } from './services/errorUtils';
@@ -899,8 +899,21 @@ function findRunById(runId: string): KronosRun | undefined {
   return listRuns().find(run => run.id === runId);
 }
 
-function openInteractiveRunCenter(state: KronosState): void {
+function kronosScriptableWebviewOptions(extensionUri?: vscode.Uri): vscode.WebviewOptions {
+  return extensionUri
+    ? { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')] }
+    : { enableScripts: true };
+}
+
+function kronosActionPanelScriptUri(panel: vscode.WebviewPanel, extensionUri?: vscode.Uri): string | undefined {
+  return extensionUri
+    ? panel.webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', WEBVIEW_ACTION_PANEL_SCRIPT)).toString()
+    : undefined;
+}
+
+function openInteractiveRunCenter(state: KronosState, extensionUri?: vscode.Uri): void {
   openRunCenter({
+    extensionUri,
     onAction: request => executeRunCenterAction(state, request),
   });
 }
@@ -2082,14 +2095,14 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('kronos.evidenceGate', async (treeItem: unknown) => {
       const ticketKey = resolveTicketKey(treeItem);
       if (ticketKey && state.state?.tickets?.[ticketKey]) {
-        openEvidenceGatePanel(state, [evaluateEvidenceGate(ticketKey, state.state.tickets[ticketKey])], `Evidence Gate: ${ticketKey}`);
+        openEvidenceGatePanel(state, [evaluateEvidenceGate(ticketKey, state.state.tickets[ticketKey])], `Evidence Gate: ${ticketKey}`, { extensionUri: context.extensionUri });
         return;
       }
       if (!state.state) {
         vscode.window.showWarningMessage('No Kronos state loaded.');
         return;
       }
-      openEvidenceGatePanel(state, evidenceGatePanelGatesForState(state), 'Kronos Evidence Gate', { refreshAllEvidenceGates: true });
+      openEvidenceGatePanel(state, evidenceGatePanelGatesForState(state), 'Kronos Evidence Gate', { refreshAllEvidenceGates: true, extensionUri: context.extensionUri });
     }),
 
     vscode.commands.registerCommand('kronos.exportEvidence', async (treeItem: unknown) => {
@@ -3066,7 +3079,7 @@ export function activate(context: vscode.ExtensionContext) {
             'Cancel'
           );
           if (action === 'Open Gate') {
-            openEvidenceGatePanel(state, [handoffDecision.gate], `Evidence Gate: ${ticketKey}`);
+            openEvidenceGatePanel(state, [handoffDecision.gate], `Evidence Gate: ${ticketKey}`, { extensionUri: context.extensionUri });
           } else if (action === 'Add Evidence') {
             await vscode.commands.executeCommand('kronos.addEvidence', { ticketKey: evidenceTicketKey });
           }
@@ -3080,7 +3093,7 @@ export function activate(context: vscode.ExtensionContext) {
             'Cancel'
           );
           if (action === 'Open Gate') {
-            openEvidenceGatePanel(state, [handoffDecision.gate], `Evidence Gate: ${ticketKey}`);
+            openEvidenceGatePanel(state, [handoffDecision.gate], `Evidence Gate: ${ticketKey}`, { extensionUri: context.extensionUri });
             return;
           }
           if (action !== 'Continue Handoff') { return; }
@@ -3305,7 +3318,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand('kronos.runCenter', async () => {
-      openInteractiveRunCenter(state);
+      openInteractiveRunCenter(state, context.extensionUri);
     }),
 
     vscode.commands.registerCommand('kronos.openRunArtifact', async () => {
@@ -3501,7 +3514,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand('kronos.humanReviewInbox', async () => {
-      openHumanReviewInbox(state);
+      openHumanReviewInbox(state, context.extensionUri);
     }),
 
     vscode.commands.registerCommand('kronos.recoveryCenter', async () => {
@@ -4039,14 +4052,15 @@ async function pickAndRestoreBackup(state: KronosState, backups = listBackups(),
   }
 }
 
-function openHumanReviewInbox(state: KronosState): void {
+function openHumanReviewInbox(state: KronosState, extensionUri?: vscode.Uri): void {
   const panel = vscode.window.createWebviewPanel(
     'kronosHumanReviewInbox',
     'Kronos Human Review Inbox',
     vscode.ViewColumn.One,
-    { enableScripts: true }
+    kronosScriptableWebviewOptions(extensionUri)
   );
   const nonce = createWebviewNonce();
+  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
   const render = () => {
     const inbox = buildHumanReviewInbox({
       state: state.state,
@@ -4055,7 +4069,7 @@ function openHumanReviewInbox(state: KronosState): void {
       worktreeReport: cleanupStaleWorktrees({ remove: false }),
       doctorChecks: runDoctorChecks(state),
     });
-    const htmlOptions = { nonce };
+    const htmlOptions = { nonce, actionScriptUri };
     if (state.state?.tickets) { Object.assign(htmlOptions, { tickets: state.state.tickets }); }
     panel.webview.html = withWebviewCsp(buildHumanReviewInboxHtml(inbox, htmlOptions), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
@@ -4145,15 +4159,16 @@ function openEvidenceGatePanel(
   state: KronosState,
   gates: EvidenceGateResult[],
   title: string,
-  options: { refreshAllEvidenceGates?: boolean } = {},
+  options: { refreshAllEvidenceGates?: boolean; extensionUri?: vscode.Uri } = {},
 ): void {
   const panel = vscode.window.createWebviewPanel(
     'kronosEvidenceGate',
     title,
     vscode.ViewColumn.One,
-    { enableScripts: true }
+    kronosScriptableWebviewOptions(options.extensionUri)
   );
   const nonce = createWebviewNonce();
+  const actionScriptUri = kronosActionPanelScriptUri(panel, options.extensionUri);
   const gateTicketKeys = gates.map(gate => gate.ticketKey);
   const render = () => {
     const freshGates = options.refreshAllEvidenceGates
@@ -4164,7 +4179,7 @@ function openEvidenceGatePanel(
           return ticket ? evaluateEvidenceGate(ticketKey, ticket) : undefined;
         })
         .filter((gate): gate is EvidenceGateResult => Boolean(gate));
-    panel.webview.html = withWebviewCsp(buildEvidenceGateHtml(freshGates, title, nonce), webviewScriptCspOptions(panel.webview.cspSource, nonce));
+    panel.webview.html = withWebviewCsp(buildEvidenceGateHtml(freshGates, title, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   };
   const logReady = createWebviewReadyMonitor(panel, title);
   panel.webview.onDidReceiveMessage(async msg => {
