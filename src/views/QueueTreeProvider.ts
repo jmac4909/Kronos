@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { KronosState } from '../state/KronosState';
 import { QueueItem } from '../state/types';
 import { KronosRun, listRuns } from '../runners/sessionDispatcher';
-import { actionToLabel } from '../services/actionLabels';
+import { actionDisplayLabel as actionToLabel } from '../services/actionCatalog';
 import { activeRunForQueueItem } from '../services/queueActiveRun';
 import { formatRunProgress } from '../services/runProgress';
 import { isFreshActiveRun } from '../services/runStatus';

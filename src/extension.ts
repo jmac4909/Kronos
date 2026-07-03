@@ -14,7 +14,7 @@ import { dispatchClaudeSession, openInClaude, ensureAuth, cleanupStaleWorktrees,
 import { PromptHistoryDiff, PromptSmokeTest, PromptTemplateInfo, buildDefaultPromptSmokeTests, createPromptHistorySnapshot, diffPromptHistorySnapshots, latestPromptHistorySnapshot, listPromptHistorySnapshots, listPromptTemplates, repairRequiredPromptTemplates, runPromptSmokeTests } from './services/promptManager';
 import { KRONOS_DIR, STATE_AUDIT_FILE, listBackups, listStateAuditEvents, restoreBackup } from './services/stateStore';
 import { PlannedAction, buildBacklogTriageReport, overnightCandidatePlans, planByProject, planByRelease, planForMinutes, planNextActions as buildNextActionPlan, planToQueueItem as buildQueueItemFromPlan } from './services/queuePlanner';
-import { actionToLabel } from './services/actionLabels';
+import { actionDisplayLabel as actionToLabel } from './services/actionCatalog';
 import { isCodeAction, isProofSensitiveAction } from './services/actionSemantics';
 import { writeEvidenceExport } from './services/evidenceStore';
 import { evidenceAcceptanceCriteria, evidenceChecked, evidenceChecks, evidenceEnvironmentResults, evidenceNotes, evidenceRecordCount, evidenceString } from './services/evidenceData';

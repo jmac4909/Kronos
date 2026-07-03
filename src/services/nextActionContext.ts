@@ -1,6 +1,6 @@
 import { KronosState, QueueState, Ticket } from '../state/types';
 import { actionSkill } from './actionCatalog';
-import { actionToLabel } from './actionLabels';
+import { actionDisplayLabel as actionToLabel } from './actionCatalog';
 import { isCodeAction, isProofSensitiveAction } from './actionSemantics';
 import { evidenceRecordCount } from './evidenceData';
 import { PlannedAction } from './queuePlanner';

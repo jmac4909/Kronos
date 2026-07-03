@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { KronosState } from '../state/KronosState';
 import { Ticket } from '../state/types';
-import { actionToLabel } from '../services/actionLabels';
+import { actionDisplayLabel as actionToLabel } from '../services/actionCatalog';
 import { evidenceRecordCount } from '../services/evidenceData';
 import { TicketFilter, TicketGroupBy, describeTicketFilter, filterTickets, groupTicketEntries, hasTicketFilter } from '../services/ticketFilters';
 import { themeIcon, ticketActionIcon } from './actionIcons';

@@ -1,5 +1,5 @@
 import type { DispatchCollision } from './collisionDetector';
-import { actionToLabel } from './actionLabels';
+import { actionDisplayLabel as actionToLabel } from './actionCatalog';
 import type { BacklogTriageReport, PlannedAction, ProjectBatchPlan, ReleaseBatchPlan } from './queuePlanner';
 import { estimatePlanMinutes } from './queuePlanner';
 import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss } from './operatorPanel';

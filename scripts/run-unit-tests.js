@@ -7962,12 +7962,12 @@ test('tree providers share action labels and icons', () => {
   const nextActionContext = readSourceFixture('src', 'services', 'nextActionContext.ts');
   const actionCatalog = readSourceFixture('src', 'services', 'actionCatalog.ts');
   const actionIcons = readSourceFixture('src', 'views', 'actionIcons.ts');
-  const actionLabels = readSourceFixture('src', 'services', 'actionLabels.ts');
   const queuePlanner = readSourceFixture('src', 'services', 'queuePlanner.ts');
+  const queuePlannerPanelView = readSourceFixture('src', 'services', 'queuePlannerPanelView.ts');
   const queueActiveRunSource = readSourceFixture('src', 'services', 'queueActiveRun.ts');
 
   for (const marker of [
-    "import { actionToLabel } from '../services/actionLabels'",
+    "import { actionDisplayLabel as actionToLabel } from '../services/actionCatalog'",
     "import { evidenceRecordCount } from '../services/evidenceData'",
     "import { themeIcon, ticketActionIcon } from './actionIcons'",
     'themeIcon(ticketActionIcon(action))',
@@ -7995,7 +7995,7 @@ test('tree providers share action labels and icons', () => {
   }
 
   for (const marker of [
-    "import { actionToLabel } from '../services/actionLabels'",
+    "import { actionDisplayLabel as actionToLabel } from '../services/actionCatalog'",
     "import { queueActionIcon, themeIcon } from './actionIcons'",
     'themeIcon(queueActionIcon(item.action))',
     "import { KronosRun, listRuns } from '../runners/sessionDispatcher'",
@@ -8119,10 +8119,17 @@ test('tree providers share action labels and icons', () => {
     assert.ok(extensionSource.includes(marker), marker);
   }
   assert.equal(reviewTree.includes("ticket.mr.state === 'merged'"), false, 'review tree should not keep merged MRs in the active review inbox');
-  assert.ok(actionLabels.includes('export function actionToLabel'), 'action labels should live outside queue planning');
+  assert.ok(actionCatalog.includes('export function actionDisplayLabel'), 'action labels should live in the action catalog');
   assert.equal(queuePlanner.includes("export { actionToLabel } from './actionLabels'"), false, 'queuePlanner should not keep stale action label re-exports');
-  assert.ok(extensionSource.includes("import { actionToLabel } from './services/actionLabels'"), 'extension should import action labels directly');
-  assert.ok(nextActionContext.includes("import { actionToLabel } from './actionLabels'"), 'next action context should import action labels directly');
+  for (const [name, source] of [
+    ['extension', extensionSource],
+    ['next action context', nextActionContext],
+    ['queue planner', queuePlanner],
+    ['queue planner panel view', queuePlannerPanelView],
+  ]) {
+    assert.ok(source.includes('actionDisplayLabel as actionToLabel'), `${name} should import action labels from actionCatalog`);
+    assert.equal(source.includes('actionLabels'), false, `${name} should not import the removed actionLabels wrapper`);
+  }
   assert.equal(ticketTree.includes('function actionToLabel'), false, 'ticket tree should not duplicate action labels');
   assert.equal(ticketTree.includes('function evidenceItemCount'), false, 'ticket tree should not duplicate evidence counting');
   assert.equal(queueTree.includes('function actionIcon'), false, 'queue tree should not duplicate action icons');
