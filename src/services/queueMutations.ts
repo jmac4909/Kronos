@@ -273,16 +273,18 @@ function fallbackQueueItem(state: KronosState, ticketKey: string): QueueItem {
 
 function normalizeQueueItem(item: unknown): QueueItem {
   const record = queueRecord(item);
-  return {
+  const queueItem: QueueItem = {
     id: queueString(record.id) || `queued-${queueString(record.ticket) || Date.now()}`,
     ticket: queueNullableString(record.ticket),
-    ticket_summary: queueNullableString(record.ticket_summary) || undefined,
     projects: queueStringArray(record.projects),
     project_path: queueString(record.project_path),
     action: queueString(record.action) || 'implement',
     priority_score: Number.isFinite(Number(record.priority_score)) ? Number(record.priority_score) : 0,
     reason: queueString(record.reason),
   };
+  const summary = queueNullableString(record.ticket_summary);
+  if (summary) { queueItem.ticket_summary = summary; }
+  return queueItem;
 }
 
 function queueRecord(value: unknown): Record<string, unknown> {

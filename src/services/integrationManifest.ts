@@ -151,10 +151,11 @@ export function buildIntegrationManifestSnapshot(
 ): IntegrationManifest {
   const scripts: IntegrationManifest['scripts'] = {};
   for (const script of requiredScripts()) {
-    scripts[script.name] = {
+    const entry: NonNullable<IntegrationManifest['scripts']>[RequiredScriptName] = {
       required: true,
-      sha256: fs.existsSync(script.path) ? sha256File(script.path) : undefined,
     };
+    if (fs.existsSync(script.path)) { entry.sha256 = sha256File(script.path); }
+    scripts[script.name] = entry;
   }
 
   const promptDir = options.promptDir || path.join(KRONOS_DIR, 'prompts');
@@ -185,7 +186,9 @@ export function writeIntegrationManifestSnapshot(
   const manifest = buildIntegrationManifestSnapshot(options);
   writeJsonAtomic(filePath, manifest);
   const status = readIntegrationManifest(filePath);
-  const audit = auditIntegrationManifest(status, { promptDir: options.promptDir });
+  const auditOptions: { promptDir?: string } = {};
+  if (options.promptDir) { auditOptions.promptDir = options.promptDir; }
+  const audit = auditIntegrationManifest(status, auditOptions);
   return { path: filePath, manifest, status, audit };
 }
 
@@ -204,24 +207,24 @@ export function auditIntegrationManifest(
   const scripts = options.scripts || requiredScripts();
   for (const script of scripts) {
     const entry = status.manifest.scripts?.[script.name];
-    artifacts.push(auditArtifact({
+    const artifact = {
       kind: 'script',
       name: script.name,
       path: script.path,
-      expectedSha256: entry?.sha256,
       required: entry?.required !== false,
-    }));
+    } as const;
+    artifacts.push(entry?.sha256 ? auditArtifact({ ...artifact, expectedSha256: entry.sha256 }) : auditArtifact(artifact));
   }
 
   const promptDir = options.promptDir || path.join(KRONOS_DIR, 'prompts');
   for (const [name, entry] of Object.entries(status.manifest.prompts || {})) {
-    artifacts.push(auditArtifact({
+    const artifact = {
       kind: 'prompt',
       name,
       path: path.join(promptDir, safePromptFileName(name)),
-      expectedSha256: entry.sha256,
       required: entry.required !== false,
-    }));
+    } as const;
+    artifacts.push(entry.sha256 ? auditArtifact({ ...artifact, expectedSha256: entry.sha256 }) : auditArtifact(artifact));
   }
 
   const failures = artifacts.filter(artifact => artifact.status === 'fail').length;

@@ -178,19 +178,24 @@ export function buildDefaultPromptSmokeTests(
   templates: PromptTemplateInfo[],
   options: { projectPath?: string; idPrefix?: string } = {},
 ): PromptSmokeTest[] {
-  return templates.map(template => ({
-    id: `${options.idPrefix || 'default'}:${template.name}`,
-    templateName: template.name,
-    projectPath: options.projectPath,
-    variables: Object.fromEntries(template.variables.map(variable => [variable, `fixture-${variable.toLowerCase()}`])),
-    source: 'default',
-  }));
+  return templates.map(template => {
+    const test: PromptSmokeTest = {
+      id: `${options.idPrefix || 'default'}:${template.name}`,
+      templateName: template.name,
+      variables: Object.fromEntries(template.variables.map(variable => [variable, `fixture-${variable.toLowerCase()}`])),
+      source: 'default',
+    };
+    if (options.projectPath) { test.projectPath = options.projectPath; }
+    return test;
+  });
 }
 
 export function runPromptSmokeTests(tests: PromptSmokeTest[]): PromptSmokeResult[] {
   return tests.map(test => {
     try {
-      const rendered = renderPrompt(test.templateName, test.variables || {}, { projectPath: test.projectPath });
+      const renderOptions: RenderPromptOptions = {};
+      if (test.projectPath) { renderOptions.projectPath = test.projectPath; }
+      const rendered = renderPrompt(test.templateName, test.variables || {}, renderOptions);
       const errors: string[] = [];
       if (!test.allowMissingVariables && rendered.missingVariables.length > 0) {
         errors.push(`Missing variables: ${rendered.missingVariables.join(', ')}`);
@@ -242,7 +247,6 @@ export function createPromptHistorySnapshot(
     id: `${now.toISOString().replace(/[:.]/g, '-')}-${safeSnapshotPart(scope)}`,
     createdAt: now.toISOString(),
     scope,
-    projectPath: options.projectPath,
     templateCount: templates.length,
     templates: templates.map(template => ({
       name: template.name,
@@ -254,6 +258,7 @@ export function createPromptHistorySnapshot(
       variables: [...template.variables],
     })).sort(compareHistoryTemplates),
   };
+  if (options.projectPath) { snapshot.projectPath = options.projectPath; }
   writeJsonAtomic(promptSnapshotPath(snapshot.id), snapshot);
   return snapshot;
 }
@@ -275,8 +280,7 @@ export function latestPromptHistorySnapshot(scope?: string): PromptHistorySnapsh
 
 export function diffPromptHistorySnapshots(current: PromptHistorySnapshot, previous?: PromptHistorySnapshot): PromptHistoryDiff {
   const changes = diffPromptTemplates(previous?.templates || [], current.templates);
-  return {
-    previous,
+  const diff: PromptHistoryDiff = {
     current,
     changes,
     summary: {
@@ -286,6 +290,8 @@ export function diffPromptHistorySnapshots(current: PromptHistorySnapshot, previ
       unchanged: changes.filter(change => change.kind === 'unchanged').length,
     },
   };
+  if (previous) { diff.previous = previous; }
+  return diff;
 }
 
 export function diffPromptTemplates(previous: PromptHistoryTemplate[], current: PromptHistoryTemplate[]): PromptHistoryChange[] {
@@ -429,18 +435,19 @@ function historyChange(
   before?: PromptHistoryTemplate,
   after?: PromptHistoryTemplate,
 ): PromptHistoryChange {
-  return {
+  const change: PromptHistoryChange = {
     kind,
     name: anchor.name,
     source: anchor.source,
     path: anchor.path,
-    beforeHash: before?.hash,
-    afterHash: after?.hash,
-    beforeModifiedAt: before?.modifiedAt,
-    afterModifiedAt: after?.modifiedAt,
-    beforeVariables: before?.variables,
-    afterVariables: after?.variables,
   };
+  if (before?.hash) { change.beforeHash = before.hash; }
+  if (after?.hash) { change.afterHash = after.hash; }
+  if (before?.modifiedAt) { change.beforeModifiedAt = before.modifiedAt; }
+  if (after?.modifiedAt) { change.afterModifiedAt = after.modifiedAt; }
+  if (before?.variables) { change.beforeVariables = before.variables; }
+  if (after?.variables) { change.afterVariables = after.variables; }
+  return change;
 }
 
 function safeSnapshotPart(value: string): string {

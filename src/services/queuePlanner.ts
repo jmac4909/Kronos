@@ -90,7 +90,7 @@ export function planNextActions(input: PlannerInput): PlannedAction[] {
       { label: 'Queue priority', value: priorityScore, detail: `Stored priority score ${item.priority_score || 0}` },
     ];
     const score = sumBreakdown(scoreBreakdown);
-    plans.push({
+    const plan: PlannedAction = {
       planId: planIdFor(item.ticket, item.action || 'implement'),
       ticketKey: item.ticket,
       action: item.action || 'implement',
@@ -100,9 +100,10 @@ export function planNextActions(input: PlannerInput): PlannedAction[] {
       scoreBreakdown,
       reason: item.reason || `Queue position ${idx + 1}`,
       source: 'queue',
-      ticketSummary: item.ticket_summary,
       queueItem: item,
-    });
+    };
+    if (item.ticket_summary) { plan.ticketSummary = item.ticket_summary; }
+    plans.push(plan);
   });
 
   const tickets = input.state?.tickets || {};
@@ -258,16 +259,17 @@ function sumBreakdown(items: ScoreBreakdownItem[]): number {
 export function planToQueueItem(input: PlannerInput, plan: PlannedAction): QueueItem {
   if (plan.queueItem) { return plan.queueItem; }
   const firstProject = plan.projects[0];
-  return {
+  const item: QueueItem = {
     id: `planned-${plan.ticketKey || plan.action}`,
     ticket: plan.ticketKey,
-    ticket_summary: plan.ticketSummary,
     projects: plan.projects,
     project_path: firstProject && input.resolveProjectPath ? input.resolveProjectPath(firstProject) || '' : '',
     action: plan.action,
     priority_score: plan.score,
     reason: plan.reason,
   };
+  if (plan.ticketSummary) { item.ticket_summary = plan.ticketSummary; }
+  return item;
 }
 
 function evidenceItemCount(ticket: Ticket): number {
@@ -295,7 +297,7 @@ function triageItem(
   detail: string,
   ageDays?: number,
 ): BacklogTriageItem {
-  return {
+  const item: BacklogTriageItem = {
     ticketKey,
     summary: ticket.summary || '',
     kind,
@@ -303,8 +305,9 @@ function triageItem(
     action,
     projects: ticket.projects || [],
     detail,
-    ageDays,
   };
+  if (ageDays !== undefined) { item.ageDays = ageDays; }
+  return item;
 }
 
 function compareTriageItems(a: BacklogTriageItem, b: BacklogTriageItem): number {
@@ -427,8 +430,8 @@ export function recordQueueDecision(
     action: plan.action,
     decision,
     decided_at: now.toISOString(),
-    reason: options?.reason,
   };
+  if (options?.reason) { record.reason = options.reason; }
   if (decision === 'snoozed') {
     const minutes = Math.max(1, Math.round(options?.snoozeMinutes || 60));
     record.snoozed_until = new Date(now.getTime() + minutes * 60 * 1000).toISOString();
