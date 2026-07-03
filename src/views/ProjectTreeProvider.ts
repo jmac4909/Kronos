@@ -43,9 +43,11 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeElement>
         const byFolder: Record<string, typeof discovered> = {};
         for (const d of discovered) {
           const parts = d.path.replace(/\\/g, '/').split('/');
-          const parent = parts.length >= 2 ? parts[parts.length - 2] : 'Other';
-          if (!byFolder[parent]) { byFolder[parent] = []; }
-          byFolder[parent].push(d);
+          const parent = parts.length >= 2 ? parts[parts.length - 2] : undefined;
+          const folder = parent || 'Other';
+          const repos = byFolder[folder] || [];
+          repos.push(d);
+          byFolder[folder] = repos;
         }
         for (const [folder, repos] of Object.entries(byFolder).sort((a, b) => b[1].length - a[1].length)) {
           items.push(new FolderItem(folder, repos));

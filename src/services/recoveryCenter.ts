@@ -152,8 +152,8 @@ export function buildRecoveryInventory(input: RecoveryInventoryInput): RecoveryI
   }
 
   const backups = [...(input.backups || [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  if (backups.length > 0) {
-    const latest = backups[0];
+  const latest = backups[0];
+  if (latest) {
     items.push({
       id: 'backup:latest',
       kind: 'backup',

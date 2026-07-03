@@ -102,7 +102,11 @@ export function recordPlanQueueDecision(
   const queue = recordQueueDecision(ensureQueue(readQueueFile()), plan, decision, options);
   persistQueue(queue, decision === 'snoozed' ? 'queue-plan-snoozed' : 'queue-plan-rejected');
   const planId = plan.planId || `${plan.ticketKey || 'refresh'}:${plan.action || 'implement'}`;
-  return { decision: queue.decisions![planId] };
+  const recordedDecision = queue.decisions?.[planId];
+  if (!recordedDecision) {
+    throw new Error(`Queue decision was not recorded for ${planId}.`);
+  }
+  return { decision: recordedDecision };
 }
 
 export function reorderQueueItem(index: number, direction: QueueReorderDirection): QueueReorderResult {
@@ -111,27 +115,38 @@ export function reorderQueueItem(index: number, direction: QueueReorderDirection
   if (!Number.isInteger(index) || index < 0 || index >= items.length) {
     return { changed: false, items };
   }
+  const currentItem = items[index];
+  if (!currentItem) {
+    return { changed: false, items };
+  }
   if (direction === 'up' && index === 0) {
-    return { changed: false, item: items[index], items };
+    return { changed: false, item: currentItem, items };
   }
   if (direction === 'down' && index >= items.length - 1) {
-    return { changed: false, item: items[index], items };
+    return { changed: false, item: currentItem, items };
   }
   if (direction === 'top' && index === 0) {
-    return { changed: false, item: items[index], items };
+    return { changed: false, item: currentItem, items };
   }
 
-  let targetIndex = index;
+  let movedItem = currentItem;
   if (direction === 'up') {
-    targetIndex = index - 1;
-    [items[targetIndex], items[index]] = [items[index], items[targetIndex]];
+    const targetIndex = index - 1;
+    const targetItem = items[targetIndex];
+    if (!targetItem) { return { changed: false, item: currentItem, items }; }
+    items[targetIndex] = currentItem;
+    items[index] = targetItem;
   } else if (direction === 'down') {
-    targetIndex = index + 1;
-    [items[index], items[targetIndex]] = [items[targetIndex], items[index]];
+    const targetIndex = index + 1;
+    const targetItem = items[targetIndex];
+    if (!targetItem) { return { changed: false, item: currentItem, items }; }
+    items[index] = targetItem;
+    items[targetIndex] = currentItem;
   } else {
     const [item] = items.splice(index, 1);
+    if (!item) { return { changed: false, item: currentItem, items }; }
     items.unshift(item);
-    targetIndex = 0;
+    movedItem = item;
   }
 
   const next = {
@@ -140,7 +155,7 @@ export function reorderQueueItem(index: number, direction: QueueReorderDirection
     last_computed: new Date().toISOString(),
   };
   persistQueue(next, 'queue-reorder');
-  return { changed: true, item: items[targetIndex], items };
+  return { changed: true, item: movedItem, items };
 }
 
 export function addTicketToQueue(ticketKey: string): AddTicketToQueueResult {
@@ -150,8 +165,9 @@ export function addTicketToQueue(ticketKey: string): AddTicketToQueueResult {
     throw new Error(`Ticket not found: ${ticketKey}`);
   }
   const queue = ensureQueue(readQueueFile());
-  if (queue.items.some(item => item.ticket === ticketKey)) {
-    return { added: false, alreadyInQueue: true, item: queue.items.find(item => item.ticket === ticketKey) };
+  const existing = queue.items.find(item => item.ticket === ticketKey);
+  if (existing) {
+    return { added: false, alreadyInQueue: true, item: existing };
   }
 
   const plans = planNextActions({ state, queue, resolveProjectPath: project => state.projects[project]?.path });
@@ -237,14 +253,18 @@ function persistQueue(queue: QueueState, action: string): void {
 
 function fallbackQueueItem(state: KronosState, ticketKey: string): QueueItem {
   const ticket = state.tickets[ticketKey];
+  if (!ticket) {
+    throw new Error(`Ticket not found: ${ticketKey}`);
+  }
   const projects = ticket.projects || [];
+  const firstProject = projects[0];
   const action = ticket.next_action || 'implement';
   return normalizeQueueItem({
     id: `planned-${ticketKey}`,
     ticket: ticketKey,
     ticket_summary: ticket.summary,
     projects,
-    project_path: projects[0] ? state.projects[projects[0]]?.path || '' : '',
+    project_path: firstProject ? state.projects[firstProject]?.path || '' : '',
     action,
     priority_score: 0,
     reason: `Manual queue add for ${action}`,
