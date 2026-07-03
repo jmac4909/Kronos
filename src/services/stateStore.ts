@@ -798,15 +798,16 @@ export function restoreBackup(backupPath: string): StateBackup {
     throw new Error(`Backup not found or not restorable: ${backupPath}`);
   }
 
-  let raw = JSON.parse(fs.readFileSync(backup.filePath, 'utf-8'));
+  const raw = readJsonFile(backup.filePath);
+  let restored: KronosState | QueueState;
   if (backup.targetName === 'state.json') {
-    raw = migrateStateFileShape(raw);
-    validateStateFileShape(raw);
+    restored = migrateStateFileShape(raw);
+    validateStateFileShape(restored);
   } else {
-    raw = migrateQueueFileShape(raw);
-    validateQueueState(raw);
+    restored = migrateQueueFileShape(raw);
+    validateQueueState(restored);
   }
-  writeJsonFileAtomic(backup.targetPath, raw, `restore-${backup.targetName}`);
+  writeJsonFileAtomic(backup.targetPath, restored, `restore-${backup.targetName}`);
   return backup;
 }
 
@@ -897,7 +898,7 @@ function clearStaleWriteLock(): void {
 
 function readCurrentWriteLock(): StateWriteLock | null {
   try {
-    const lock = JSON.parse(fs.readFileSync(STATE_WRITE_LOCK_FILE, 'utf-8'));
+    const lock = readJsonFile(STATE_WRITE_LOCK_FILE);
     if (!isPlainObject(lock)) { return null; }
     return {
       pid: typeof lock.pid === 'string' || typeof lock.pid === 'number' ? lock.pid : undefined,

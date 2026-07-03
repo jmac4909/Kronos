@@ -3,6 +3,7 @@ import * as path from 'path';
 import { safeFileStem } from './fileNames';
 import { KRONOS_DIR } from './stateStore';
 import { unknownErrorMessage } from './errorUtils';
+import { readJsonFile } from './jsonFiles';
 
 const SESSIONS_DIR = path.join(KRONOS_DIR, 'sessions');
 const STATS_FILE = path.join(KRONOS_DIR, 'stats.json');
@@ -126,8 +127,8 @@ function readSavedSessionFileIssue(filePath: string): SessionStoreIssue | null {
 
 function readSavedSessionFileResult(filePath: string): { session?: SavedSession; issue?: SessionStoreIssue } {
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    const parsed = readJsonFile(filePath);
+    if (!isRecord(parsed)) {
       return { issue: invalidSessionIssue('invalid_saved_session', filePath, 'Saved session must be a JSON object.') };
     }
     for (const key of ['id', 'project', 'skill', 'ticket', 'startedAt']) {
@@ -165,8 +166,8 @@ function readAggregateStatsIssue(): SessionStoreIssue | null {
 function readAggregateStatsResult(): { stats?: AggregateStats; issue?: SessionStoreIssue } {
   if (!fs.existsSync(STATS_FILE)) { return { stats: { sessions: [] } }; }
   try {
-    const stats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf-8'));
-    if (!stats || typeof stats !== 'object' || Array.isArray(stats)) {
+    const stats = readJsonFile(STATS_FILE);
+    if (!isRecord(stats)) {
       return { issue: invalidSessionIssue('invalid_session_stats', STATS_FILE, 'stats.json must be a JSON object.') };
     }
     if (stats.sessions !== undefined && !Array.isArray(stats.sessions)) {

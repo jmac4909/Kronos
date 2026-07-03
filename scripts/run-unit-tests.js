@@ -277,13 +277,15 @@ test('prompt manager snapshots prompt history and diffs metadata changes', () =>
     promptManager.listPromptTemplates(project),
     { scope: 'test-history', projectPath: project, now: new Date('2026-07-01T11:00:00.000Z') }
   );
+  const secondPath = path.join(promptManager.PROMPT_HISTORY_DIR, `${second.id}.json`);
+  fs.writeFileSync(secondPath, `\ufeff${fs.readFileSync(secondPath, 'utf8')}`, 'utf8');
 
   const diff = promptManager.diffPromptHistorySnapshots(second, first);
   assert.equal(diff.summary.added, 1);
   assert.equal(diff.summary.removed, 1);
   assert.equal(diff.summary.changed, 1);
   assert.ok(diff.changes.some(change => change.kind === 'changed' && change.name === 'alpha' && change.afterVariables.includes('TWO')));
-  assert.ok(fs.existsSync(path.join(promptManager.PROMPT_HISTORY_DIR, `${second.id}.json`)));
+  assert.ok(fs.existsSync(secondPath));
   assert.equal(promptManager.latestPromptHistorySnapshot('test-history').id, second.id);
 });
 
@@ -1530,6 +1532,7 @@ test('worktree registry tracks, deduplicates, and untracks entries safely', () =
 
   worktreeRegistry.trackActiveWorktree('/repo/app', '/repo/app/.claude/worktrees/K-1', 'K-1', new Date('2026-07-01T10:00:00.000Z'), registryPath);
   worktreeRegistry.trackActiveWorktree('/repo/app', '/repo/app/.claude/worktrees/K-1', 'K-1-retry', new Date('2026-07-01T11:00:00.000Z'), registryPath);
+  fs.writeFileSync(registryPath, `\ufeff${fs.readFileSync(registryPath, 'utf8')}`, 'utf8');
 
   const tracked = worktreeRegistry.loadActiveWorktreeRegistry(registryPath);
   assert.equal(tracked.issue, undefined);
@@ -3373,7 +3376,7 @@ test('dispatcher lists saved sessions newest first by startedAt', () => {
     events: [],
     stats: {},
   }));
-  fs.writeFileSync(path.join(sessionsDir, 'aaa-new.json'), JSON.stringify({
+  fs.writeFileSync(path.join(sessionsDir, 'aaa-new.json'), `\ufeff${JSON.stringify({
     id: 'aaa-new',
     project: 'alpha',
     skill: 'implement',
@@ -3386,7 +3389,7 @@ test('dispatcher lists saved sessions newest first by startedAt', () => {
       { type: 42, label: null, detail: undefined, timestamp: '' },
     ],
     stats: {},
-  }));
+  })}`);
   fs.mkdirSync(path.join(sessionsDir, 'folder.json'));
   const malformedSessionPath = path.join(sessionsDir, 'bad-json.json');
   fs.writeFileSync(malformedSessionPath, '{ bad json');
@@ -3406,7 +3409,7 @@ test('dispatcher lists saved sessions newest first by startedAt', () => {
 
 test('session store normalizes aggregate stats rows for rendering', () => {
   const statsPath = path.join(process.env.KRONOS_DIR, 'stats.json');
-  fs.writeFileSync(statsPath, JSON.stringify({
+  fs.writeFileSync(statsPath, `\ufeff${JSON.stringify({
     sessions: [
       null,
       'bad',
@@ -3427,7 +3430,7 @@ test('session store normalizes aggregate stats rows for rendering', () => {
       { id: 42, project: null, skill: '', ticket: undefined, startedAt: '', toolCalls: Infinity, verdict: 12 },
     ],
     lastUpdated: 42,
-  }));
+  })}`);
 
   assert.deepEqual(sessionStore.getAggregateStats(), {
     sessions: [
@@ -4457,7 +4460,7 @@ test('integration manifest reports missing, valid, and malformed manifests', () 
   assert.ok(missing.warnings.some(w => w.includes('not found')));
 
   const manifestPath = path.join(process.env.KRONOS_DIR, 'manifest.json');
-  fs.writeFileSync(manifestPath, JSON.stringify({
+  fs.writeFileSync(manifestPath, `\ufeff${JSON.stringify({
     version: '1.0.0',
     scripts: {
       'kronos_state.py': { version: '1.0.0', required: true },
@@ -4474,7 +4477,7 @@ test('integration manifest reports missing, valid, and malformed manifests', () 
     providers: {
       gitlab: { enabled: true, baseUrl: 'https://gitlab.example' },
     },
-  }, null, 2));
+  }, null, 2)}`);
   const valid = integrationManifest.readIntegrationManifest(manifestPath);
   assert.equal(valid.present, true);
   assert.equal(valid.valid, true);

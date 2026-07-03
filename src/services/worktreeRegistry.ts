@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { KRONOS_DIR } from './stateStore';
 import { unknownErrorMessage } from './errorUtils';
+import { readJsonFile } from './jsonFiles';
 
 export const ACTIVE_WORKTREES_FILE = path.join(KRONOS_DIR, 'active-worktrees.json');
 
@@ -20,7 +21,7 @@ export interface ActiveWorktreeRegistry {
 export function loadActiveWorktreeRegistry(filePath = ACTIVE_WORKTREES_FILE): ActiveWorktreeRegistry {
   try {
     if (fs.existsSync(filePath)) {
-      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      const parsed = readJsonFile(filePath);
       if (!Array.isArray(parsed)) {
         return { entries: [], issue: 'active-worktrees.json must be an array.' };
       }

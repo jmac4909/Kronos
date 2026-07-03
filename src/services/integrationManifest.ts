@@ -5,6 +5,7 @@ import { KRONOS_DIR } from './stateStore';
 import { RequiredScriptName, ScriptHealth, requiredScripts } from './scriptClient';
 import { safePromptFileName } from './fileNames';
 import { unknownErrorMessage } from './errorUtils';
+import { readJsonFile } from './jsonFiles';
 
 export const INTEGRATION_MANIFEST_FILE = path.join(KRONOS_DIR, 'manifest.json');
 
@@ -73,7 +74,7 @@ export function readIntegrationManifest(filePath = INTEGRATION_MANIFEST_FILE): I
   }
 
   try {
-    const manifest = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as IntegrationManifest;
+    const manifest = readJsonFile(filePath) as IntegrationManifest;
     const status = validateIntegrationManifest(manifest);
     return { present: true, valid: status.errors.length === 0, path: filePath, manifest, ...status };
   } catch (e: unknown) {

@@ -23,6 +23,7 @@ import { isActiveRun } from '../services/runStatus';
 import { runProgressSummary } from '../services/runProgress';
 import { runAttentionDetail } from '../services/runAttention';
 import { sortedRunCenterRuns } from '../services/runCenterSort';
+import { readJsonFile } from '../services/jsonFiles';
 export { getAggregateStats, listSavedSessions, listSessionStoreIssues } from '../services/sessionStore';
 
 const CLAUDE_PATH = process.env.CLAUDE_PATH || 'claude';
@@ -149,7 +150,9 @@ function configuredStateBaseBranch(projectPath: string): { branch?: string; warn
 function configuredProjectJsonBaseBranch(projConfig: string): { branch?: string; warning?: string } {
   if (!fs.existsSync(projConfig)) { return {}; }
   try {
-    const cfg = JSON.parse(fs.readFileSync(projConfig, 'utf-8'));
+    const parsed = readJsonFile(projConfig);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) { return {}; }
+    const cfg = parsed as Record<string, unknown>;
     const configured = cfg?.base_branch || cfg?.default_branch;
     if (typeof configured !== 'string' || !configured.trim()) { return {}; }
     const branch = sanitizeBranch(configured);

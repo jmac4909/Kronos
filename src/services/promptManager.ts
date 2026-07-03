@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { safeFileStem, safePromptFileName } from './fileNames';
 import { KRONOS_DIR } from './stateStore';
 import { unknownErrorMessage } from './errorUtils';
+import { readJsonFile } from './jsonFiles';
 
 const GLOBAL_PROMPTS_DIR = path.join(KRONOS_DIR, 'prompts');
 export const PROMPT_HISTORY_DIR = path.join(KRONOS_DIR, 'prompt-history');
@@ -369,7 +370,7 @@ function promptSnapshotPath(snapshotId: string): string {
 
 function readPromptSnapshot(filePath: string): PromptHistorySnapshot | null {
   try {
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as PromptHistorySnapshot;
+    const raw = readJsonFile(filePath) as PromptHistorySnapshot;
     if (!raw || typeof raw !== 'object' || !Array.isArray(raw.templates)) { return null; }
     return raw;
   } catch {
