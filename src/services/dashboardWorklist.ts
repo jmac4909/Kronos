@@ -41,14 +41,12 @@ export function buildDashboardWorklist(input: DashboardWorklistInput, limit = 5)
       kind: 'needs_human',
       title: 'Needs Human',
       emptyText: 'No human decisions queued.',
-      items: input.humanReviewInbox.items.slice(0, limit).map(item => ({
+      items: input.humanReviewInbox.items.slice(0, limit).map(item => dashboardWorklistItem({
         id: item.id,
         title: item.title,
         detail: item.detail,
         severity: item.severity === 'critical' ? 'critical' : item.severity === 'warning' ? 'warning' : 'info',
-        ticketKey: item.ticketKey,
-        runId: item.runId,
-      })),
+      }, { ticketKey: item.ticketKey, runId: item.runId })),
     },
     {
       kind: 'active_runs',
@@ -59,15 +57,12 @@ export function buildDashboardWorklist(input: DashboardWorklistInput, limit = 5)
         .map(run => {
           const status = runString(run, 'status') || 'unknown';
           const ticketKey = runString(run, 'ticket');
-          return {
+          return dashboardWorklistItem({
             id: `run:${runId(run)}`,
             title: `${runString(run, 'project') || 'Project'} ${runString(run, 'skill') || 'run'}`,
             detail: `${status}${ticketKey ? ` for ${ticketKey}` : ''}`,
             severity: status === 'paused' ? 'warning' : 'info',
-            ticketKey: ticketKey || undefined,
-            runId: runId(run),
-            timestamp: runString(run, 'startedAt') || undefined,
-          };
+          }, { ticketKey, runId: runId(run), timestamp: runString(run, 'startedAt') });
         }),
     },
     {
@@ -95,15 +90,12 @@ export function buildDashboardWorklist(input: DashboardWorklistInput, limit = 5)
         .map(run => {
           const status = runString(run, 'status') || 'completed';
           const ticketKey = runString(run, 'ticket');
-          return {
+          return dashboardWorklistItem({
             id: `completed:${runId(run)}`,
             title: `${runString(run, 'project') || 'Project'} ${runString(run, 'skill') || 'run'}`,
             detail: `${status}${ticketKey ? ` for ${ticketKey}` : ''}${evidenceStatusForRun(input.evidenceGates, ticketKey)}`,
             severity: status === 'waiting_for_review' ? 'info' : 'ok',
-            ticketKey: ticketKey || undefined,
-            runId: runId(run),
-            timestamp: runString(run, 'endedAt') || undefined,
-          };
+          }, { ticketKey, runId: runId(run), timestamp: runString(run, 'endedAt') });
         }),
     },
     {
@@ -119,6 +111,17 @@ export function buildDashboardWorklist(input: DashboardWorklistInput, limit = 5)
       })),
     },
   ];
+}
+
+function dashboardWorklistItem(
+  base: Omit<DashboardWorklistItem, 'ticketKey' | 'runId' | 'timestamp'>,
+  refs: { ticketKey?: string | undefined; runId?: string | undefined; timestamp?: string | undefined } = {},
+): DashboardWorklistItem {
+  const item: DashboardWorklistItem = { ...base };
+  if (refs.ticketKey) { item.ticketKey = refs.ticketKey; }
+  if (refs.runId) { item.runId = refs.runId; }
+  if (refs.timestamp) { item.timestamp = refs.timestamp; }
+  return item;
 }
 
 function sortRuns(runs: DashboardRunRecord[], timestampField: 'startedAt' | 'endedAt'): DashboardRunRecord[] {

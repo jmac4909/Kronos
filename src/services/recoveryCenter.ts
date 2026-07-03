@@ -184,7 +184,7 @@ function recoveryItemForOrphanMergeRequest(ticketKey: string, ticket: RecoveryTi
   if (ticket.source !== 'adhoc' || ticket.mr?.state !== 'opened') { return null; }
   const iid = ticket.mr.iid ? `!${ticket.mr.iid}` : 'unknown MR';
   const status = ticket.mr.review_status ? ticket.mr.review_status.replace(/_/g, ' ') : 'unknown review status';
-  return {
+  const item: RecoveryItem = {
     id: `mr:${ticketKey}:${ticket.mr.iid || 'unknown'}`,
     kind: 'merge_request',
     severity: 'warning',
@@ -193,8 +193,9 @@ function recoveryItemForOrphanMergeRequest(ticketKey: string, ticket: RecoveryTi
     action: 'linkMrToTicket',
     actionLabel: 'Link MR to Ticket',
     ticketKey,
-    mrUrl: ticket.mr.url,
   };
+  if (ticket.mr.url) { item.mrUrl = ticket.mr.url; }
+  return item;
 }
 
 function recoveryItemForRun(run: RecoveryRun, now: Date, staleRunMs: number): RecoveryItem | null {

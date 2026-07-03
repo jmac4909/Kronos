@@ -52,12 +52,7 @@ export function buildRecoveryHtml(inventory: RecoveryInventory, nonce?: string):
     <td>${escapeHtml(item.kind)}</td>
     <td>${escapeHtml(item.title)}</td>
     <td class="detail">${escapeHtml(item.detail)}</td>
-    <td class="action-cell">${actionButton('executeRecoveryItem', item.actionLabel || recoveryActionLabel(item.action), {
-      itemId: item.id,
-      ticket: item.ticketKey,
-      runId: item.runId,
-      primary: item.severity === 'critical',
-    })}</td>
+    <td class="action-cell">${actionButton('executeRecoveryItem', item.actionLabel || recoveryActionLabel(item.action), recoveryActionOptions(item))}</td>
   </tr>`).join('');
   const empty = inventory.items.length === 0 ? '<div class="empty">No active recovery items.</div>' : '';
 
@@ -74,6 +69,16 @@ export function buildRecoveryHtml(inventory: RecoveryInventory, nonce?: string):
   </div>
   ${empty || `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Severity</th><th>Kind</th><th>Item</th><th>Detail</th><th class="action-cell">Action</th></tr>${rows}</table></div>`}
 </div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+}
+
+function recoveryActionOptions(item: RecoveryItem): { itemId: string; ticket?: string; runId?: string; primary: boolean } {
+  const options: { itemId: string; ticket?: string; runId?: string; primary: boolean } = {
+    itemId: item.id,
+    primary: item.severity === 'critical',
+  };
+  if (item.ticketKey) { options.ticket = item.ticketKey; }
+  if (item.runId) { options.runId = item.runId; }
+  return options;
 }
 
 function recoveryActionLabel(action: RecoveryItem['action']): string {

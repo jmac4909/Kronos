@@ -45,10 +45,9 @@ export function assessSafetyGate(plan: SafetyPlan): SafetyAssessment {
   const requiresConfirmation = risks.some(risk => risk !== 'read-only');
   const modal = ['branch-switch', 'destructive', 'external-publish'].includes(highestRisk);
   const confirmationLabel = plan.confirmationLabel || defaultConfirmationLabel(highestRisk);
-  return {
+  const assessment: SafetyAssessment = {
     command: plan.command,
     title: plan.title,
-    target: plan.target,
     risks,
     highestRisk,
     requiresConfirmation,
@@ -56,6 +55,8 @@ export function assessSafetyGate(plan: SafetyPlan): SafetyAssessment {
     confirmationLabel,
     message: buildSafetyMessage(plan, risks, highestRisk),
   };
+  if (plan.target) { assessment.target = plan.target; }
+  return assessment;
 }
 
 function normalizeRisks(risks: SafetyRisk[]): SafetyRisk[] {

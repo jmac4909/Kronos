@@ -51,15 +51,13 @@ export function buildHumanReviewInbox(input: HumanReviewInboxInput): HumanReview
     const status = runString(run, 'status');
     if (status === 'needs_human' || status === 'failed' || status === 'cancelled') {
       const ticketKey = runString(run, 'ticket');
-      items.push({
+      items.push(humanReviewItem({
         id: `run:${runId(run)}`,
         kind: 'run',
         severity: status === 'needs_human' ? 'critical' : 'warning',
         title: `${runString(run, 'project') || 'Project'} ${runString(run, 'skill') || 'run'} needs review`,
         detail: runAttentionDetail(run),
-        ticketKey: ticketKey || undefined,
-        runId: runId(run),
-      });
+      }, { ticketKey, runId: runId(run) }));
     }
   }
 
@@ -86,14 +84,13 @@ export function buildHumanReviewInbox(input: HumanReviewInboxInput): HumanReview
 
   for (const result of input.worktreeReport?.results || []) {
     if (result.status !== 'blocked' && result.status !== 'error') { continue; }
-    items.push({
+    items.push(humanReviewItem({
       id: `worktree:${result.entry.worktreePath}`,
       kind: 'worktree',
       severity: result.status === 'error' ? 'critical' : 'warning',
       title: `${result.entry.ticket || 'Worktree'} needs cleanup review`,
       detail: result.reason,
-      ticketKey: result.entry.ticket || undefined,
-    });
+    }, { ticketKey: result.entry.ticket }));
   }
 
   for (const check of input.doctorChecks || []) {
@@ -132,6 +129,16 @@ export function buildHumanReviewInbox(input: HumanReviewInboxInput): HumanReview
 
 function ticketItem(ticketKey: string, kind: HumanReviewKind, severity: HumanReviewSeverity, title: string, detail: string): HumanReviewItem {
   return { id: `${kind}:${ticketKey}:${title}`, kind, severity, title, detail, ticketKey };
+}
+
+function humanReviewItem(
+  base: Omit<HumanReviewItem, 'ticketKey' | 'runId'>,
+  refs: { ticketKey?: string | undefined; runId?: string | undefined } = {},
+): HumanReviewItem {
+  const item: HumanReviewItem = { ...base };
+  if (refs.ticketKey) { item.ticketKey = refs.ticketKey; }
+  if (refs.runId) { item.runId = refs.runId; }
+  return item;
 }
 
 function duplicateQueuedTickets(queue?: QueueState | null): Map<string, number> {
