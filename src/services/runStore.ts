@@ -2,12 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { safeFileStem } from './fileNames';
 import { KRONOS_DIR } from './stateStore';
-import { unknownErrorMessage } from './errorUtils';
+import { unknownErrorCode, unknownErrorMessage } from './errorUtils';
 import { effectiveRunStatus, isActiveRunStatus } from './runStatus';
 import { readJsonFile } from './jsonFiles';
 
 export const RUNS_DIR = path.join(KRONOS_DIR, 'runs');
 export const ARCHIVED_RUNS_DIR = path.join(RUNS_DIR, 'archive');
+const PROCESS_BACKED_ACTIVE_STATUSES = new Set(['preflight', 'running']);
 
 export interface RunRecord {
   id: string;
@@ -208,14 +209,20 @@ function readRunFileResult(filePath: string, scope: RunStoreIssue['scope']): { r
 function normalizeTerminalActiveRun(run: RunRecord): RunRecord {
   const status = typeof run.status === 'string' ? run.status : '';
   const effectiveStatus = effectiveRunStatus(run);
+  const deadProcessStatus = effectiveStatus === status && isActiveRunStatus(status)
+    ? terminalRunOutcomeFromDeadProcess(run, status)
+    : undefined;
   const repairedStatus = effectiveStatus === status && isActiveRunStatus(status)
-    ? terminalRunOutcomeFromActiveLog(run)
+    ? terminalRunOutcomeFromActiveLog(run) || deadProcessStatus
     : undefined;
   const nextStatus = repairedStatus || effectiveStatus;
   if (!status || !isActiveRunStatus(status) || !nextStatus || nextStatus === status) {
     return run;
   }
   const normalized: RunRecord = { ...run, status: nextStatus };
+  if (deadProcessStatus && !normalized.endedAt) {
+    normalized.endedAt = new Date().toISOString();
+  }
   if (nextStatus === 'needs_human' && !normalized.failureReason) {
     normalized.failureReason = `Run record had terminal metadata while persisted status was ${status}; inspect the run before retrying.`;
   }
@@ -223,7 +230,9 @@ function normalizeTerminalActiveRun(run: RunRecord): RunRecord {
     const endedAt = logModifiedAt(run.logPath);
     if (endedAt) { normalized.endedAt = endedAt; }
   }
-  if (repairedStatus === 'failed' && !normalized.failureReason) {
+  if (deadProcessStatus && !normalized.failureReason) {
+    normalized.failureReason = `Run process ${run.processPid} is no longer running while persisted status was ${status}.`;
+  } else if (repairedStatus === 'failed' && !normalized.failureReason) {
     normalized.failureReason = `Run log indicates the session exited unsuccessfully while persisted status was ${status}.`;
   } else if (repairedStatus === 'cancelled' && !normalized.failureReason) {
     normalized.failureReason = `Run log indicates the session was cancelled while persisted status was ${status}.`;
@@ -231,7 +240,24 @@ function normalizeTerminalActiveRun(run: RunRecord): RunRecord {
   if ((nextStatus === 'failed' || nextStatus === 'cancelled') && !normalized.failureKind) {
     normalized.failureKind = nextStatus === 'cancelled' ? 'cancelled' : 'unknown';
   }
+  if (deadProcessStatus) {
+    const timestamp = normalized.endedAt || new Date().toISOString();
+    normalized.events = Array.isArray(normalized.events) ? [...normalized.events] : [];
+    normalized.events.push({
+      type: 'error',
+      label: 'Run process no longer exists',
+      detail: `PID ${run.processPid} disappeared before Kronos recorded a terminal event.`,
+      timestamp,
+    });
+  }
   return normalized;
+}
+
+function terminalRunOutcomeFromDeadProcess(run: RunRecord, status: string): string | undefined {
+  if (!PROCESS_BACKED_ACTIVE_STATUSES.has(status)) { return undefined; }
+  const pid = numericPid(run.processPid);
+  if (pid === undefined) { return undefined; }
+  return processIsGone(pid) ? 'failed' : undefined;
 }
 
 function terminalRunOutcomeFromActiveLog(run: RunRecord): string | undefined {
@@ -294,6 +320,20 @@ function readLogTail(logPath: string, maxBytes = 64 * 1024): string {
 function logModifiedAt(logPath: unknown): string | undefined {
   if (typeof logPath !== 'string' || !isReadableActiveRunLog(logPath)) { return undefined; }
   return fs.statSync(logPath).mtime.toISOString();
+}
+
+function numericPid(value: unknown): number | undefined {
+  const pid = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN;
+  return Number.isInteger(pid) && pid > 0 ? pid : undefined;
+}
+
+function processIsGone(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (e: unknown) {
+    return unknownErrorCode(e) === 'ESRCH';
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
