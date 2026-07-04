@@ -7,7 +7,7 @@ import { effectiveRunStatus, isActiveRunStatus, isStaleActiveRun } from './runSt
 import { readJsonFile } from './jsonFiles';
 
 export const RUNS_DIR = path.join(KRONOS_DIR, 'runs');
-export const ARCHIVED_RUNS_DIR = path.join(RUNS_DIR, 'archive');
+const ARCHIVED_RUNS_DIR = path.join(RUNS_DIR, 'archive');
 const PROCESS_BACKED_ACTIVE_STATUSES = new Set(['preflight', 'running']);
 
 export interface RunRecord {
@@ -63,7 +63,7 @@ export function runRecordPath(runId: string): string {
   return path.join(RUNS_DIR, `${safeRunId(runId)}.json`);
 }
 
-export function archivedRunRecordPath(runId: string): string {
+function archivedRunRecordPath(runId: string): string {
   return path.join(ARCHIVED_RUNS_DIR, `${safeRunId(runId)}.json`);
 }
 

@@ -33,6 +33,10 @@ process.once('exit', cleanupTrackedTempDirs);
 process.env.KRONOS_DIR = makeTempDir('kronos-home-');
 process.env.KRONOS_SCRIPTS_DIR = makeTempDir('kronos-scripts-');
 
+function kronosTestPath(...segments) {
+  return path.join(process.env.KRONOS_DIR, ...segments);
+}
+
 const ACTION_SCRIPT_URI = 'vscode-resource://kronos/action-panel.js';
 
 function readSourceFixture(...segments) {
@@ -415,7 +419,7 @@ test('prompt manager snapshots prompt history and diffs metadata changes', () =>
     promptManager.listPromptTemplates(project),
     { scope: 'test-history', projectPath: project, now: new Date('2026-07-01T11:00:00.000Z') }
   );
-  const secondPath = path.join(promptManager.PROMPT_HISTORY_DIR, `${second.id}.json`);
+  const secondPath = path.join(kronosTestPath('prompt-history'), `${second.id}.json`);
   fs.writeFileSync(secondPath, `\ufeff${fs.readFileSync(secondPath, 'utf8')}`, 'utf8');
 
   const diff = promptManager.diffPromptHistorySnapshots(second, first);
@@ -443,7 +447,7 @@ test('prompt manager keeps long prompt history scopes in distinct snapshot files
     projectPath: project,
     now: new Date('2026-07-01T12:31:00.000Z'),
   });
-  const files = fs.readdirSync(promptManager.PROMPT_HISTORY_DIR).filter(file => file.endsWith('.json'));
+  const files = fs.readdirSync(kronosTestPath('prompt-history')).filter(file => file.endsWith('.json'));
 
   assert.notEqual(first.id, second.id);
   assert.ok(files.some(file => file.includes(first.id.substring(0, 80))));
@@ -4309,16 +4313,22 @@ test('run store limit selects newest records before repairing active runs', () =
 });
 
 test('run store archive does not overwrite existing archived records or artifacts', () => {
-  fs.mkdirSync(runStore.ARCHIVED_RUNS_DIR, { recursive: true });
-  const existingRunPath = runStore.archivedRunRecordPath('run-collision');
-  const existingLogPath = path.join(runStore.ARCHIVED_RUNS_DIR, 'shared.log');
-  const existingPromptPath = path.join(runStore.ARCHIVED_RUNS_DIR, 'shared.prompt.txt');
-  fs.writeFileSync(existingRunPath, JSON.stringify({ id: 'run-collision', archivedAt: 'old' }, null, 2));
-  fs.writeFileSync(existingLogPath, 'old log\n');
-  fs.writeFileSync(existingPromptPath, 'old prompt\n');
-
   const logPath = path.join(runStore.RUNS_DIR, 'shared.log');
   const promptPath = path.join(runStore.RUNS_DIR, 'shared.prompt.txt');
+  const existingRun = {
+    id: 'run-collision',
+    project: 'app',
+    skill: 'implement',
+    ticket: 'K-COLLIDE',
+    status: 'failed',
+    logPath,
+    promptPath,
+  };
+  runStore.writeRunRecord(existingRun);
+  runStore.appendRunLog(logPath, 'old log\n');
+  fs.writeFileSync(promptPath, 'old prompt\n');
+  const existingArchived = runStore.archiveRun(existingRun.id);
+
   const run = {
     id: 'run-collision',
     project: 'app',
@@ -4334,12 +4344,11 @@ test('run store archive does not overwrite existing archived records or artifact
 
   const archived = runStore.archiveRun(run.id);
 
-  assert.notEqual(archived.runPath, existingRunPath);
-  assert.notEqual(archived.logPath, existingLogPath);
-  assert.notEqual(archived.promptPath, existingPromptPath);
-  assert.equal(fs.readFileSync(existingRunPath, 'utf8'), JSON.stringify({ id: 'run-collision', archivedAt: 'old' }, null, 2));
-  assert.equal(fs.readFileSync(existingLogPath, 'utf8'), 'old log\n');
-  assert.equal(fs.readFileSync(existingPromptPath, 'utf8'), 'old prompt\n');
+  assert.notEqual(archived.runPath, existingArchived.runPath);
+  assert.notEqual(archived.logPath, existingArchived.logPath);
+  assert.notEqual(archived.promptPath, existingArchived.promptPath);
+  assert.equal(fs.readFileSync(existingArchived.logPath, 'utf8'), 'old log\n');
+  assert.equal(fs.readFileSync(existingArchived.promptPath, 'utf8'), 'old prompt\n');
   assert.equal(fs.readFileSync(archived.logPath, 'utf8'), 'new log\n');
   assert.equal(fs.readFileSync(archived.promptPath, 'utf8'), 'new prompt\n');
   assert.ok(archived.warnings.some(warning => warning.includes('already exists')));
@@ -4391,19 +4400,29 @@ test('run store archive refuses to move artifacts outside runs directory', () =>
 test('run store refuses to append logs outside active runs directory', () => {
   const externalDir = makeTempDir('kronos-external-log-');
   const externalLog = path.join(externalDir, 'run.log');
-  const archivedLog = path.join(runStore.ARCHIVED_RUNS_DIR, 'old.log');
-  fs.mkdirSync(runStore.ARCHIVED_RUNS_DIR, { recursive: true });
+  const activeLog = path.join(runStore.RUNS_DIR, 'archived.log');
+  runStore.writeRunRecord({
+    id: 'run-archived-log',
+    project: 'app',
+    skill: 'implement',
+    ticket: 'K-ARCHIVE-LOG',
+    status: 'failed',
+    logPath: activeLog,
+  });
+  runStore.appendRunLog(activeLog, 'archived log\n');
+  const archived = runStore.archiveRun('run-archived-log');
+  assert.ok(archived.logPath);
 
   assert.throws(
     () => runStore.appendRunLog(externalLog, 'bad\n'),
     /outside active runs directory/,
   );
   assert.throws(
-    () => runStore.appendRunLog(archivedLog, 'bad\n'),
+    () => runStore.appendRunLog(archived.logPath, 'bad\n'),
     /outside active runs directory/,
   );
   assert.equal(fs.existsSync(externalLog), false);
-  assert.equal(fs.existsSync(archivedLog), false);
+  assert.equal(fs.readFileSync(archived.logPath, 'utf8'), 'archived log\n');
 });
 
 test('run store marks runs needs-human with recovery metadata', () => {

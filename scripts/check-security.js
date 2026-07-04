@@ -1604,7 +1604,8 @@ for (const marker of [
   'catch (e: unknown)',
   "unknownErrorMessage(e, 'Unable to parse JSON.')",
   'writeTextAtomic(promptPath, prompt)',
-  'ARCHIVED_RUNS_DIR',
+  'const ARCHIVED_RUNS_DIR',
+  'function archivedRunRecordPath',
   "safeFileStem(runId, { fallback: 'run' })",
   'Refusing to append run log outside active runs directory',
   'function moveRunArtifactIfExists',
@@ -1628,6 +1629,14 @@ for (const marker of [
 ]) {
   if (!runStore.includes(marker)) {
     fail(`Missing run store marker: ${marker}`);
+  }
+}
+for (const marker of [
+  'export const ARCHIVED_RUNS_DIR',
+  'export function archivedRunRecordPath',
+]) {
+  if (runStore.includes(marker)) {
+    fail(`Run store archive path helper should stay private: ${marker}`);
   }
 }
 if (runStore.includes('function normalizeRunFile')) {
@@ -3356,7 +3365,7 @@ for (const marker of [
   'export interface PromptSmokeTest',
   'export interface PromptSmokeResult',
   'export interface PromptHistorySnapshot',
-  'PROMPT_HISTORY_DIR',
+  'const PROMPT_HISTORY_DIR',
   'buildDefaultPromptSmokeTests',
   'runPromptSmokeTests',
   "import { unknownErrorMessage } from './errorUtils'",
@@ -3372,6 +3381,9 @@ for (const marker of [
   if (!promptManager.includes(marker)) {
     fail(`Missing prompt manager marker: ${marker}`);
   }
+}
+if (promptManager.includes('export const PROMPT_HISTORY_DIR')) {
+  fail('Prompt history directory should stay private to promptManager.');
 }
 
 for (const marker of [

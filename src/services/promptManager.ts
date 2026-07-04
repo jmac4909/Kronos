@@ -7,7 +7,7 @@ import { unknownErrorMessage } from './errorUtils';
 import { readJsonFile } from './jsonFiles';
 
 const GLOBAL_PROMPTS_DIR = path.join(KRONOS_DIR, 'prompts');
-export const PROMPT_HISTORY_DIR = path.join(KRONOS_DIR, 'prompt-history');
+const PROMPT_HISTORY_DIR = path.join(KRONOS_DIR, 'prompt-history');
 
 export interface PromptTemplateInfo {
   name: string;
