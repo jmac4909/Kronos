@@ -1,8 +1,11 @@
+import { toValidDate } from './dateValues';
+
 export function formatRelativeTime(isoDate: string, now: Date | number = Date.now()): string {
-  const timestamp = new Date(isoDate).getTime();
-  if (!Number.isFinite(timestamp)) {
+  const date = toValidDate(isoDate);
+  if (!date) {
     return isoDate;
   }
+  const timestamp = date.getTime();
 
   const nowTimestamp = typeof now === 'number' ? now : now.getTime();
   if (!Number.isFinite(nowTimestamp)) {
