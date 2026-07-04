@@ -7,7 +7,7 @@ export type SafetyRisk =
   | 'external-publish';
 
 export interface SafetyPlan {
-  command: string;
+  operationId: string;
   title: string;
   target?: string;
   risks: SafetyRisk[];
@@ -17,7 +17,7 @@ export interface SafetyPlan {
 }
 
 export interface SafetyAssessment {
-  command: string;
+  operationId: string;
   title: string;
   target?: string;
   risks: SafetyRisk[];
@@ -56,7 +56,7 @@ export function assessSafetyGate(plan: SafetyPlan): SafetyAssessment {
   const modal = ['branch-switch', 'destructive', 'external-publish'].includes(highestRisk);
   const confirmationLabel = plan.confirmationLabel || defaultConfirmationLabel(highestRisk);
   const assessment: SafetyAssessment = {
-    command: plan.command,
+    operationId: plan.operationId,
     title: plan.title,
     risks,
     highestRisk,

@@ -88,7 +88,7 @@ export function buildNextActionStartDecision(plan: PlannedAction, context: NextA
     commandId: context.commandId,
     refreshProjects,
     safetyPlan: {
-      command: context.commandId,
+      operationId: context.commandId,
       title: context.commandId === 'kronos.refresh'
         ? 'Run Next Best Refresh'
         : `Start Next Best Action: ${actionToLabel(plan.action)}`,

@@ -1739,7 +1739,7 @@ test('next action context explains command, risk, preflight, and blockers', () =
   const queuedStart = nextActionContext.buildNextActionStartDecision(queuedPlan, queuedContext);
   assert.equal(queuedStart.allowed, true);
   assert.equal(queuedStart.commandId, 'kronos.startQueueItem');
-  assert.equal(queuedStart.safetyPlan.command, 'kronos.startQueueItem');
+  assert.equal(queuedStart.safetyPlan.operationId, 'kronos.startQueueItem');
   assert.equal(queuedStart.safetyPlan.confirmationLabel, 'Start');
   assert.ok(queuedStart.safetyPlan.changes.some(item => item.includes('Dispatch Claude /implement')));
   assert.ok(queuedStart.safetyPlan.warnings.some(item => item.includes('Claude auth preflight')));
@@ -7030,7 +7030,7 @@ test('profile manager resolves built-in profiles and base branches safely', () =
 
 test('safety gate classifies risk, confirmation, and operator prompt text', () => {
   const readOnly = safetyGate.assessSafetyGate({
-    command: 'kronos.openDashboard',
+    operationId: 'kronos.openDashboard',
     title: 'Open Dashboard',
     risks: ['read-only'],
     changes: ['Open a read-only panel.'],
@@ -7040,9 +7040,10 @@ test('safety gate classifies risk, confirmation, and operator prompt text', () =
   assert.equal(readOnly.workspaceTrustSummary, 'change Kronos state');
   assert.equal(readOnly.modal, false);
   assert.equal(readOnly.highestRisk, 'read-only');
+  assert.equal(readOnly.operationId, 'kronos.openDashboard');
 
   const destructive = safetyGate.assessSafetyGate({
-    command: 'kronos.cleanupWorktrees',
+    operationId: 'kronos.cleanupWorktrees',
     title: 'Cleanup Stale Worktrees',
     target: '2 clean / 1 blocked',
     risks: ['state-write', 'destructive', 'repo-write'],
@@ -7054,6 +7055,7 @@ test('safety gate classifies risk, confirmation, and operator prompt text', () =
   assert.equal(destructive.requiresWorkspaceTrust, true);
   assert.equal(destructive.modal, true);
   assert.equal(destructive.highestRisk, 'destructive');
+  assert.equal(destructive.operationId, 'kronos.cleanupWorktrees');
   assert.deepEqual(destructive.risks, ['destructive', 'repo-write', 'state-write']);
   assert.equal(destructive.confirmationLabel, 'Remove Clean Worktrees');
   assert.equal(destructive.workspaceTrustSummary, 'remove files or clean managed worktrees');
@@ -8551,7 +8553,7 @@ test('extension declares limited Restricted Mode support and blocks trust-sensit
     '!assessment.requiresWorkspaceTrust || vscode.workspace.isTrusted',
     'const hasWorkspaceTrust = await confirmWorkspaceTrustForAssessment(assessment);',
     'const canDispatch = await confirmWorkspaceTrustForAssessment(assessSafetyGate({',
-    "command: 'kronos.startClaudeDispatch'",
+    "operationId: 'startClaudeDispatch'",
     'title: `Start Claude /${skill}`',
     "risks: ['repo-write']",
     'if (!canDispatch) { return false; }',

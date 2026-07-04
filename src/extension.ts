@@ -289,7 +289,7 @@ async function startClaudeDispatch(
   customPrompt?: string
 ): Promise<boolean> {
   const canDispatch = await confirmWorkspaceTrustForAssessment(assessSafetyGate({
-    command: 'kronos.startClaudeDispatch',
+    operationId: 'startClaudeDispatch',
     title: `Start Claude /${skill}`,
     target: ticket ? `${ticket} / ${projectPath}` : projectPath,
     risks: ['repo-write'],
@@ -2399,7 +2399,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (!selected || selected.length === 0) { return; }
 
       const canPublish = await confirmSafetyGate({
-        command: 'kronos.publishEvidence',
+        operationId: 'kronos.publishEvidence',
         title: 'Publish Evidence Comment',
         target: ticketKey,
         risks: ['external-publish'],
@@ -2449,7 +2449,7 @@ export function activate(context: vscode.ExtensionContext) {
       const name = resolveProjectName(state, item);
       if (!name) { return; }
       const canRemove = await confirmSafetyGate({
-        command: 'kronos.removeProject',
+        operationId: 'kronos.removeProject',
         title: 'Remove Project',
         target: name,
         risks: ['state-write'],
@@ -2904,7 +2904,7 @@ export function activate(context: vscode.ExtensionContext) {
       ].filter(Boolean).join('\n\n');
 
       const safetyPlan: SafetyPlan = {
-        command: 'kronos.fixSonarIssues',
+        operationId: 'kronos.fixSonarIssues',
         title: 'Fix SonarQube Issues',
         target: `${projectName}${sourceBranch ? ` / ${sourceBranch}` : ''}`,
         risks: ['repo-write', 'external-publish'],
@@ -2946,7 +2946,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const branchList = tickets.map(t => t.key).join(', ');
       const canFixAll = await confirmSafetyGate({
-        command: 'kronos.sonarCombined',
+        operationId: 'kronos.sonarCombined',
         title: 'Fix SonarQube on Review Branches',
         target: `${projectName}: ${branchList}`,
         risks: ['repo-write', 'external-publish'],
@@ -3016,7 +3016,7 @@ export function activate(context: vscode.ExtensionContext) {
       const findingDesc = description || 'Fix all CRITICAL and FAIL findings from the last develop verification. Read the session history or git log to find what was flagged.';
 
       const safetyPlan: SafetyPlan = {
-        command: 'kronos.fixFinding',
+        operationId: 'kronos.fixFinding',
         title: 'Fix Verification Finding',
         target: projectName,
         risks: ['repo-write'],
@@ -3068,7 +3068,7 @@ export function activate(context: vscode.ExtensionContext) {
       const ticketList = tickets.join(', ');
 
       const canVerify = await confirmSafetyGate({
-        command: 'kronos.verifyDevelop',
+        operationId: 'kronos.verifyDevelop',
         title: 'Verify Develop',
         target: `${projectName}: ${ticketList}`,
         risks: ['repo-write'],
@@ -3116,7 +3116,7 @@ export function activate(context: vscode.ExtensionContext) {
       const ticketList = tickets.map(t => t.key).join(', ');
 
       const canVerify = await confirmSafetyGate({
-        command: 'kronos.verifyTest',
+        operationId: 'kronos.verifyTest',
         title: 'Verify TEST',
         target: `${projectName}: ${ticketList}`,
         risks: ['repo-write'],
@@ -3168,7 +3168,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const branchOrder = branchLookups.map((b, i) => `${i + 1}. ${b.key} (branch: ${b.branch})`).join('\n');
       const canResolve = await confirmSafetyGate({
-        command: 'kronos.resolveConflicts',
+        operationId: 'kronos.resolveConflicts',
         title: 'Resolve Merge Conflicts',
         target: `${projectName}: ${mergeOrder.join(', ')}`,
         risks: ['branch-switch', 'repo-write'],
@@ -3204,7 +3204,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const branchList = branchPlans.map(plan => `${plan.ticketKey} (${plan.branch}, MR ${plan.mrIid ? `!${plan.mrIid}` : '?'})`).join(', ');
       const canVerify = await confirmSafetyGate({
-        command: 'kronos.verifyCombined',
+        operationId: 'kronos.verifyCombined',
         title: 'Verify Combined MRs',
         target: `${projectName}: ${branchList}`,
         risks: ['branch-switch', 'repo-write'],
@@ -3260,7 +3260,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const branch = ticket?.mr ? `${ticketKey}` : undefined;
       const canContinue = await confirmSafetyGate({
-        command: 'kronos.rejectReview',
+        operationId: 'kronos.rejectReview',
         title: 'Send Review Back to Agent',
         target: `${ticketKey} / ${projectName}`,
         risks: ['repo-write', 'external-publish'],
@@ -3342,7 +3342,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       const canLink = await confirmSafetyGate({
-        command: 'kronos.linkMrToTicket',
+        operationId: 'kronos.linkMrToTicket',
         title: 'Link Merge Request to Ticket',
         target: `${orphanKey} -> ${ticketKey}`,
         risks: ['state-write'],
@@ -3415,7 +3415,7 @@ export function activate(context: vscode.ExtensionContext) {
       const projectName = stringFromUnknown(recordFromUnknown(item)['linkedProject']);
       if (ticketKey && projectName) {
         const canUnlink = await confirmSafetyGate({
-          command: 'kronos.unlinkTicket',
+          operationId: 'kronos.unlinkTicket',
           title: 'Unlink Ticket from Project',
           target: `${ticketKey} / ${projectName}`,
           risks: ['state-write'],
@@ -3769,7 +3769,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       const canClean = await confirmSafetyGate({
-        command: 'kronos.cleanupWorktrees',
+        operationId: 'kronos.cleanupWorktrees',
         title: 'Cleanup Stale Worktrees',
         target: `${preview.removable} clean / ${preview.blocked} blocked`,
         risks: ['destructive'],
@@ -4006,7 +4006,7 @@ async function repairPromptPack(state: KronosState, extensionUri?: vscode.Uri): 
     return;
   }
   const canRepair = await confirmSafetyGate({
-    command: 'kronos.repairPromptPack',
+    operationId: 'kronos.repairPromptPack',
     title: 'Repair Prompt Pack',
     target: path.join(KRONOS_DIR, 'prompts'),
     risks: ['state-write'],
@@ -4264,7 +4264,7 @@ async function pickAndRestoreBackup(state: KronosState, backups = listBackups(),
   }
 
   const canRestore = await confirmSafetyGate({
-    command: 'kronos.restoreBackup',
+    operationId: 'restoreBackup',
     title: 'Restore Kronos Backup',
     target: picked.backup.targetName,
     risks: ['state-write'],
@@ -4958,7 +4958,7 @@ function openIntegrationManifestPanel(extensionUri?: vscode.Uri): void {
 
 async function snapshotIntegrationManifest(): Promise<void> {
   const canSnapshot = await confirmSafetyGate({
-    command: 'kronos.snapshotIntegrationManifest',
+    operationId: 'kronos.snapshotIntegrationManifest',
     title: 'Snapshot Integration Manifest',
     target: INTEGRATION_MANIFEST_FILE,
     risks: ['state-write'],
