@@ -831,11 +831,18 @@ async function executeRunCenterAction(state: KronosState, request: RunCenterActi
   if (!run) {
     vscode.window.showWarningMessage('Run record not found.');
     return;
-  } else if (request.command === 'openRunLog') {
+  }
+  await executeRunAction(state, run, request.command);
+}
+
+async function executeRunAction(state: KronosState, run: KronosRun, command: string): Promise<void> {
+  if (command === 'openRunLog') {
     await openRunArtifactFileIfExists(run.logPath, 'Run log not found.');
-  } else if (request.command === 'openRunPrompt') {
+  } else if (command === 'openRunPrompt') {
     await openRunArtifactFileIfExists(run.promptPath, 'Run prompt artifact not found.');
-  } else if (request.command === 'openRunWorkspace') {
+  } else if (command === 'openRunRecord') {
+    await openRunArtifactFileIfExists(runRecordPath(run.id), 'Run record not found.');
+  } else if (command === 'openRunWorkspace') {
     const cwd = run.worktreePath || run.cwd || run.projectPath;
     if (cwd && fs.existsSync(cwd)) {
       const terminal = vscode.window.createTerminal(kronosTerminalOptions({ name: `Kronos ${run.project || run.id}`, cwd }));
@@ -843,24 +850,43 @@ async function executeRunCenterAction(state: KronosState, request: RunCenterActi
     } else {
       vscode.window.showWarningMessage('Run workspace no longer exists.');
     }
-  } else if (request.command === 'openRunDiff') {
+  } else if (command === 'openRunDiff') {
     await openRunDiffArtifact(run);
-  } else if (request.command === 'markNeedsHuman') {
+  } else if (command === 'markNeedsHuman') {
     await markSelectedRunNeedsHuman(run);
-  } else if (request.command === 'pauseRun') {
+  } else if (command === 'pauseRun') {
     await pauseSelectedRun(run);
-  } else if (request.command === 'continueRun') {
+  } else if (command === 'continueRun') {
     await continueSelectedRun(run);
-  } else if (request.command === 'cancelRun') {
+  } else if (command === 'cancelRun') {
     await cancelSelectedRun(run);
-  } else if (request.command === 'resumeRun') {
+  } else if (command === 'resumeRun') {
     await resumeSelectedRun(state, run);
-  } else if (request.command === 'retryRun') {
+  } else if (command === 'retryRun') {
     await retryRunFromPrompt(state, run);
-  } else if (request.command === 'archiveRun') {
-    await archiveSelectedRun(request.runId);
+  } else if (command === 'archiveRun') {
+    await archiveSelectedRun(run.id);
   }
 }
+
+interface RunActionQuickPickItem extends vscode.QuickPickItem {
+  runCommand: string;
+}
+
+const RUN_ACTION_QUICK_PICK_ITEMS: RunActionQuickPickItem[] = [
+  { label: 'Open Log', runCommand: 'openRunLog' },
+  { label: 'Open Prompt', runCommand: 'openRunPrompt' },
+  { label: 'Open Run Record', runCommand: 'openRunRecord' },
+  { label: 'Open Workspace Terminal', runCommand: 'openRunWorkspace' },
+  { label: 'Open Workspace Diff', runCommand: 'openRunDiff' },
+  { label: 'Mark Needs Human', runCommand: 'markNeedsHuman' },
+  { label: 'Pause Run', runCommand: 'pauseRun' },
+  { label: 'Continue Run', runCommand: 'continueRun' },
+  { label: 'Cancel Run', runCommand: 'cancelRun' },
+  { label: 'Resume Run', runCommand: 'resumeRun' },
+  { label: 'Retry Saved Prompt', runCommand: 'retryRun' },
+  { label: 'Archive Run', runCommand: 'archiveRun' },
+];
 
 function openTicketExternalUrl(state: KronosState, ticketKey: string, kind: 'jira' | 'mr' | 'build'): void {
   const ticket = state.state?.tickets?.[ticketKey];
@@ -3218,43 +3244,12 @@ export function activate(context: vscode.ExtensionContext) {
       const run = resolveRunItem(item) || await pickRun(listRuns(), 'Select a Kronos run', 'No persisted Kronos runs yet.');
       if (!run) { return; }
 
-      const action = await vscode.window.showQuickPick(
-        ['Open Log', 'Open Prompt', 'Open Run Record', 'Open Workspace Terminal', 'Open Workspace Diff', 'Mark Needs Human', 'Pause Run', 'Continue Run', 'Cancel Run', 'Resume Run', 'Retry Saved Prompt', 'Archive Run'],
+      const action = await vscode.window.showQuickPick<RunActionQuickPickItem>(
+        RUN_ACTION_QUICK_PICK_ITEMS,
         { placeHolder: `Inspect ${run.project} - ${run.skill}${run.ticket ? ` ${run.ticket}` : ''}` }
       );
       if (!action) { return; }
-
-      if (action === 'Open Log') {
-        await openRunArtifactFileIfExists(run.logPath, 'Run log not found.');
-      } else if (action === 'Open Prompt') {
-        await openRunArtifactFileIfExists(run.promptPath, 'Run prompt artifact not found.');
-      } else if (action === 'Open Run Record') {
-        await openRunArtifactFileIfExists(runRecordPath(run.id), 'Run record not found.');
-      } else if (action === 'Open Workspace Terminal') {
-        const cwd = run.worktreePath || run.cwd || run.projectPath;
-        if (cwd && fs.existsSync(cwd)) {
-          const terminal = vscode.window.createTerminal(kronosTerminalOptions({ name: `Kronos ${run.project}`, cwd }));
-          terminal.show();
-        } else {
-          vscode.window.showWarningMessage('Run workspace no longer exists.');
-        }
-      } else if (action === 'Open Workspace Diff') {
-        await openRunDiffArtifact(run);
-      } else if (action === 'Mark Needs Human') {
-        await markSelectedRunNeedsHuman(run);
-      } else if (action === 'Pause Run') {
-        await pauseSelectedRun(run);
-      } else if (action === 'Continue Run') {
-        await continueSelectedRun(run);
-      } else if (action === 'Cancel Run') {
-        await cancelSelectedRun(run);
-      } else if (action === 'Resume Run') {
-        await resumeSelectedRun(state, run);
-      } else if (action === 'Retry Saved Prompt') {
-        await retryRunFromPrompt(state, run);
-      } else if (action === 'Archive Run') {
-        await archiveSelectedRun(run.id);
-      }
+      await executeRunAction(state, run, action.runCommand);
     }),
 
     vscode.commands.registerCommand('kronos.retryRun', async (item: unknown) => {
