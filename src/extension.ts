@@ -25,7 +25,7 @@ import {
   queueDispatchNoProjectPathMessage,
 } from './services/queueDispatchPlan';
 import { actionDisplayLabel as actionToLabel } from './services/actionCatalog';
-import { isCodeAction, isProofSensitiveAction } from './services/actionSemantics';
+import { isCodeAction } from './services/actionSemantics';
 import { toValidDate } from './services/dateValues';
 import { writeEvidenceExport } from './services/evidenceStore';
 import { evidenceAcceptanceCriteria, evidenceChecked, evidenceString } from './services/evidenceData';
@@ -49,7 +49,7 @@ import { buildRunCompletionEvidenceCheck, buildRunCompletionEvidenceText, evalua
 import { existingAcceptanceCriterion, extractAcceptanceCriteria } from './services/acceptanceCriteria';
 import type { ExistingAcceptanceCriterion } from './services/acceptanceCriteria';
 import { buildHumanReviewInbox } from './services/humanReviewInbox';
-import { EvidenceGateResult, evaluateEvidenceGate, evaluateEvidenceGates } from './services/evidenceGate';
+import { EvidenceGateResult, evaluateEvidenceGate, panelEvidenceGates } from './services/evidenceGate';
 import { decideEvidenceHandoff } from './services/evidenceGatePolicy';
 import { computeAgentQualityScore } from './services/agentQualityScore';
 import { INTEGRATION_MANIFEST_FILE, auditIntegrationManifest, readIntegrationManifest, writeIntegrationManifestSnapshot } from './services/integrationManifest';
@@ -3764,10 +3764,7 @@ function openEvidenceGatePanel(
 }
 
 function evidenceGatePanelGatesForState(state: KronosState): EvidenceGateResult[] {
-  const currentState = state.state;
-  if (!currentState) { return []; }
-  return evaluateEvidenceGates(currentState.tickets)
-    .filter(gate => gate.status !== 'pass' || isProofSensitiveAction(currentState.tickets[gate.ticketKey]?.next_action));
+  return panelEvidenceGates(state.state?.tickets);
 }
 
 function openEvidenceHandoffPanel(plan: EvidenceHandoffPlan, extensionUri?: vscode.Uri): void {

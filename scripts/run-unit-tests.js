@@ -8832,6 +8832,23 @@ test('evidence gate fails objective blockers and warns on incomplete proof', () 
   assert.equal(unknownOnlyCheck.ready, true);
   assert.ok(unknownOnlyCheck.checks.some(check => check.kind === 'test' && check.status === 'warn' && check.title === 'No passing test evidence'));
   assert.equal(unknownOnlyCheck.checks.some(check => check.kind === 'test' && check.status === 'pass'), false);
+
+  const panelGates = evidenceGate.panelEvidenceGates({
+    'K-FAIL': ticket({ projects: [], next_action: 'implement' }),
+    'K-PASS-ACTIVE': ticket({
+      projects: ['app'],
+      next_action: 'implement',
+      evidence: { notes: [{ at: 'now', kind: 'test', text: 'npm test passed' }] },
+    }),
+    'K-PASS-DONE': ticket({
+      projects: ['app'],
+      next_action: 'done',
+      build: { number: 16, status: 'SUCCESS', url: 'https://jenkins.example/16' },
+      evidence: { notes: [{ at: 'now', kind: 'test', text: 'npm test passed' }] },
+    }),
+  });
+  assert.deepEqual(panelGates.map(gate => gate.ticketKey), ['K-FAIL', 'K-PASS-DONE']);
+  assert.deepEqual(evidenceGate.panelEvidenceGates(undefined), []);
 });
 
 test('evidence gate tolerates malformed direct evidence entries', () => {
@@ -9516,7 +9533,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "import { decideReviewMonitorAction, reviewDeployMonitorActionHandled, reviewTerminalMergeRequestActionKey, type ReviewDeployMonitorResult, type ReviewMonitorDecision, type ReviewTerminalMergeRequestAction } from './services/reviewMonitor'",
     "import { buildEvidenceGateHtml, buildEvidenceHandoffHtml, buildEvidencePublishHtml } from './services/evidencePanelView'",
     "import { buildBacklogTriageHtml, buildCollisionReportHtml, buildProjectBatchPlanHtml, buildQueuePlanModeHtml, buildQueuePlannerHtml, buildReleaseBatchPlanHtml } from './services/queuePlannerPanelView'",
-    "import { isCodeAction, isProofSensitiveAction } from './services/actionSemantics'",
+    "import { isCodeAction } from './services/actionSemantics'",
     "import { createWebviewReadyMonitor } from './services/webviewDiagnostics'",
     'const nonce = createWebviewNonce()',
     'webviewScriptCspOptions(panel.webview.cspSource, nonce)',
@@ -9619,7 +9636,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "openEvidenceGatePanel(state, evidenceGatePanelGatesForState(state), 'Kronos Evidence Gate', { refreshAllEvidenceGates: true, extensionUri: context.extensionUri })",
     'options.refreshAllEvidenceGates',
     'function evidenceGatePanelGatesForState(state: KronosState): EvidenceGateResult[]',
-    'isProofSensitiveAction(currentState.tickets[gate.ticketKey]?.next_action)',
+    'panelEvidenceGates(state.state?.tickets)',
     'isCodeAction(target.action)',
     'function openInteractiveRunCenter',
     'function kronosScriptableWebviewOptions',

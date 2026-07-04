@@ -1,6 +1,6 @@
-import { Ticket } from '../state/types';
+import type { Ticket } from '../state/types';
 import { extractCriterionTexts } from './acceptanceCriteria';
-import { isReviewReadyAction } from './actionSemantics';
+import { isProofSensitiveAction, isReviewReadyAction } from './actionSemantics';
 import { buildStatusKind } from './buildStatus';
 import { evidenceAcceptanceCriteria, evidenceChecked, evidenceChecks, evidenceEnvironmentResults, evidenceNotes, evidenceRecordCount, evidenceRiskNotes, evidenceString } from './evidenceData';
 
@@ -144,6 +144,12 @@ export function evaluateEvidenceGate(ticketKey: string, ticket: Ticket): Evidenc
 
 export function evaluateEvidenceGates(tickets: Record<string, Ticket>): EvidenceGateResult[] {
   return Object.entries(tickets).map(([ticketKey, ticket]) => evaluateEvidenceGate(ticketKey, ticket));
+}
+
+export function panelEvidenceGates(tickets: Record<string, Ticket> | undefined): EvidenceGateResult[] {
+  if (!tickets) { return []; }
+  return evaluateEvidenceGates(tickets)
+    .filter(gate => gate.status !== 'pass' || isProofSensitiveAction(tickets[gate.ticketKey]?.next_action));
 }
 
 function pass(kind: EvidenceGateCheckKind, title: string, detail: string): EvidenceGateCheck {
