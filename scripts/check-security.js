@@ -38,6 +38,7 @@ const namedFiles = [
   'src/services/webviewHtml.ts',
   'src/views/ProjectTreeProvider.ts',
   'src/views/TicketTreeProvider.ts',
+  'media/kronos-webview-runtime.js',
   'media/kronos-action-panel.js',
   'media/kronos-jira-board.js',
 ];
@@ -125,6 +126,7 @@ const gitWorkspace = readSource('src/services/gitWorkspace.ts');
 const processTree = readSource('src/services/processTree.ts');
 const webviewDiagnostics = readSource('src/services/webviewDiagnostics.ts');
 const webviewSecurity = sources['src/services/webviewSecurity.ts'];
+const webviewRuntimeScript = sources['media/kronos-webview-runtime.js'];
 const webviewActionPanelScript = sources['media/kronos-action-panel.js'];
 const jiraBoardScript = sources['media/kronos-jira-board.js'];
 const operatorPanel = sources['src/services/operatorPanel.ts'];
@@ -2747,6 +2749,7 @@ if (extension.includes('function logWebviewReadyMessage') || extension.includes(
 }
 for (const [file, source] of Object.entries({
   'src/services/webviewSecurity.ts': webviewSecurity,
+  'media/kronos-webview-runtime.js': webviewRuntimeScript,
   'media/kronos-action-panel.js': webviewActionPanelScript,
   'media/kronos-jira-board.js': jiraBoardScript,
 })) {
@@ -2760,6 +2763,8 @@ for (const marker of [
   "toString('hex')",
   'export function webviewScriptCspOptions',
   'return { allowScripts: true, nonce, cspSource }',
+  'export const WEBVIEW_RUNTIME_SCRIPT',
+  "'kronos-webview-runtime.js'",
   'export const WEBVIEW_ACTION_PANEL_SCRIPT',
   "'kronos-action-panel.js'",
   'export const WEBVIEW_JIRA_BOARD_SCRIPT',
@@ -2783,7 +2788,13 @@ for (const marker of [
   'function injectWebviewScriptDiagnostic(html: string): string',
   'injectWebviewScriptDiagnostic(value)',
   'export function webviewActionScriptTag',
+  'webviewRuntimeScriptTag(nonce, webviewRuntimeScriptUri(options.scriptUri))',
   'scriptUri: string',
+  'export function webviewRuntimeScriptTag',
+  'id="kronos-webview-runtime-script"',
+  'data-kronos-script-kind="runtime"',
+  'export function webviewRuntimeScriptUri',
+  'WEBVIEW_RUNTIME_SCRIPT',
   'id="kronos-action-panel-script"',
   'data-kronos-script-kind="action-panel"',
   'data-kronos-webview-name',
@@ -2831,32 +2842,48 @@ for (const marker of [
 }
 
 for (const marker of [
+  'KronosWebviewRuntime',
+  'version: 1',
+  'function kronosFallbackVsCodeApi()',
+  'function vscodeApi()',
+  "Symbol.for('kronos.vscodeApi')",
+  "typeof acquireVsCodeApi !== 'function'",
+  '__kronosFallbackVsCodeApi',
+  '!cached.__kronosFallbackVsCodeApi',
+  "console.error('Failed to acquire VS Code API for Kronos webview action', error)",
+  "document.documentElement.setAttribute('data-kronos-script-ready', 'true')",
+  "console.info('Kronos webview script ready', webviewName, navigator.userAgent)",
+  "console.error('Kronos webview script error', diagnosticWebviewName",
+  "console.error('Kronos webview unhandled rejection', diagnosticWebviewName",
+  'function createReadyPoster(input)',
+  'var readyPosted = false',
+  'var readyAttempts = 0',
+  'var maxReadyAttempts = 20',
+  'if (readyPosted || !readyCommand) { return; }',
+  'readyPosted = true',
+  'if (readyAttempts < maxReadyAttempts) { setTimeout(postReady, 50); }',
+  "console.warn('Kronos webview could not acquire VS Code API after ready retries', webviewName)",
+]) {
+  if (!webviewRuntimeScript.includes(marker)) {
+    fail(`Missing packaged webview runtime marker: ${marker}`);
+  }
+}
+
+for (const marker of [
   'document.currentScript',
   'function findKronosActionScript()',
   'kronos-action-panel-script',
   'data-kronos-webview-name',
   'data-kronos-ready-command',
   'data-kronos-action-fields',
-  'function kronosVsCodeApi()',
-  "Symbol.for('kronos.vscodeApi')",
-  "typeof acquireVsCodeApi !== 'function'",
-  '__kronosFallbackVsCodeApi',
-  '!cached.__kronosFallbackVsCodeApi',
-  "document.documentElement.setAttribute('data-kronos-script-ready', 'true')",
+  'KronosWebviewRuntime',
+  'runtime.createReadyPoster',
+  'runtime.vscodeApi().postMessage(message)',
+  'runtime.markReady(webviewName)',
+  'runtime.installDiagnostics(webviewName)',
   "document.documentElement.setAttribute('data-kronos-actions-ready', 'true')",
   '__kronosActionHandlerAttached',
   'data-kronos-action-handler-attached',
-  "console.info('Kronos webview script ready', webviewName, navigator.userAgent)",
-  "console.error('Kronos webview script error', webviewName",
-  "console.error('Kronos webview unhandled rejection', webviewName",
-  'function postReady()',
-  'var readyPosted = false',
-  'var readyAttempts = 0',
-  'var maxReadyAttempts = 20',
-  'if (readyPosted) { return; }',
-  'readyPosted = true',
-  'if (readyAttempts < maxReadyAttempts) { setTimeout(postReady, 50); }',
-  "console.warn('Kronos webview could not acquire VS Code API after ready retries', webviewName)",
   'function closestKronosActionTarget(target)',
   'target.parentElement',
   'function postKronosAction(event)',
@@ -2870,16 +2897,15 @@ for (const marker of [
 for (const marker of [
   'function findKronosJiraBoardScript()',
   'kronos-jira-board-script',
-  '__kronosFallbackVsCodeApi',
-  '!cached.__kronosFallbackVsCodeApi',
+  'KronosWebviewRuntime',
+  'runtime.createReadyPoster',
+  'runtime.vscodeApi().postMessage(Object.assign({ command: command }, payload || {}))',
+  'runtime.markReady(webviewName)',
+  'runtime.installDiagnostics(webviewName)',
   'function claimKronosJiraBoard()',
   'function closestBoardTarget',
   '__kronosJiraBoardAttached',
   'data-kronos-jira-board-attached',
-  'var readyAttempts = 0',
-  'var maxReadyAttempts = 20',
-  'if (readyAttempts < maxReadyAttempts) { setTimeout(postReady, 50); }',
-  "console.warn('Kronos webview could not acquire VS Code API after ready retries', webviewName)",
 ]) {
   if (!jiraBoardScript.includes(marker)) {
     fail(`Missing packaged Jira board script guard marker: ${marker}`);

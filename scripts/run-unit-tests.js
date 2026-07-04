@@ -2388,6 +2388,7 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.doesNotMatch(apiScript, /const vscode =/);
   assert.doesNotMatch(apiScript, /var vscode =/);
   assert.equal(webviewSecurity.WEBVIEW_READY_COMMAND, '__kronosWebviewReady');
+  assert.equal(webviewSecurity.WEBVIEW_RUNTIME_SCRIPT, 'kronos-webview-runtime.js');
   assert.equal(Object.prototype.hasOwnProperty.call(webviewSecurity, 'webviewScriptDiagnosticBanner'), false);
   const scriptableHtml = webviewSecurity.withWebviewCsp('<!DOCTYPE html><html><head><style>body{}</style></head><body><button>ok</button></body></html>', {
     allowScripts: true,
@@ -2415,9 +2416,22 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   };
   assert.equal(webviewSecurity.WEBVIEW_ACTION_PANEL_SCRIPT, 'kronos-action-panel.js');
   assert.equal(webviewSecurity.WEBVIEW_JIRA_BOARD_SCRIPT, 'kronos-jira-board.js');
+  const runtimeScript = readSourceFixture('media', webviewSecurity.WEBVIEW_RUNTIME_SCRIPT);
+  assert.match(runtimeScript, /KronosWebviewRuntime/);
+  assert.match(runtimeScript, /function vscodeApi\(\)/);
+  assert.match(runtimeScript, /Symbol\.for\('kronos\.vscodeApi'\)/);
+  assert.match(runtimeScript, /__kronosFallbackVsCodeApi/);
+  assert.match(runtimeScript, /function createReadyPoster/);
+  assert.match(runtimeScript, /var readyAttempts = 0/);
+  assert.match(runtimeScript, /var maxReadyAttempts = 20/);
+  assert.match(runtimeScript, /Kronos webview script ready/);
+  assert.match(runtimeScript, /Kronos webview script error/);
+  assert.match(runtimeScript, /Kronos webview unhandled rejection/);
+  assert.doesNotMatch(runtimeScript, /root\[cacheKey\] = kronosFallbackVsCodeApi\(\)/);
   const externalScriptTag = webviewSecurity.webviewActionScriptTag('nonce<1>', 'Kronos External', [
     { messageKey: 'runId', dataAttribute: 'data-run-id' },
   ], { readyCommand: webviewSecurity.WEBVIEW_READY_COMMAND, scriptUri: 'vscode-resource://kronos/action.js?x=1&y=<2>' });
+  assert.match(externalScriptTag, /<script nonce="nonce&lt;1&gt;"\s+id="kronos-webview-runtime-script"\s+src="vscode-resource:\/\/kronos\/kronos-webview-runtime\.js\?x=1&amp;y=&lt;2&gt;"/);
   assert.match(externalScriptTag, /<script nonce="nonce&lt;1&gt;"\s+id="kronos-action-panel-script"\s+src="vscode-resource:\/\/kronos\/action\.js\?x=1&amp;y=&lt;2&gt;"/);
   assert.match(externalScriptTag, /data-kronos-script-kind="action-panel"/);
   assert.match(externalScriptTag, /data-kronos-webview-name="Kronos External"/);
@@ -2430,7 +2444,11 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(externalActionScript, /document\.currentScript/);
   assert.match(externalActionScript, /function findKronosActionScript/);
   assert.match(externalActionScript, /kronos-action-panel-script/);
-  assert.match(externalActionScript, /__kronosFallbackVsCodeApi/);
+  assert.match(externalActionScript, /KronosWebviewRuntime/);
+  assert.match(externalActionScript, /runtime\.createReadyPoster/);
+  assert.match(externalActionScript, /runtime\.vscodeApi\(\)\.postMessage/);
+  assert.match(externalActionScript, /runtime\.markReady\(webviewName\)/);
+  assert.match(externalActionScript, /runtime\.installDiagnostics\(webviewName\)/);
   assert.match(externalActionScript, /data-kronos-action-fields/);
   assert.match(externalActionScript, /function postKronosAction/);
   assert.match(externalActionScript, /function claimKronosActionHandler/);
@@ -2471,7 +2489,7 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
       addEventListener(type, handler) { externalDocumentListeners[type] = handler; },
     },
   };
-  vm.runInNewContext(externalActionScript, externalSandbox);
+  vm.runInNewContext(`${runtimeScript}\n${externalActionScript}`, externalSandbox);
   assert.equal(externalDocumentElementAttributes['data-kronos-script-ready'], 'true');
   assert.equal(externalDocumentElementAttributes['data-kronos-actions-ready'], 'true');
   assert.equal(externalDocumentElementAttributes['data-kronos-webview'], 'Kronos External');
@@ -2487,7 +2505,7 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   const externalReadyRetryListeners = {};
   const externalReadyRetryTimeouts = [];
   let externalReadyRetryAcquireCalls = 0;
-  vm.runInNewContext(externalActionScript, {
+  vm.runInNewContext(`${runtimeScript}\n${externalActionScript}`, {
     acquireVsCodeApi: () => {
       externalReadyRetryAcquireCalls += 1;
       if (externalReadyRetryAcquireCalls === 1) { throw new Error('transient acquire failure'); }
@@ -2526,7 +2544,7 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.equal(typeof externalReadyRetryListeners.click, 'function');
   const externalUnavailableTimeouts = [];
   const externalUnavailableWarnings = [];
-  vm.runInNewContext(externalActionScript, {
+  vm.runInNewContext(`${runtimeScript}\n${externalActionScript}`, {
     console: { info() {}, warn(...args) { externalUnavailableWarnings.push(args.join(' ')); }, error() {} },
     navigator: { userAgent: 'Kronos Windows Webview Missing API Test' },
     setTimeout(handler, ms) {
@@ -2567,7 +2585,7 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
       }[name] || '';
     },
   };
-  vm.runInNewContext(externalActionScript, {
+  vm.runInNewContext(`${runtimeScript}\n${externalActionScript}`, {
     acquireVsCodeApi: () => ({ postMessage: message => externalNullPostedMessages.push(message) }),
     console: { info() {}, warn() {}, error() {} },
     navigator: { userAgent: 'Kronos Windows Webview Null CurrentScript Test' },
@@ -2589,7 +2607,11 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(jiraBoardScript, /document\.currentScript/);
   assert.match(jiraBoardScript, /function findKronosJiraBoardScript/);
   assert.match(jiraBoardScript, /kronos-jira-board-script/);
-  assert.match(jiraBoardScript, /__kronosFallbackVsCodeApi/);
+  assert.match(jiraBoardScript, /KronosWebviewRuntime/);
+  assert.match(jiraBoardScript, /runtime\.createReadyPoster/);
+  assert.match(jiraBoardScript, /runtime\.vscodeApi\(\)\.postMessage/);
+  assert.match(jiraBoardScript, /runtime\.markReady\(webviewName\)/);
+  assert.match(jiraBoardScript, /runtime\.installDiagnostics\(webviewName\)/);
   assert.match(jiraBoardScript, /function initKronosJiraBoard/);
   assert.match(jiraBoardScript, /function claimKronosJiraBoard/);
   assert.match(jiraBoardScript, /__kronosJiraBoardAttached/);
@@ -2597,7 +2619,6 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.doesNotMatch(jiraBoardScript, /Symbol\.for\('kronos\.jiraBoardAttached'\)/);
   assert.match(jiraBoardScript, /kronos-jira-ticket-data/);
   assert.match(jiraBoardScript, /data-kronos-actions-ready/);
-  assert.match(jiraBoardScript, /Kronos webview script ready/);
   assert.match(jiraBoardScript, /function closestBoardTarget/);
   assert.doesNotMatch(jiraBoardScript, /const vscode =/);
   const jiraPostedMessages = [];
@@ -2648,7 +2669,7 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
       addEventListener(type, handler) { jiraDocumentListeners[type] = handler; },
     },
   };
-  vm.runInNewContext(jiraBoardScript, jiraSandbox);
+  vm.runInNewContext(`${runtimeScript}\n${jiraBoardScript}`, jiraSandbox);
   assert.equal(jiraDocumentElementAttributes['data-kronos-script-ready'], 'true');
   assert.equal(jiraDocumentElementAttributes['data-kronos-actions-ready'], 'true');
   assert.equal(jiraPostedMessages[0].command, webviewSecurity.WEBVIEW_READY_COMMAND);
@@ -2665,7 +2686,7 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   const jiraReadyRetryMessages = [];
   let jiraReadyAcquireCalls = 0;
   const jiraReadyTimeouts = [];
-  vm.runInNewContext(jiraBoardScript, {
+  vm.runInNewContext(`${runtimeScript}\n${jiraBoardScript}`, {
     acquireVsCodeApi() {
       jiraReadyAcquireCalls += 1;
       if (jiraReadyAcquireCalls === 1) { throw new Error('transient acquire failure'); }
@@ -2707,7 +2728,7 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.equal(jiraReadyRetryMessages[0].command, webviewSecurity.WEBVIEW_READY_COMMAND);
   const jiraUnavailableTimeouts = [];
   const jiraUnavailableWarnings = [];
-  vm.runInNewContext(jiraBoardScript, {
+  vm.runInNewContext(`${runtimeScript}\n${jiraBoardScript}`, {
     console: { info() {}, warn(...args) { jiraUnavailableWarnings.push(args.join(' ')); }, error() {} },
     navigator: { userAgent: 'Kronos Windows Jira Missing API Test' },
     setTimeout(handler, ms) {
@@ -8421,7 +8442,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   assert.ok(boardHandlerStart >= 0 && boardHandlerEnd > boardHandlerStart, 'Jira board message handler should be present');
   const boardHandlerSource = source.slice(boardHandlerStart, boardHandlerEnd);
   for (const marker of [
-    "import { WEBVIEW_ACTION_PANEL_SCRIPT, WEBVIEW_JIRA_BOARD_SCRIPT, WEBVIEW_READY_COMMAND, createWebviewNonce, webviewScriptCspOptions, withWebviewCsp } from './services/webviewSecurity'",
+    "import { WEBVIEW_ACTION_PANEL_SCRIPT, WEBVIEW_JIRA_BOARD_SCRIPT, WEBVIEW_READY_COMMAND, createWebviewNonce, webviewRuntimeScriptTag, webviewRuntimeScriptUri, webviewScriptCspOptions, withWebviewCsp } from './services/webviewSecurity'",
     "import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss, normalizeActionPanelMessage, operatorCommandRow, type ActionPanelMessage } from './services/operatorPanel'",
     "import { buildPromptHistoryHtml, buildPromptManagerHtml, buildPromptSmokeTestsHtml } from './services/promptPanelView'",
     "import { buildRecoveryHtml, buildStateAuditLogHtml } from './services/recoveryPanelView'",
@@ -9067,6 +9088,7 @@ test('security check validates semantic webview script policy', () => {
     "assertAbsent(/(^|[^\\w.])exec\\s*\\(/m, 'Use execFile instead of shell-string exec.');",
     "const promptPanelView = sources['src/services/promptPanelView.ts']",
     "const webviewActionPanelScript = sources['media/kronos-action-panel.js']",
+    "const webviewRuntimeScript = sources['media/kronos-webview-runtime.js']",
   ]) {
     assert.ok(source.includes(marker), marker);
   }

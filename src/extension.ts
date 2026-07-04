@@ -57,7 +57,7 @@ import { buildNextActionContext, buildNextActionStartDecision, skillForAction } 
 import { createWorkspaceDiffArtifact, firstRemoteBranchMatching, originProjectPath } from './services/gitWorkspace';
 import { signalProcessTree, stopProcessTree, supportsProcessTreeSuspend } from './services/processTree';
 import { createWebviewReadyMonitor } from './services/webviewDiagnostics';
-import { WEBVIEW_ACTION_PANEL_SCRIPT, WEBVIEW_JIRA_BOARD_SCRIPT, WEBVIEW_READY_COMMAND, createWebviewNonce, webviewScriptCspOptions, withWebviewCsp } from './services/webviewSecurity';
+import { WEBVIEW_ACTION_PANEL_SCRIPT, WEBVIEW_JIRA_BOARD_SCRIPT, WEBVIEW_READY_COMMAND, createWebviewNonce, webviewRuntimeScriptTag, webviewRuntimeScriptUri, webviewScriptCspOptions, withWebviewCsp } from './services/webviewSecurity';
 import { escapeAttr, escapeClass, escapeHtml, kronosWebviewBaseCss, safeHttpHref } from './services/webviewHtml';
 import { kronosTerminalOptions } from './services/terminalProfiles';
 import { unknownErrorCode, unknownErrorMessage } from './services/errorUtils';
@@ -6322,6 +6322,7 @@ function buildJiraBoardHtml(state: KronosState, nonce: string, scriptUri: string
     .modal .modal-actions .jira-action { margin-left: 0; }
   }
 </style>
+${webviewRuntimeScriptTag(nonce, webviewRuntimeScriptUri(scriptUri))}
 <script nonce="${escapeAttr(nonce)}" id="kronos-jira-board-script" defer src="${escapeAttr(scriptUri)}" data-kronos-script-kind="jira-board" data-kronos-webview-name="Kronos Jira Board" data-kronos-ready-command="${escapeAttr(WEBVIEW_READY_COMMAND)}"></script>
 </head><body><div class="kronos-shell board-shell">
   <textarea id="kronos-jira-ticket-data" class="kronos-data-payload" hidden aria-hidden="true">${ticketJsonRaw}</textarea>

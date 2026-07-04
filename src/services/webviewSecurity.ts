@@ -19,6 +19,7 @@ interface WebviewActionScriptTagOptions {
 }
 
 export const WEBVIEW_READY_COMMAND = '__kronosWebviewReady';
+export const WEBVIEW_RUNTIME_SCRIPT = 'kronos-webview-runtime.js';
 export const WEBVIEW_ACTION_PANEL_SCRIPT = 'kronos-action-panel.js';
 export const WEBVIEW_JIRA_BOARD_SCRIPT = 'kronos-jira-board.js';
 
@@ -85,6 +86,7 @@ export function webviewActionScriptTag(
     ? ` data-kronos-ready-command="${escapeAttr(options.readyCommand)}"`
     : '';
   return [
+    webviewRuntimeScriptTag(nonce, webviewRuntimeScriptUri(options.scriptUri)),
     `<script nonce="${escapeAttr(nonce)}"`,
     'id="kronos-action-panel-script"',
     `src="${escapeAttr(options.scriptUri)}"`,
@@ -92,6 +94,23 @@ export function webviewActionScriptTag(
     `data-kronos-webview-name="${escapeAttr(webviewName)}"`,
     `data-kronos-action-fields="${escapeAttr(JSON.stringify(fields))}"${readyAttr}></script>`,
   ].join('\n');
+}
+
+export function webviewRuntimeScriptTag(nonce: string, runtimeScriptUri: string): string {
+  return [
+    `<script nonce="${escapeAttr(nonce)}"`,
+    'id="kronos-webview-runtime-script"',
+    `src="${escapeAttr(runtimeScriptUri)}"`,
+    'data-kronos-script-kind="runtime"></script>',
+  ].join('\n');
+}
+
+export function webviewRuntimeScriptUri(scriptUri: string): string {
+  const scriptFilePattern = /\/[^/?#]+(?=([?#]|$))/;
+  if (scriptFilePattern.test(scriptUri)) {
+    return scriptUri.replace(scriptFilePattern, `/${WEBVIEW_RUNTIME_SCRIPT}`);
+  }
+  return WEBVIEW_RUNTIME_SCRIPT;
 }
 
 function webviewCspMeta(options: WebviewCspOptions = {}): string {
