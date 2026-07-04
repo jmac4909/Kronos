@@ -67,7 +67,7 @@ import { buildRunCompletionNotification } from './services/runCompletionNotifica
 import { openReviewTicketEntries, reviewBranchTickets as buildReviewBranchTickets, type ReviewBranchTicket, type TicketWithOpenMergeRequest } from './services/reviewWork';
 import { decideReviewMonitorAction, type ReviewMonitorDecision } from './services/reviewMonitor';
 import { decideQueueRemoval } from './services/queueRemovalPolicy';
-import { deployMonitorAttentionIssue, deployMonitorHandoffCheckName, hasDeployMonitorHandoffIssue, hasHandledDeployMonitorRun, resolveDeployMonitorProject } from './services/deployMonitorHandoff';
+import { deployMonitorAttentionIssue, deployMonitorHandoffCheckName, deployMonitorHandoffIssueSummary, hasDeployMonitorHandoffIssue, hasHandledDeployMonitorRun, resolveDeployMonitorProject } from './services/deployMonitorHandoff';
 import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss, normalizeActionPanelMessage, operatorCommandRow, type ActionPanelMessage } from './services/operatorPanel';
 import { buildPromptHistoryHtml, buildPromptManagerHtml, buildPromptSmokeTestsHtml } from './services/promptPanelView';
 import { buildRecoveryHtml, buildStateAuditLogHtml } from './services/recoveryPanelView';
@@ -189,10 +189,11 @@ function notifyNewReviewItems(reviewTree: ReviewTreeProvider, notifiedReviewKeys
   const primary = freshItems[0];
   if (!primary) { return; }
   const mr = primary.mrIid !== undefined ? `MR !${primary.mrIid}` : 'MR';
+  const activity = primary.activity ? ` - ${primary.activity}` : '';
   const suffix = freshItems.length > 1 ? ` (+${freshItems.length - 1} more)` : '';
   runNotificationCommandAction(
     vscode.window.showInformationMessage(
-      `${primary.ticketKey}: ${mr} ready for review${suffix}`,
+      `${primary.ticketKey}: ${mr} needs review${activity}${suffix}`,
       'Open Review'
     ),
     'Open Review',
@@ -5539,16 +5540,21 @@ function reviewBranchTickets(state: KronosState): ReviewBranchTicket[] {
 }
 
 async function startDeployMonitorForMergedTicket(state: KronosState, ticketKey: string, ticket: Ticket): Promise<boolean> {
-  const project = resolveDeployMonitorProject(state.state, ticketKey, ticket);
+  state.reloadAndNotify();
+  const currentTicket = state.state?.tickets?.[ticketKey] || ticket;
+  if (deployMonitorHandoffIssueSummary(currentTicket)) {
+    return false;
+  }
+  const project = resolveDeployMonitorProject(state.state, ticketKey, currentTicket);
   if (project.kind !== 'ok' || !project.projectName || !project.projectPath) {
     const reason = project.reason || `${ticketKey} MR merged, but deploy monitoring could not resolve a project.`;
-    recordDeployMonitorHandoffIssue(state, ticketKey, ticket, reason);
+    recordDeployMonitorHandoffIssue(state, ticketKey, currentTicket, reason);
     void vscode.window.showWarningMessage(reason);
     return false;
   }
   const projectName = project.projectName;
   const projectPath = project.projectPath;
-  const mrIid = ticket.mr?.iid;
+  const mrIid = currentTicket.mr?.iid;
   const deployMonitorRuns = [...listRuns(), ...readArchivedRuns()];
   const deployMonitorMatch = { projectName, projectPath, ticketKey, mrIid };
   if (hasHandledDeployMonitorRun(deployMonitorRuns, deployMonitorMatch)) {
@@ -5557,7 +5563,7 @@ async function startDeployMonitorForMergedTicket(state: KronosState, ticketKey: 
   }
   const attentionIssue = deployMonitorAttentionIssue(deployMonitorRuns, deployMonitorMatch);
   if (attentionIssue) {
-    recordDeployMonitorHandoffIssue(state, ticketKey, ticket, attentionIssue);
+    recordDeployMonitorHandoffIssue(state, ticketKey, currentTicket, attentionIssue);
     void vscode.window.showWarningMessage(attentionIssue, 'Run Center').then(action => {
       if (action === 'Run Center') {
         return vscode.commands.executeCommand('kronos.runCenter');
@@ -5580,7 +5586,7 @@ async function startDeployMonitorForMergedTicket(state: KronosState, ticketKey: 
   });
   if (!started) {
     const reason = `${ticketKey} merged, but deploy monitor did not start. Start deploy monitor manually from the Review view or ticket details.`;
-    recordDeployMonitorHandoffIssue(state, ticketKey, ticket, reason);
+    recordDeployMonitorHandoffIssue(state, ticketKey, currentTicket, reason);
     void vscode.window.showWarningMessage(reason);
     return false;
   }

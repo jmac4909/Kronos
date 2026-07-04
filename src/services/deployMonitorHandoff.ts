@@ -107,11 +107,16 @@ export function deployMonitorHandoffCheckName(ticket: Ticket): string {
   return `${DEPLOY_MONITOR_HANDOFF_CHECK_PREFIX}${ticket.mr?.iid ? ` MR !${ticket.mr.iid}` : ''}`;
 }
 
-export function hasDeployMonitorHandoffIssue(ticket: Ticket, summary: string): boolean {
+export function deployMonitorHandoffIssueSummary(ticket: Ticket): string | undefined {
   const expectedName = deployMonitorHandoffCheckName(ticket);
-  return evidenceChecks(ticket).some(check =>
-    evidenceString(check, 'name') === expectedName &&
-    evidenceString(check, 'result') === 'fail' &&
-    evidenceString(check, 'summary') === summary
+  const check = evidenceChecks(ticket).find(candidate =>
+    evidenceString(candidate, 'name') === expectedName &&
+    evidenceString(candidate, 'result') === 'fail'
   );
+  if (!check) { return undefined; }
+  return evidenceString(check, 'summary') || expectedName;
+}
+
+export function hasDeployMonitorHandoffIssue(ticket: Ticket, summary: string): boolean {
+  return deployMonitorHandoffIssueSummary(ticket) === summary;
 }

@@ -1374,8 +1374,10 @@ test('deploy monitor handoff resolves projects and only suppresses handled runs'
     },
   });
   assert.equal(deployMonitorHandoff.deployMonitorHandoffCheckName(issueTicket), 'Deploy monitor handoff MR !13');
+  assert.equal(deployMonitorHandoff.deployMonitorHandoffIssueSummary(issueTicket), 'deploy monitor did not start');
   assert.equal(deployMonitorHandoff.hasDeployMonitorHandoffIssue(issueTicket, 'deploy monitor did not start'), true);
   assert.equal(deployMonitorHandoff.hasDeployMonitorHandoffIssue(issueTicket, 'different failure'), false);
+  assert.equal(deployMonitorHandoff.deployMonitorHandoffIssueSummary(ticket({ mr: merged.mr })), undefined);
 });
 
 test('queue mutation helpers centralize queue membership and ticket project links', () => {
@@ -2960,9 +2962,9 @@ test('review tree persists seen review keys across reloads', async () => {
       update: keys => { storedSeenKeys = [...keys]; },
     };
     const stateEmitter = new vscodeStub.EventEmitter();
-    const reviewTicket = iid => ticket({
+    const reviewTicket = (iid, mrFields = {}) => ticket({
       next_action: 'await_review',
-      mr: { iid, state: 'opened', review_status: 'pending_review', url: `https://gitlab.example/mr/${iid}` },
+      mr: { iid, state: 'opened', review_status: 'pending_review', url: `https://gitlab.example/mr/${iid}`, ...mrFields },
     });
     let currentState = baseState({ 'K-1': reviewTicket(1) });
     const kronosState = {
@@ -2972,7 +2974,8 @@ test('review tree persists seen review keys across reloads', async () => {
 
     const firstProvider = new ReviewTreeProvider(kronosState, seenKeysStore);
     assert.equal(firstProvider.getNewReviewCount(), 0);
-    assert.deepEqual(storedSeenKeys, ['K-1']);
+    assert.equal(storedSeenKeys.length, 1);
+    assert.match(storedSeenKeys[0], /^K-1\|mr:1\|opened\|pending_review\|/);
 
     currentState = baseState({ 'K-1': reviewTicket(1), 'K-2': reviewTicket(2) });
     stateEmitter.fire(undefined);
@@ -2995,8 +2998,32 @@ test('review tree persists seen review keys across reloads', async () => {
 
     reloadedProvider.markVisibleReviewItemsSeen();
     assert.equal(reloadedProvider.getNewReviewCount(), 0);
-    assert.deepEqual(storedSeenKeys, ['K-1', 'K-3']);
+    assert.equal(storedSeenKeys.length, 2);
+    assert.ok(storedSeenKeys.some(key => key.startsWith('K-1|mr:1|opened|pending_review|')));
+    assert.ok(storedSeenKeys.some(key => key.startsWith('K-3|mr:3|opened|pending_review|')));
+
+    currentState = baseState({
+      'K-3': reviewTicket(3, {
+        comment_count: 1,
+        last_comment_at: '2026-07-03T01:00:00.000Z',
+        comments: [{ id: 'n1', author: 'Reviewer', created: '2026-07-03T01:00:00.000Z', body: 'Please recheck the Windows smoke.' }],
+      }),
+    });
+    stateEmitter.fire(undefined);
+    assert.equal(reloadedProvider.getNewReviewCount(), 1);
+    assert.deepEqual(reloadedProvider.getNewReviewItems().map(item => item.ticketKey), ['K-3']);
+    assert.match(reloadedProvider.getNewReviewItems()[0].activity, /1 comment/);
+    reloadedProvider.markVisibleReviewItemsSeen();
+    assert.equal(reloadedProvider.getNewReviewCount(), 0);
     reloadedProvider.dispose();
+
+    storedSeenKeys = ['K-1'];
+    currentState = baseState({ 'K-1': reviewTicket(1) });
+    const migratedProvider = new ReviewTreeProvider(kronosState, seenKeysStore);
+    assert.equal(migratedProvider.getNewReviewCount(), 0);
+    assert.equal(storedSeenKeys.length, 1);
+    assert.match(storedSeenKeys[0], /^K-1\|mr:1\|opened\|pending_review\|/);
+    migratedProvider.dispose();
   });
 });
 
@@ -7092,7 +7119,8 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'function runNotificationCommandAction',
     'function notifyNewReviewItems(reviewTree: ReviewTreeProvider, notifiedReviewKeys: Set<string>): void',
     'const items = reviewTree.getNewReviewItems()',
-    '`${primary.ticketKey}: ${mr} ready for review${suffix}`',
+    'const activity = primary.activity ? ` - ${primary.activity}` :',
+    '`${primary.ticketKey}: ${mr} needs review${activity}${suffix}`',
     "'kronosReview.focus'",
     'void selection.then(action => {',
     'void vscode.commands.executeCommand(command).then(undefined, (e: unknown) => {',
@@ -7165,7 +7193,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'return true;',
     'return false;',
     'unknownErrorMessage(e, `Failed to start ${skill} session.`)',
-    "import { deployMonitorAttentionIssue, deployMonitorHandoffCheckName, hasDeployMonitorHandoffIssue, hasHandledDeployMonitorRun, resolveDeployMonitorProject } from './services/deployMonitorHandoff'",
+    "import { deployMonitorAttentionIssue, deployMonitorHandoffCheckName, deployMonitorHandoffIssueSummary, hasDeployMonitorHandoffIssue, hasHandledDeployMonitorRun, resolveDeployMonitorProject } from './services/deployMonitorHandoff'",
     'const started = await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket)',
     'if (started) { reviewTerminalMergeRequestActions.add(actionKey); }',
     'console.warn(unknownErrorMessage(e, `Failed to load MR diff hints for ${ticketKey}.`))',
@@ -7174,15 +7202,16 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'deploy monitor did not start',
     'projectNameOverride: projectName',
     'promptMetadata.mergeRequestIid = mrIid',
-    'resolveDeployMonitorProject(state.state, ticketKey, ticket)',
+    'const currentTicket = state.state?.tickets?.[ticketKey] || ticket',
+    'if (deployMonitorHandoffIssueSummary(currentTicket))',
+    'resolveDeployMonitorProject(state.state, ticketKey, currentTicket)',
     'const deployMonitorRuns = [...listRuns(), ...readArchivedRuns()]',
     'const deployMonitorMatch = { projectName, projectPath, ticketKey, mrIid }',
     'hasHandledDeployMonitorRun(deployMonitorRuns, deployMonitorMatch)',
     'deploy monitor already handled',
     'const attentionIssue = deployMonitorAttentionIssue(deployMonitorRuns, deployMonitorMatch)',
     "vscode.window.showWarningMessage(attentionIssue, 'Run Center')",
-    'recordDeployMonitorHandoffIssue(state, ticketKey, ticket, reason)',
-    'const currentTicket = state.state?.tickets?.[ticketKey] || ticket',
+    'recordDeployMonitorHandoffIssue(state, ticketKey, currentTicket, reason)',
     'hasDeployMonitorHandoffIssue(currentTicket, summary)',
     'deployMonitorHandoffCheckName(currentTicket)',
     "command: `kronos run deploy-monitor ${ticketKey}`",
@@ -8260,9 +8289,11 @@ test('tree providers share action labels and icons', () => {
     'export interface NewReviewItemSummary',
     'getNewReviewItems(): NewReviewItemSummary[]',
     'if (ticket.mr?.iid !== undefined) { summary.mrIid = ticket.mr.iid; }',
+    'if (activity) { summary.activity = activity; }',
     'markVisibleReviewItemsSeen(): void',
-    'this.spinningReviewKeys.set(key, Date.now() + NEW_REVIEW_SPIN_MS)',
-    'new ReviewItem(key, ticket, isNew, isNew && this.isReviewItemSpinning(key))',
+    'this.spinningReviewKeys.set(snapshot.activityKey, Date.now() + NEW_REVIEW_SPIN_MS)',
+    'new ReviewItem(',
+    'reviewActivityKey(ticketKey, ticket)',
     'private scheduleSpinRefresh(): void',
     'private clearSpinTimer(): void',
     'dispose(): void',
@@ -8273,6 +8304,8 @@ test('tree providers share action labels and icons', () => {
     'private persistSeenReviewKeys(): void',
     'this.persistSeenReviewKeys()',
     'Kronos review seen-key persistence failed.',
+    'function reviewActivityKey(ticketKey: string, ticket: TicketWithOpenMergeRequest): string',
+    'function reviewActivitySummary(ticket: TicketWithOpenMergeRequest): string',
     "this.description = `${isNew ? 'NEW · ' : ''}",
     'const unresolvedSuffix = mr.unresolved_discussion_count !== undefined',
     'Unresolved discussions: ${mr.unresolved_discussion_count}',
