@@ -1,9 +1,9 @@
 import { Ticket } from '../state/types';
 import { EvidenceExport, formatEvidenceComment } from './evidenceStore';
 
-export type EvidenceDestinationKind = 'jira' | 'mr' | 'file';
+type EvidenceDestinationKind = 'jira' | 'mr' | 'file';
 
-export interface EvidenceDestination {
+interface EvidenceDestination {
   kind: EvidenceDestinationKind;
   label: string;
   available: boolean;

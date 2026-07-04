@@ -59,7 +59,7 @@ export interface PromptSmokeResult {
   errors: string[];
 }
 
-export interface PromptHistoryTemplate {
+interface PromptHistoryTemplate {
   name: string;
   path: string;
   source: 'project' | 'global';
@@ -78,7 +78,7 @@ export interface PromptHistorySnapshot {
   templates: PromptHistoryTemplate[];
 }
 
-export interface PromptHistoryChange {
+interface PromptHistoryChange {
   kind: 'added' | 'removed' | 'changed' | 'unchanged';
   name: string;
   source: 'project' | 'global';
@@ -103,7 +103,7 @@ export interface PromptHistoryDiff {
   };
 }
 
-export interface PromptRepairResult {
+interface PromptRepairResult {
   directory: string;
   created: string[];
   existing: string[];

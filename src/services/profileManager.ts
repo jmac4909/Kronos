@@ -1,4 +1,4 @@
-export type KronosProfileId = 'personal-local' | 'enterprise-gitlab-jira' | 'github-actions' | 'no-sonar';
+type KronosProfileId = 'personal-local' | 'enterprise-gitlab-jira' | 'github-actions' | 'no-sonar';
 
 export interface KronosProfile {
   id: KronosProfileId;
