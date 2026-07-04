@@ -7376,7 +7376,10 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'promptSmokeResultRow',
     'promptTemplateRow',
     'kronosOperatorPanelCss',
-    'kronosActionPanelScript(nonce)',
+    'actionScriptUri?: string',
+    "kronosActionPanelScript(nonce, 'Kronos Prompt Manager', true, actionScriptUri)",
+    "kronosActionPanelScript(nonce, 'Kronos Prompt History', true, actionScriptUri)",
+    "kronosActionPanelScript(nonce, 'Kronos Prompt Smoke Tests', true, actionScriptUri)",
   ]) {
     assert.ok(promptPanelViewSource.includes(marker), marker);
   }
@@ -7451,7 +7454,12 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'requiredScripts().map',
     'listProfiles().map',
     'kronosOperatorPanelCss',
-    'kronosActionPanelScript(nonce)',
+    'actionScriptUri?: string',
+    "kronosActionPanelScript(nonce, 'Kronos Agent Quality Score', true, actionScriptUri)",
+    "kronosActionPanelScript(nonce, 'Kronos Trend Metrics', true, actionScriptUri)",
+    "kronosActionPanelScript(nonce, 'Kronos Integration Manifest', true, actionScriptUri)",
+    "kronosActionPanelScript(nonce, 'Kronos Profiles', true, actionScriptUri)",
+    "kronosActionPanelScript(nonce, 'Kronos Doctor', true, actionScriptUri)",
   ]) {
     assert.ok(operationsReportPanelViewSource.includes(marker), marker);
   }

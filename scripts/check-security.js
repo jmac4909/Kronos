@@ -1485,7 +1485,10 @@ for (const marker of [
   'promptSmokeResultRow',
   'promptTemplateRow',
   'kronosOperatorPanelCss',
-  'kronosActionPanelScript(nonce)',
+  'actionScriptUri?: string',
+  "kronosActionPanelScript(nonce, 'Kronos Prompt Manager', true, actionScriptUri)",
+  "kronosActionPanelScript(nonce, 'Kronos Prompt History', true, actionScriptUri)",
+  "kronosActionPanelScript(nonce, 'Kronos Prompt Smoke Tests', true, actionScriptUri)",
 ]) {
   if (!promptPanelView.includes(marker)) {
     fail(`Missing prompt panel view marker: ${marker}`);
@@ -3098,7 +3101,12 @@ for (const marker of [
   'requiredScripts().map',
   'listProfiles().map',
   'kronosOperatorPanelCss',
-  'kronosActionPanelScript(nonce)',
+  'actionScriptUri?: string',
+  "kronosActionPanelScript(nonce, 'Kronos Agent Quality Score', true, actionScriptUri)",
+  "kronosActionPanelScript(nonce, 'Kronos Trend Metrics', true, actionScriptUri)",
+  "kronosActionPanelScript(nonce, 'Kronos Integration Manifest', true, actionScriptUri)",
+  "kronosActionPanelScript(nonce, 'Kronos Profiles', true, actionScriptUri)",
+  "kronosActionPanelScript(nonce, 'Kronos Doctor', true, actionScriptUri)",
 ]) {
   if (!operationsReportPanelView.includes(marker)) {
     fail(`Missing operations report panel view marker: ${marker}`);

@@ -3,7 +3,7 @@ import type { RecoveryInventory, RecoveryItem } from './recoveryCenter';
 import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss, operatorCommandRow } from './operatorPanel';
 import { escapeAttr, escapeHtml } from './webviewHtml';
 
-export function buildStateAuditLogHtml(events: StateAuditEvent[], stateAuditFile: string, nonce?: string): string {
+export function buildStateAuditLogHtml(events: StateAuditEvent[], stateAuditFile: string, nonce?: string, actionScriptUri?: string): string {
   const rows = events.length === 0
     ? '<tr><td colspan="5" class="empty">No state audit events found.</td></tr>'
     : events.map(event => {
@@ -43,7 +43,7 @@ export function buildStateAuditLogHtml(events: StateAuditEvent[], stateAuditFile
   </div>
   ${actions}
   <div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Time</th><th>Action</th><th>Target</th><th>Backup</th><th>Detail</th></tr>${rows}</table></div>
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos State Audit Log', true, actionScriptUri) : ''}</body></html>`;
 }
 
 export function buildRecoveryHtml(inventory: RecoveryInventory, nonce?: string, focusRunId?: string, actionScriptUri?: string): string {

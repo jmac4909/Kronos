@@ -13,6 +13,7 @@ export function buildPromptManagerHtml(
   smokeResults: PromptSmokeResult[],
   requiredPrompts: string[],
   nonce?: string,
+  actionScriptUri?: string,
 ): string {
   const globalByName = new Map(globalTemplates.map(t => [t.name, t]));
   const missing = requiredPrompts.filter(name => !globalByName.has(name));
@@ -71,10 +72,10 @@ export function buildPromptManagerHtml(
 
   <div class="operator-section"><h2>Project Overrides</h2>
   ${projectOverrides.length === 0 ? '<div class="kronos-empty">No project prompt overrides found.</div>' : `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Project</th><th>Name</th><th>Hash</th><th>Modified</th><th>Variables</th><th>Path</th></tr>${overrideRows}</table></div>`}</div>
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Prompt Manager', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildPromptHistoryHtml(snapshots: PromptHistorySnapshot[], diff?: PromptHistoryDiff, nonce?: string): string {
+export function buildPromptHistoryHtml(snapshots: PromptHistorySnapshot[], diff?: PromptHistoryDiff, nonce?: string, actionScriptUri?: string): string {
   const snapshotRows = snapshots.map(snapshot => `<tr>
     <td>${escapeHtml(snapshot.createdAt)}</td>
     <td>${escapeHtml(snapshot.scope)}</td>
@@ -121,10 +122,10 @@ export function buildPromptHistoryHtml(snapshots: PromptHistorySnapshot[], diff?
   ${diff ? `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Status</th><th>Prompt</th><th>Hash</th><th>Variables</th><th>Path</th></tr>${diffRows}</table></div>` : '<div class="kronos-empty">Create a prompt snapshot to start history tracking.</div>'}</div>
   <div class="operator-section"><h2>Snapshots</h2>
   ${snapshots.length === 0 ? '<div class="kronos-empty">No prompt snapshots found.</div>' : `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Created</th><th>Scope</th><th>Templates</th><th>ID</th></tr>${snapshotRows}</table></div>`}</div>
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Prompt History', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildPromptSmokeTestsHtml(results: PromptSmokeResult[], nonce?: string): string {
+export function buildPromptSmokeTestsHtml(results: PromptSmokeResult[], nonce?: string, actionScriptUri?: string): string {
   const pass = results.filter(result => result.status === 'pass').length;
   const fail = results.filter(result => result.status === 'fail').length;
   const rows = results.map(promptSmokeResultRow).join('');
@@ -146,7 +147,7 @@ export function buildPromptSmokeTestsHtml(results: PromptSmokeResult[], nonce?: 
   </div>
   ${actions}
   ${results.length === 0 ? '<div class="kronos-empty">No prompt smoke tests configured.</div>' : `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Status</th><th>Test</th><th>Template</th><th>Detail</th></tr>${rows}</table></div>`}
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Prompt Smoke Tests', true, actionScriptUri) : ''}</body></html>`;
 }
 
 function promptSmokeResultRow(result: PromptSmokeResult): string {

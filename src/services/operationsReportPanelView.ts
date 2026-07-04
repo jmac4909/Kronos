@@ -7,7 +7,7 @@ import { requiredScripts } from './scriptClient';
 import type { TrendMetricsReport } from './trendMetrics';
 import { escapeClass, escapeHtml } from './webviewHtml';
 
-export function buildAgentQualityScoreHtml(score: AgentQualityScore, nonce?: string): string {
+export function buildAgentQualityScoreHtml(score: AgentQualityScore, nonce?: string, actionScriptUri?: string): string {
   const componentRows = score.components.map(component => `<tr>
     <td>${escapeHtml(component.label)}</td>
     <td><strong>${escapeHtml(String(component.score))}</strong> / ${escapeHtml(String(component.max))}</td>
@@ -38,10 +38,10 @@ export function buildAgentQualityScoreHtml(score: AgentQualityScore, nonce?: str
   </div>
   <div class="operator-summary">${metricRows}</div>
   <div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Component</th><th>Score</th><th>Detail</th></tr>${componentRows}</table></div>
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Agent Quality Score', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildTrendMetricsHtml(report: TrendMetricsReport, nonce?: string): string {
+export function buildTrendMetricsHtml(report: TrendMetricsReport, nonce?: string, actionScriptUri?: string): string {
   const metricCards = report.metrics.map(metric => `<div class="summary-card ${escapeClass(metric.status)}">
     <div class="num">${escapeHtml(metric.value)}</div>
     <div class="lbl">${escapeHtml(metric.label)}</div>
@@ -80,10 +80,10 @@ export function buildTrendMetricsHtml(report: TrendMetricsReport, nonce?: string
   ${actions}
   <div class="operator-summary">${metricCards}</div>
   <div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Status</th><th>Metric</th><th>Value</th><th>Detail</th></tr>${rows}</table></div>
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Trend Metrics', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildIntegrationManifestHtml(status: IntegrationManifestStatus, audit: IntegrationManifestAudit, nonce?: string): string {
+export function buildIntegrationManifestHtml(status: IntegrationManifestStatus, audit: IntegrationManifestAudit, nonce?: string, actionScriptUri?: string): string {
   const artifactByKey = new Map(audit.artifacts.map(artifact => [`${artifact.kind}:${artifact.name}`, artifact]));
   const hashCell = (artifact: IntegrationManifestAudit['artifacts'][number] | undefined) => {
     if (!artifact) {
@@ -154,10 +154,10 @@ export function buildIntegrationManifestHtml(status: IntegrationManifestStatus, 
   ${prompts ? `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Prompt</th><th>Required</th><th>Hash Status</th><th>Manifest SHA-256</th></tr>${prompts}</table></div>` : '<div class="kronos-empty">No prompt manifest entries.</div>'}</div>
   <div class="operator-section"><h2>Providers</h2>
   ${providers ? `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Provider</th><th>Status</th><th>Base URL</th></tr>${providers}</table></div>` : '<div class="kronos-empty">No provider manifest entries.</div>'}</div>
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Integration Manifest', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildProfilesHtml(active: KronosProfile, nonce?: string): string {
+export function buildProfilesHtml(active: KronosProfile, nonce?: string, actionScriptUri?: string): string {
   const rows = listProfiles().map(profile => {
     const providers = Object.entries(profile.providers)
       .filter(([, enabled]) => enabled)
@@ -190,10 +190,10 @@ export function buildProfilesHtml(active: KronosProfile, nonce?: string): string
   </div>
   ${actions}
   <div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Profile</th><th>Default Branch</th><th>Providers</th><th>Description</th></tr>${rows}</table></div>
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Profiles', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildDoctorHtml(checks: DoctorCheck[], nonce?: string): string {
+export function buildDoctorHtml(checks: DoctorCheck[], nonce?: string, actionScriptUri?: string): string {
   const summary = {
     pass: checks.filter(c => c.status === 'pass').length,
     warn: checks.filter(c => c.status === 'warn').length,
@@ -233,5 +233,5 @@ export function buildDoctorHtml(checks: DoctorCheck[], nonce?: string): string {
     <tr><th>Status</th><th>Check</th><th>Detail</th></tr>
     ${rows}
   </table></div>
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Doctor', true, actionScriptUri) : ''}</body></html>`;
 }

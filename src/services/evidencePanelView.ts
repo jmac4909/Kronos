@@ -4,7 +4,7 @@ import type { EvidencePublishDestination, EvidencePublishResult } from './eviden
 import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss, operatorCommandRow } from './operatorPanel';
 import { escapeClass, escapeHtml, safeHttpHref } from './webviewHtml';
 
-export function buildEvidenceHandoffHtml(plan: EvidenceHandoffPlan, nonce?: string): string {
+export function buildEvidenceHandoffHtml(plan: EvidenceHandoffPlan, nonce?: string, actionScriptUri?: string): string {
   const destinations = plan.destinations.map(destination => {
     const href = safeHttpHref(destination.url);
     return `<tr class="${destination.available ? 'available' : 'missing'}">
@@ -38,10 +38,10 @@ export function buildEvidenceHandoffHtml(plan: EvidenceHandoffPlan, nonce?: stri
   <div class="operator-section"><h2>Comment Payload</h2>
   <pre>${comment}</pre></div>
   <p>Markdown artifact: ${escapeHtml(plan.exportPath)}</p>
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Evidence Handoff', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildEvidencePublishHtml(results: Array<EvidencePublishResult | EvidencePublishDestination>, ticketKey: string, nonce?: string): string {
+export function buildEvidencePublishHtml(results: Array<EvidencePublishResult | EvidencePublishDestination>, ticketKey: string, nonce?: string, actionScriptUri?: string): string {
   const rows = results.map(result => {
     const href = safeHttpHref(result.endpoint);
     const httpStatus = 'httpStatus' in result && result.httpStatus ? `HTTP ${result.httpStatus}` : '';
@@ -68,7 +68,7 @@ export function buildEvidencePublishHtml(results: Array<EvidencePublishResult | 
   ${actions}
   <div class="subtitle">External publishing is safety-gated and credential values are never displayed.</div>
   ${empty || `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Status</th><th>Destination</th><th>Detail</th><th>Endpoint</th></tr>${rows}</table></div>`}
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Evidence Publish', true, actionScriptUri) : ''}</body></html>`;
 }
 
 export function buildEvidenceGateHtml(gates: EvidenceGateResult[], title: string, nonce: string, actionScriptUri?: string): string {

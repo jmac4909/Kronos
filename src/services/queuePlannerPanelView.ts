@@ -5,7 +5,7 @@ import { estimatePlanMinutes } from './queuePlanner';
 import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss } from './operatorPanel';
 import { escapeClass, escapeHtml } from './webviewHtml';
 
-export function buildQueuePlannerHtml(plans: PlannedAction[], nonce?: string): string {
+export function buildQueuePlannerHtml(plans: PlannedAction[], nonce?: string, actionScriptUri?: string): string {
   const rows = plans.map((plan, idx) => {
     const parts = plan.scoreBreakdown
       .map(part => `<div class="score-part"><span>${escapeHtml(part.label)}</span><strong>${escapeHtml(String(part.value))}</strong><small>${escapeHtml(part.detail)}</small></div>`)
@@ -34,10 +34,10 @@ export function buildQueuePlannerHtml(plans: PlannedAction[], nonce?: string): s
     </div>
   </div>
   ${empty || `<div class="plan-list">${rows}</div>`}
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Queue Planner', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildBacklogTriageHtml(report: BacklogTriageReport, nonce?: string): string {
+export function buildBacklogTriageHtml(report: BacklogTriageReport, nonce?: string, actionScriptUri?: string): string {
   const cards = Object.entries(report.summary)
     .filter(([, count]) => count > 0)
     .map(([kind, count]) => `<div class="summary-card"><div class="num">${escapeHtml(String(count))}</div><div class="lbl">${escapeHtml(triageKindLabel(kind))}</div></div>`)
@@ -70,10 +70,10 @@ export function buildBacklogTriageHtml(report: BacklogTriageReport, nonce?: stri
   </div>
   <div class="operator-summary">${summaryCards}</div>
   ${empty || `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Severity</th><th>Ticket</th><th>Category</th><th>Action</th><th>Projects</th><th>Age</th><th>Detail</th><th class="action-cell">Actions</th></tr>${rows}</table></div>`}
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Backlog Triage', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildProjectBatchPlanHtml(batches: ProjectBatchPlan[], nonce?: string): string {
+export function buildProjectBatchPlanHtml(batches: ProjectBatchPlan[], nonce?: string, actionScriptUri?: string): string {
   const rows = batches.map(batch => {
     const actions = Object.entries(batch.actionCounts)
       .map(([action, count]) => `${actionToLabel(action)}: ${count}`)
@@ -105,10 +105,10 @@ export function buildProjectBatchPlanHtml(batches: ProjectBatchPlan[], nonce?: s
     </div>
   </div>
   ${empty || `<div class="plan-list">${rows}</div>`}
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Project Batch Plan', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildReleaseBatchPlanHtml(batches: ReleaseBatchPlan[], nonce?: string): string {
+export function buildReleaseBatchPlanHtml(batches: ReleaseBatchPlan[], nonce?: string, actionScriptUri?: string): string {
   const rows = batches.map(batch => {
     const actions = Object.entries(batch.actionCounts)
       .map(([action, count]) => `${actionToLabel(action)}: ${count}`)
@@ -141,10 +141,10 @@ export function buildReleaseBatchPlanHtml(batches: ReleaseBatchPlan[], nonce?: s
     </div>
   </div>
   ${empty || `<div class="plan-list">${rows}</div>`}
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Release Batch Plan', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildCollisionReportHtml(reports: Array<{ plan: PlannedAction; collisions: DispatchCollision[] }>, nonce?: string): string {
+export function buildCollisionReportHtml(reports: Array<{ plan: PlannedAction; collisions: DispatchCollision[] }>, nonce?: string, actionScriptUri?: string): string {
   const rows = reports.flatMap(report => report.collisions.map(collision => `<tr class="${escapeClass(collision.severity)}">
     <td><span class="pill ${escapeClass(collision.severity)}">${escapeHtml(collision.severity)}</span></td>
     <td>${escapeHtml(report.plan.ticketKey || 'Refresh')}<br><span class="collision-plan-detail">${escapeHtml(actionToLabel(report.plan.action))}</span></td>
@@ -169,10 +169,10 @@ export function buildCollisionReportHtml(reports: Array<{ plan: PlannedAction; c
     </div>
   </div>
   ${empty || `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>Severity</th><th>Plan</th><th>Kind</th><th>Detail</th><th class="action-cell">Actions</th></tr>${rows}</table></div>`}
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, 'Kronos Collision Report', true, actionScriptUri) : ''}</body></html>`;
 }
 
-export function buildQueuePlanModeHtml(title: string, subtitle: string, plans: PlannedAction[], nonce?: string): string {
+export function buildQueuePlanModeHtml(title: string, subtitle: string, plans: PlannedAction[], nonce?: string, actionScriptUri?: string): string {
   const rows = plans.map((plan, idx) => `<tr>
     <td>${idx + 1}</td>
     <td><strong>${escapeHtml(plan.ticketKey || 'Refresh')}</strong><div class="muted">${escapeHtml(plan.ticketSummary || '')}</div></td>
@@ -196,7 +196,7 @@ export function buildQueuePlanModeHtml(title: string, subtitle: string, plans: P
     </div>
   </div>
   ${empty || `<div class="table-wrap kronos-panel"><table class="kronos-table"><tr><th>#</th><th>Ticket</th><th>Action</th><th>Projects</th><th>Score</th><th>Estimate</th><th>Reason</th><th class="action-cell">Actions</th></tr>${rows}</table></div>`}
-</div>${nonce ? kronosActionPanelScript(nonce) : ''}</body></html>`;
+</div>${nonce ? kronosActionPanelScript(nonce, title, true, actionScriptUri) : ''}</body></html>`;
 }
 
 function planActionRow(plan: PlannedAction): string {
