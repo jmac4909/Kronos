@@ -22,6 +22,7 @@ import { gcloudApplicationDefaultLoginCommand, kronosLoginShellTerminalOptions, 
 import { unknownErrorMessage } from '../services/errorUtils';
 import { isFreshActiveRun } from '../services/runStatus';
 import { runProgressSummary } from '../services/runProgress';
+import { buildRunOperatorSummary, type RunOperatorSummary, type RunOperatorTone } from '../services/runOperatorSummary';
 import { isAttentionRunStatus, runAttentionDetail } from '../services/runAttention';
 import { sortedRunCenterRuns } from '../services/runCenterSort';
 import { readJsonFile } from '../services/jsonFiles';
@@ -1330,6 +1331,18 @@ function buildProgressHtml(project: string, skill: string, ticket: string, event
   const progress = runProgressSummary({ events });
   const attentionDetail = run && isAttentionRunStatus(run.status) ? runAttentionDetail(run) : '';
   const statusPresentation = progressStatusPresentation(events, run);
+  const summaryRun = {
+    ...(run || {}),
+    project,
+    skill,
+    ticket,
+    status: run?.status || (statusPresentation.isDone ? (statusPresentation.statusText === 'Error' ? 'failed' : 'completed') : 'running'),
+    events,
+  };
+  const operatorSummary = buildRunOperatorSummary(summaryRun);
+  const operatorFacts = renderRunOperatorFacts(operatorSummary);
+  const changedPreview = renderRunFilePreview('Changed', operatorSummary.changedFiles);
+  const readPreview = renderRunFilePreview('Inspected', operatorSummary.readFiles);
   const filesEdited = new Set<string>();
   const filesRead = new Set<string>();
   let lastThinking = '';
@@ -1363,6 +1376,25 @@ function buildProgressHtml(project: string, skill: string, ticket: string, event
   .run-title { margin: 0; font-size: 18px; line-height: 1.25; }
   .run-subtitle { margin-top: 3px; color: var(--k-muted); font-size: 12px; }
   .run-status { color: var(--k-muted); font-size: 11px; font-weight: 650; text-transform: uppercase; }
+  .operator-brief { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr); gap: 16px; padding: 16px; margin-bottom: 16px; border-left: 4px solid var(--k-accent); }
+  .operator-brief.good { border-left-color: var(--k-ok); }
+  .operator-brief.warn { border-left-color: var(--k-warn); }
+  .operator-brief.bad { border-left-color: var(--k-danger); }
+  .operator-brief.info { border-left-color: #2196f3; }
+  .operator-kicker { color: var(--k-muted); font-size: 11px; font-weight: 650; text-transform: uppercase; }
+  .operator-brief h2 { margin: 4px 0 6px; font-size: 18px; line-height: 1.25; }
+  .operator-brief p { margin: 0; color: var(--k-muted); line-height: 1.45; }
+  .next-step { margin-top: 10px; padding: 8px 10px; border-radius: var(--k-radius-sm); background: var(--k-accent-bg); color: var(--k-fg); font-size: 12px; }
+  .next-step strong { color: var(--k-fg); }
+  .fact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; align-content: start; }
+  .fact { border: 1px solid var(--k-border); border-radius: var(--k-radius-sm); padding: 8px; background: var(--k-surface); }
+  .fact .fact-label { color: var(--k-muted); font-size: 10px; font-weight: 650; text-transform: uppercase; }
+  .fact .fact-value { margin-top: 3px; font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }
+  .fact.good { border-color: color-mix(in srgb, var(--k-ok) 45%, var(--k-border)); }
+  .fact.warn { border-color: color-mix(in srgb, var(--k-warn) 45%, var(--k-border)); }
+  .fact.bad { border-color: color-mix(in srgb, var(--k-danger) 45%, var(--k-border)); }
+  .file-preview { margin-top: 10px; display: grid; gap: 4px; color: var(--k-muted); font-size: 12px; }
+  .file-preview strong { color: var(--k-fg); }
   .columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 290px); gap: 16px; align-items: start; }
   .section { margin-bottom: 16px; }
   .section h3 { margin: 0 0 8px 0; color: var(--k-muted); font-size: 11px; font-weight: 650; text-transform: uppercase; }
@@ -1391,6 +1423,7 @@ function buildProgressHtml(project: string, skill: string, ticket: string, event
   .result-table th, .result-table td { border: 1px solid var(--k-border); padding: 5px 8px; text-align: left; }
   .result-table th { background: var(--k-surface-soft); font-weight: 650; }
   @media (max-width: 820px) {
+    .operator-brief { grid-template-columns: 1fr; }
     .columns { grid-template-columns: 1fr; }
     .run-header { grid-template-columns: auto 1fr; }
     .run-status { grid-column: 2; }
@@ -1403,6 +1436,16 @@ function buildProgressHtml(project: string, skill: string, ticket: string, event
       <div class="run-subtitle">${events.length} event${events.length === 1 ? '' : 's'} captured</div>
     </div>
     <div class="run-status">${statusText}</div>
+  </div>
+  <div class="operator-brief ${escapeClass(operatorSummary.tone)} kronos-panel kronos-soft">
+    <div>
+      <div class="operator-kicker">Automatic run summary</div>
+      <h2>${escapeHtml(operatorSummary.headline)}</h2>
+      <p>${escapeHtml(operatorSummary.detail)}</p>
+      <div class="next-step"><strong>Next:</strong> ${escapeHtml(operatorSummary.nextStep)}</div>
+      ${changedPreview}${readPreview}
+    </div>
+    <div class="fact-grid">${operatorFacts}</div>
   </div>
   ${attentionDetail ? `<div class="attention-banner kronos-panel"><strong>Needs Attention</strong>${escapeHtml(attentionDetail)}</div>` : ''}
   ${lastThinking && !isDone ? `<div class="thinking">${escapeHtml(lastThinking)}</div>` : ''}
@@ -1424,6 +1467,20 @@ function buildProgressHtml(project: string, skill: string, ticket: string, event
     </div>
   </div>
 </div></body></html>`;
+}
+
+function renderRunOperatorFacts(summary: RunOperatorSummary): string {
+  return summary.facts.map(fact => `<div class="fact ${escapeClass(fact.tone || 'neutral')}">
+    <div class="fact-label">${escapeHtml(fact.label)}</div>
+    <div class="fact-value">${escapeHtml(fact.value)}</div>
+  </div>`).join('');
+}
+
+function renderRunFilePreview(label: string, files: string[]): string {
+  if (files.length === 0) { return ''; }
+  const visible = files.slice(0, 4).map(file => escapeHtml(file)).join(', ');
+  const remaining = files.length > 4 ? ` + ${files.length - 4} more` : '';
+  return `<div class="file-preview"><span><strong>${escapeHtml(label)}:</strong> ${visible}${escapeHtml(remaining)}</span></div>`;
 }
 
 function runCenterActionButton(action: string, label: string, runId?: string, primary = false): string {
@@ -1488,11 +1545,13 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
   const displayRuns = focusedRunId
     ? [...sortedRuns].sort((a, b) => focusedRunSort(a, b, focusedRunId))
     : sortedRuns;
+  const runBoardHtml = buildRunCenterOperatorBoard(displayRuns);
   const rows = displayRuns.map(run => {
     const runId = stringOrDefault(run.id, '');
     const focused = Boolean(focusedRunId && runId === focusedRunId);
     const status = stringOrDefault(run.status, 'unknown');
     const statusClass = escapeClass(status);
+    const operatorSummary = buildRunOperatorSummary(run);
     const rowClass = `${statusClass}${focused ? ' focused-run' : ''}`;
     const ended = run.endedAt ? progressDateTimeLabel(run.endedAt) : '';
     const started = progressDateTimeLabel(run.startedAt);
@@ -1520,19 +1579,18 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
     const branchSummary = currentRef
       ? `ref ${currentRef}${currentCommit ? ` @ ${currentCommit.substring(0, 12)}` : ''}`
       : '';
-    const progress = runProgressSummary(run);
     const needsAttention = status === 'failed' || status === 'needs_human' || status === 'cancelled';
     const eventLabel = lastEvent ? stringOrDefault(lastEvent.label, '') : '';
     const attentionDetail = needsAttention ? runAttentionDetail(run) : '';
     const eventCell = attentionDetail && attentionDetail !== eventLabel
       ? `${eventLabel ? `${escapeHtml(eventLabel)}<br>` : ''}<span class="failure">${escapeHtml(attentionDetail)}</span>`
-      : escapeHtml(eventLabel || attentionDetail);
+      : escapeHtml(eventLabel || attentionDetail || operatorSummary.latestSignal);
     const actionCell = interactive ? `<td class="action-cell">${runCenterActionButtons(run)}</td>` : '';
     return `<tr class="${rowClass}"${runId ? ` data-run-id="${escapeAttr(runId)}"` : ''}${focused ? ' data-focused-run="true"' : ''}>
       <td><span class="kronos-pill status ${statusClass}">${escapeHtml(status)}</span></td>
       <td><strong>${escapeHtml(stringOrDefault(run.project, 'unknown project'))}</strong><br><span>${escapeHtml(stringOrDefault(run.skill, 'unknown skill'))} ${escapeHtml(stringOrDefault(run.ticket, ''))}</span></td>
       <td>${escapeHtml(started)}${ended ? `<br><span>${escapeHtml(ended)}</span>` : ''}</td>
-      <td class="progress-cell"><strong>${escapeHtml(progress.label)}</strong>${progress.detail ? `<br><span>${escapeHtml(progress.detail)}</span>` : ''}</td>
+      <td class="progress-cell outcome-cell ${escapeClass(operatorSummary.tone)}"><strong>${escapeHtml(operatorSummary.headline)}</strong><div>${escapeHtml(operatorSummary.detail)}</div><span>${escapeHtml(operatorSummary.nextStep)}</span></td>
       <td><code>${escapeHtml(run.model)}</code><br><span>${escapeHtml(promptLabel)} ${escapeHtml(promptHash.substring(0, 12))}${run.promptPath ? ' saved' : ''}</span>${missing}${permissionSummary ? `<br><span>${escapeHtml(permissionSummary)}</span>` : ''}</td>
       <td><span class="kronos-pill readiness ${escapeClass(readinessStatus)}">${escapeHtml(readinessStatus)}</span><br><span>${escapeHtml(readinessSummary)}</span></td>
       <td class="workspace-cell">${escapeHtml(stringOrDefault(run.worktreePath || run.cwd, 'unknown workspace'))}${branchSummary ? `<br><span>${escapeHtml(branchSummary)}</span>` : ''}</td>
@@ -1557,7 +1615,25 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
   .run-table-wrap { overflow: auto; }
   .kronos-table { min-width: ${interactive ? '1160' : '940'}px; }
   td span:not(.kronos-pill), .muted { color: var(--k-muted); }
-  .progress-cell strong { display: block; font-size: 11px; }
+  .run-center-board { display: grid; grid-template-columns: minmax(240px, 1.4fr) repeat(4, minmax(116px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .run-center-overview { padding: 14px 16px; border-left: 4px solid var(--k-accent); }
+  .run-center-overview h2 { margin: 0 0 5px; font-size: 16px; line-height: 1.3; }
+  .run-center-overview div { color: var(--k-muted); font-size: 12px; }
+  .run-center-stat { padding: 12px; min-height: 76px; }
+  .run-center-stat strong { display: block; font-size: 24px; line-height: 1; }
+  .run-center-stat span { display: block; margin-top: 5px; color: var(--k-muted); font-size: 11px; font-weight: 650; text-transform: uppercase; }
+  .run-center-stat.good strong { color: var(--k-ok); }
+  .run-center-stat.warn strong { color: var(--k-warn); }
+  .run-center-stat.bad strong { color: var(--k-danger); }
+  .run-center-stat.info strong { color: #2196f3; }
+  .outcome-cell { min-width: 260px; }
+  .outcome-cell strong { display: block; font-size: 12px; line-height: 1.35; }
+  .outcome-cell div { margin-top: 3px; color: var(--k-muted); font-size: 11px; line-height: 1.35; }
+  .outcome-cell > span { display: block; margin-top: 6px; padding: 5px 7px; border-radius: var(--k-radius-sm); background: var(--k-accent-bg); color: var(--k-fg); font-size: 11px; line-height: 1.3; }
+  .outcome-cell.good strong { color: var(--k-ok); }
+  .outcome-cell.warn strong { color: var(--k-warn); }
+  .outcome-cell.bad strong { color: var(--k-danger); }
+  .outcome-cell.info strong { color: #2196f3; }
   .readiness.ready { background: rgba(76,175,80,0.18); color: #4caf50; }
   .readiness.needs_human, .readiness.not_ready, .readiness.unknown { background: rgba(255,152,0,0.18); color: #ff9800; }
   .readiness.blocked { background: rgba(244,67,54,0.18); color: #f44336; }
@@ -1569,6 +1645,10 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
   .failure { color: #f44336; opacity: 1; }
   .workspace-cell { overflow-wrap: anywhere; }
   ${actionStyles}
+  @media (max-width: 900px) {
+    .run-center-board { grid-template-columns: 1fr 1fr; }
+    .run-center-overview { grid-column: 1 / -1; }
+  }
 </style></head><body><div class="kronos-shell">
   <div class="kronos-header">
     <div>
@@ -1577,6 +1657,7 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
     </div>
     ${refreshAction}
   </div>
+  ${runBoardHtml}
   ${runs.length === 0 ? '<div class="kronos-empty">No persisted runs yet.</div>' : `<div class="run-table-wrap kronos-panel"><table class="kronos-table">
     <tr><th>Status</th><th>Run</th><th>Time</th><th>Progress</th><th>Model</th><th>Readiness</th><th>Workspace</th><th>Last event</th>${actionHeader}</tr>
     ${rows}
@@ -1588,6 +1669,29 @@ function focusedRunSort(a: KronosRun, b: KronosRun, focusRunId: string): number 
   const aFocused = stringOrDefault(a.id, '') === focusRunId;
   const bFocused = stringOrDefault(b.id, '') === focusRunId;
   return Number(bFocused) - Number(aFocused);
+}
+
+function buildRunCenterOperatorBoard(runs: KronosRun[]): string {
+  const active = runs.filter(run => isFreshActiveRun(run)).length;
+  const attention = runs.filter(run => ['failed', 'cancelled', 'needs_human'].includes(stringOrDefault(run.status, ''))).length;
+  const review = runs.filter(run => stringOrDefault(run.status, '') === 'waiting_for_review').length;
+  const completed = runs.filter(run => stringOrDefault(run.status, '') === 'completed').length;
+  const firstActionable = runs.find(run => isFreshActiveRun(run) || ['failed', 'cancelled', 'needs_human', 'waiting_for_review'].includes(stringOrDefault(run.status, '')));
+  const firstSummary = firstActionable ? buildRunOperatorSummary(firstActionable) : undefined;
+  const overview = firstSummary
+    ? `<h2>${escapeHtml(firstSummary.headline)}</h2><div>${escapeHtml(firstSummary.nextStep)}</div>`
+    : `<h2>No run needs immediate action</h2><div>Completed runs can be archived when their evidence has been reviewed.</div>`;
+  return `<div class="run-center-board">
+    <div class="run-center-overview kronos-panel kronos-soft">${overview}</div>
+    ${runCenterStat('Active', active, active > 0 ? 'info' : 'neutral')}
+    ${runCenterStat('Needs Attention', attention, attention > 0 ? 'bad' : 'neutral')}
+    ${runCenterStat('Ready Review', review, review > 0 ? 'good' : 'neutral')}
+    ${runCenterStat('Completed', completed, completed > 0 ? 'good' : 'neutral')}
+  </div>`;
+}
+
+function runCenterStat(label: string, value: number, tone: RunOperatorTone): string {
+  return `<div class="run-center-stat ${escapeClass(tone)} kronos-panel kronos-soft"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`;
 }
 
 function renderResult(text: string): string {

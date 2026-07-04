@@ -152,7 +152,7 @@ import {
   ticketProjectNamesForCommand,
 } from './services/commandPayloads';
 import { openReviewTicketEntries, reviewBranchTickets as buildReviewBranchTickets } from './services/reviewWork';
-import { decideReviewMonitorAction, reviewDeployMonitorActionHandled, reviewTerminalMergeRequestActionKey, type ReviewDeployMonitorResult, type ReviewMonitorDecision, type ReviewTerminalMergeRequestAction } from './services/reviewMonitor';
+import { decideReviewMonitorAction, reviewDeployMonitorActionHandled, reviewMergeRequestNotificationKey, reviewTerminalMergeRequestActionKey, type ReviewDeployMonitorResult, type ReviewMonitorDecision, type ReviewTerminalMergeRequestAction } from './services/reviewMonitor';
 import { REVIEW_SEEN_KEYS_STORAGE_KEY, normalizeReviewSeenKeys, planNewReviewNotification } from './services/reviewNotifications';
 import { decideQueueRemoval } from './services/queueRemovalPolicy';
 import { deployMonitorAttentionIssue, deployMonitorHandoffCheckName, hasDeployMonitorHandoffIssue, hasHandledDeployMonitorRun, resolveDeployMonitorProject } from './services/deployMonitorHandoff';
@@ -183,6 +183,7 @@ const REQUIRED_PROMPTS = [
 ];
 const REVIEW_POLL_FAILURE_NOTIFICATION_MS = 15 * 60 * 1000;
 const reviewPollFailureNotifications = new Map<string, number>();
+const reviewMergeRequestNotifications = new Set<string>();
 const reviewTerminalMergeRequestActions = new Set<string>();
 const OPTIONAL_SCRIPT_PANEL_WARNING = 'Kronos integration scripts are not installed. Run Kronos: Doctor for setup details.';
 
@@ -4630,6 +4631,9 @@ async function pollReviewMergeRequests(state: KronosState, shouldContinue: () =>
         notifyReviewMonitorDecision(decision);
       } else if (decision.kind === 'notify') {
         if (!shouldContinue()) { return; }
+        const notificationKey = reviewMergeRequestNotificationKey(candidate.ticketKey, update);
+        if (reviewMergeRequestNotifications.has(notificationKey)) { continue; }
+        reviewMergeRequestNotifications.add(notificationKey);
         notifyReviewMonitorDecision(decision);
       }
     } catch (e: unknown) {

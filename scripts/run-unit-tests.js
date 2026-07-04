@@ -228,6 +228,7 @@ const diffPanelView = require('../out/services/diffPanelView.js');
 const jiraBoardPanelView = require('../out/services/jiraBoardPanelView.js');
 const runStatus = require('../out/services/runStatus.js');
 const runProgress = require('../out/services/runProgress.js');
+const runOperatorSummary = require('../out/services/runOperatorSummary.js');
 const runRecords = require('../out/services/runRecords.js');
 const activeRunDisplay = require('../out/services/activeRunDisplay.js');
 const queueActiveRun = require('../out/services/queueActiveRun.js');
@@ -1492,6 +1493,22 @@ test('review monitor decisions route merged, closed, comment, and no-op MR polls
   assert.equal(reviewMonitor.reviewTerminalMergeRequestActionKey('K-1', 13, 'deploy_monitor'), 'K-1:13:deploy_monitor');
   assert.equal(reviewMonitor.reviewTerminalMergeRequestActionKey('K-2', '  14  ', 'blocked'), 'K-2:14:blocked');
   assert.equal(reviewMonitor.reviewTerminalMergeRequestActionKey('K-3', undefined, 'blocked'), 'K-3:mr:blocked');
+  const notificationUpdate = {
+    ...baseUpdate,
+    previousMr: { iid: 8, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/8', comment_count: 1 },
+    ticket: ticket({
+      mr: { iid: 8, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/8', comment_count: 2 },
+    }),
+  };
+  const notificationKey = reviewMonitor.reviewMergeRequestNotificationKey('K-8', notificationUpdate);
+  assert.match(notificationKey, /^K-8:8:notify:/);
+  assert.equal(reviewMonitor.reviewMergeRequestNotificationKey('K-8', notificationUpdate), notificationKey);
+  assert.notEqual(reviewMonitor.reviewMergeRequestNotificationKey('K-8', {
+    ...notificationUpdate,
+    ticket: ticket({
+      mr: { iid: 8, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/8', comment_count: 3 },
+    }),
+  }), notificationKey);
 });
 
 test('deploy monitor handoff resolves projects and only suppresses handled runs', () => {
@@ -5841,6 +5858,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "from '../services/webviewSecurity'",
     "import { isFreshActiveRun } from '../services/runStatus'",
     "import { runProgressSummary } from '../services/runProgress'",
+    "import { buildRunOperatorSummary, type RunOperatorSummary, type RunOperatorTone } from '../services/runOperatorSummary'",
     "import { isAttentionRunStatus, runAttentionDetail } from '../services/runAttention'",
     'createWebviewNonce',
     'webviewScriptCspOptions',
@@ -5877,12 +5895,17 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     'const sessionStart = progressDateOr(session.startedAt, new Date())',
     'timestamp: progressDateOr(e.timestamp, sessionStart)',
     'const progress = runProgressSummary({ events })',
+    'const operatorSummary = buildRunOperatorSummary(summaryRun)',
+    'Automatic run summary',
+    'function renderRunOperatorFacts(summary: RunOperatorSummary)',
     'durationSec: progress.elapsedSeconds',
     'Duration: ${progress.elapsedSeconds}s',
     'const statusClass = escapeClass(status)',
     'const started = progressDateTimeLabel(run.startedAt)',
     'const runEvents = Array.isArray(run.events) ? run.events : []',
-    'const progress = runProgressSummary(run)',
+    'const operatorSummary = buildRunOperatorSummary(run)',
+    'buildRunCenterOperatorBoard',
+    'class="progress-cell outcome-cell',
     "export type { RunCenterActionRequest } from '../services/webviewMessages'",
     "import { normalizeRunCenterMessage, type RunCenterActionRequest } from '../services/webviewMessages'",
     'const RUN_CENTER_MESSAGE_COMMANDS = new Set',
@@ -5916,7 +5939,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     'buildRunCenterHtml(runs, interactive ? nonce : undefined, actionScriptUri, options.focusRunId)',
     'const interactive = Boolean(nonce)',
     '<th>Progress</th>',
-    'class="progress-cell"',
+    'class="progress-cell outcome-cell',
     "const actionHeader = interactive ? '<th>Actions</th>' : ''",
     'const actionCell = interactive ?',
     'const promptMeta = isRecord(run.promptMetadata) ? run.promptMetadata : undefined',
@@ -6803,6 +6826,129 @@ test('run progress helper summarizes active run activity', () => {
     'function formatElapsed',
     "countLabel(toolCalls, 'tool')",
     "countLabel(filesChanged, 'changed', 'changed')",
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+});
+
+test('run operator summary explains outcome and next action automatically', () => {
+  const active = runOperatorSummary.buildRunOperatorSummary({
+    project: 'api',
+    skill: 'implement',
+    ticket: 'K-1',
+    status: 'running',
+    startedAt: '2026-07-02T00:00:00.000Z',
+    events: [
+      { type: 'tool', label: 'Reading src/app.ts', timestamp: '2026-07-02T00:01:00.000Z' },
+      { type: 'tool', label: 'Editing src/app.ts', timestamp: '2026-07-02T00:02:00.000Z' },
+      { type: 'text', label: 'Running unit tests after the patch.', timestamp: '2026-07-02T00:03:00.000Z' },
+    ],
+  }, new Date('2026-07-02T00:05:30.000Z'));
+  assert.equal(active.tone, 'info');
+  assert.match(active.headline, /K-1 implement is running/);
+  assert.match(active.detail, /1 changed file/);
+  assert.match(active.nextStep, /Watch for file changes/);
+  assert.deepEqual(active.changedFiles, ['src/app.ts']);
+  assert.deepEqual(active.readFiles, ['src/app.ts']);
+
+  const completed = runOperatorSummary.buildRunOperatorSummary({
+    project: 'api',
+    skill: 'verify-local',
+    ticket: 'K-2',
+    status: 'completed',
+    startedAt: '2026-07-02T00:00:00.000Z',
+    endedAt: '2026-07-02T00:10:00.000Z',
+    readiness: { status: 'ready', summary: 'Run completed and evidence gate is passing.' },
+    events: [
+      { type: 'done', label: 'Complete - 10m', detail: 'All checks passed', timestamp: '2026-07-02T00:10:00.000Z' },
+    ],
+  });
+  assert.equal(completed.tone, 'good');
+  assert.match(completed.headline, /completed and passed readiness/);
+  assert.match(completed.nextStep, /Open the review item/);
+  assert.ok(completed.facts.some(fact => fact.label === 'Readiness' && fact.tone === 'good'));
+
+  const failed = runOperatorSummary.buildRunOperatorSummary({
+    project: 'api',
+    skill: 'implement',
+    ticket: 'K-3',
+    status: 'failed',
+    failureKind: 'test',
+    failureReason: 'npm test failed',
+    events: [
+      { type: 'error', label: 'Command failed', detail: 'npm test failed', timestamp: '2026-07-02T00:03:00.000Z' },
+    ],
+  });
+  assert.equal(failed.tone, 'bad');
+  assert.match(failed.headline, /Tests failed: npm test failed/);
+  assert.match(failed.nextStep, /Inspect the log and diff/);
+
+  const source = readSourceFixture('src', 'services', 'runOperatorSummary.ts');
+  for (const marker of [
+    "import { runProgressSummary } from './runProgress'",
+    "import { runAttentionDetail } from './runAttention'",
+    "import { effectiveRunStatus, isActiveRunStatus } from './runStatus'",
+    'export function buildRunOperatorSummary',
+    'function runHeadline',
+    'function runNextStep',
+    'function latestMeaningfulSignal',
+    'function eventFiles',
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+});
+
+test('run operator summary highlights progress, files, readiness, and blockers', () => {
+  const running = runOperatorSummary.buildRunOperatorSummary({
+    status: 'running',
+    ticket: 'K-1',
+    skill: 'implement',
+    startedAt: '2026-07-02T00:00:00.000Z',
+    events: [
+      { type: 'tool', label: 'Reading src/app.ts', timestamp: '2026-07-02T00:01:00.000Z' },
+      { type: 'tool', label: 'Editing src/app.ts', timestamp: '2026-07-02T00:02:00.000Z' },
+      { type: 'tool', label: 'Writing src/new.ts', timestamp: '2026-07-02T00:03:00.000Z' },
+      { type: 'thinking', label: 'Checking the failing test path', detail: 'Running tests', timestamp: '2026-07-02T00:04:00.000Z' },
+    ],
+  }, new Date('2026-07-02T00:05:30.000Z'));
+  assert.equal(running.tone, 'info');
+  assert.match(running.headline, /K-1 implement is running: Running tests/);
+  assert.match(running.detail, /3 tools/);
+  assert.deepEqual(running.changedFiles, ['src/app.ts', 'src/new.ts']);
+  assert.deepEqual(running.readFiles, ['src/app.ts']);
+  assert.ok(running.facts.some(fact => fact.label === 'Progress' && /3 tools/.test(fact.value)));
+
+  const ready = runOperatorSummary.buildRunOperatorSummary({
+    status: 'completed',
+    ticket: 'K-2',
+    skill: 'implement',
+    readiness: { status: 'ready', summary: 'MR ready for review' },
+    events: [{ type: 'done', label: 'Complete', detail: 'Session complete' }],
+  });
+  assert.equal(ready.tone, 'good');
+  assert.match(ready.headline, /completed and passed readiness/);
+  assert.match(ready.nextStep, /Open the review item/);
+
+  const failed = runOperatorSummary.buildRunOperatorSummary({
+    status: 'needs_human',
+    ticket: 'K-3',
+    skill: 'implement',
+    failureKind: 'build',
+    failureReason: 'Jenkins build failed',
+  });
+  assert.equal(failed.tone, 'bad');
+  assert.match(failed.headline, /Jenkins build failed/);
+  assert.match(failed.nextStep, /Inspect the log and diff/);
+
+  const source = readSourceFixture('src', 'services', 'runOperatorSummary.ts');
+  for (const marker of [
+    "import { runProgressSummary } from './runProgress'",
+    "import { effectiveRunStatus, isActiveRunStatus } from './runStatus'",
+    "import { runAttentionDetail } from './runAttention'",
+    'export function buildRunOperatorSummary',
+    'function latestMeaningfulSignal',
+    'function eventFiles',
+    'function runNextStep',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -9539,7 +9685,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "import { buildPromptHistoryHtml, buildPromptManagerHtml, buildPromptSmokeTestsHtml } from './services/promptPanelView'",
     "import { buildRecoveryHtml, buildStateAuditLogHtml } from './services/recoveryPanelView'",
     "import { buildHumanReviewInboxHtml } from './services/humanReviewPanelView'",
-    "import { decideReviewMonitorAction, reviewDeployMonitorActionHandled, reviewTerminalMergeRequestActionKey, type ReviewDeployMonitorResult, type ReviewMonitorDecision, type ReviewTerminalMergeRequestAction } from './services/reviewMonitor'",
+    "import { decideReviewMonitorAction, reviewDeployMonitorActionHandled, reviewMergeRequestNotificationKey, reviewTerminalMergeRequestActionKey, type ReviewDeployMonitorResult, type ReviewMonitorDecision, type ReviewTerminalMergeRequestAction } from './services/reviewMonitor'",
     "import { buildEvidenceGateHtml, buildEvidenceHandoffHtml, buildEvidencePublishHtml } from './services/evidencePanelView'",
     "import { buildBacklogTriageHtml, buildCollisionReportHtml, buildProjectBatchPlanHtml, buildQueuePlanModeHtml, buildQueuePlannerHtml, buildReleaseBatchPlanHtml } from './services/queuePlannerPanelView'",
     "import { isCodeAction } from './services/actionSemantics'",
@@ -9728,6 +9874,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'function reconcileTerminalReviewMergeRequests(state: KronosState, shouldContinue: () => boolean = () => true): Promise<void>',
     'const updates = reconcileTerminalMergeRequestState();',
     'reviewTerminalMergeRequestActions',
+    'reviewMergeRequestNotifications',
     'gitlabAdapter.mergeRequestStatus',
     'updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status })',
     'const decision = decideReviewMonitorAction(candidate.ticketKey, update)',
@@ -9736,6 +9883,9 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'if (reviewDeployMonitorActionHandled(result))',
     "decision.kind === 'blocked'",
     'notifyReviewMonitorDecision(decision)',
+    'const notificationKey = reviewMergeRequestNotificationKey(candidate.ticketKey, update)',
+    'if (reviewMergeRequestNotifications.has(notificationKey)) { continue; }',
+    'reviewMergeRequestNotifications.add(notificationKey)',
     'notifyReviewMergeRequestPollFailure(candidate.ticketKey, e)',
     'function notifyReviewMergeRequestPollFailure(ticketKey: string, error: unknown): void',
     'MR status polling failed:',
