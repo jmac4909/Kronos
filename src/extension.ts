@@ -5413,11 +5413,13 @@ function startReviewAutomation(state: KronosState): vscode.Disposable {
   const fallbackSec = positiveConfigNumber(config.get<number>('pollIntervalSec', 300), 300);
   const pollIntervalMs = configIntervalSecondsMs(config.get<number>('reviewPollIntervalSec', fallbackSec), fallbackSec, 60);
   let running = false;
+  let disposed = false;
   const poll = async () => {
-    if (running) { return; }
+    if (disposed || running) { return; }
     running = true;
     try {
-      await pollReviewMergeRequests(state);
+      if (disposed) { return; }
+      await pollReviewMergeRequests(state, () => !disposed);
     } catch (e: unknown) {
       console.warn(unknownErrorMessage(e, 'Review MR polling failed.'));
     } finally {
@@ -5426,15 +5428,24 @@ function startReviewAutomation(state: KronosState): vscode.Disposable {
   };
   void poll();
   const timer = setInterval(() => { void poll(); }, pollIntervalMs);
-  return { dispose: () => clearInterval(timer) };
+  return {
+    dispose: () => {
+      disposed = true;
+      clearInterval(timer);
+    },
+  };
 }
 
-async function pollReviewMergeRequests(state: KronosState): Promise<void> {
+async function pollReviewMergeRequests(state: KronosState, shouldContinue: () => boolean = () => true): Promise<void> {
+  if (!shouldContinue()) { return; }
   state.reloadAndNotify();
+  if (!shouldContinue()) { return; }
   await reconcileTerminalReviewMergeRequests(state);
   for (const candidate of reviewMergeRequestCandidates(state)) {
+    if (!shouldContinue()) { return; }
     try {
       const status = await gitlabAdapter.mergeRequestStatus(state, candidate.ticketKey, { timeout: LIVE_MR_DIFF_TIMEOUT_MS });
+      if (!shouldContinue()) { return; }
       const update = updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status });
       if (update.changed) {
         state.reloadAndNotify();
