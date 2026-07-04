@@ -9,6 +9,7 @@ import { readJsonFile } from './jsonFiles';
 export const RUNS_DIR = path.join(KRONOS_DIR, 'runs');
 const ARCHIVED_RUNS_DIR = path.join(RUNS_DIR, 'archive');
 const PROCESS_BACKED_ACTIVE_STATUSES = new Set(['preflight', 'running']);
+const PROCESSLESS_ACTIVE_RECORD_STALE_MS = 12 * 60 * 60 * 1000;
 
 export interface RunRecord {
   id: string;
@@ -90,7 +91,7 @@ export function repairActiveRunRecords(limit = 100): RunStoreRepairResult {
   for (const filePath of listRunRecordFiles(RUNS_DIR, limit)) {
     const run = readRunFileResult(filePath, 'active').run;
     if (!run) { continue; }
-    const normalized = normalizeTerminalActiveRun(run);
+    const normalized = normalizeTerminalActiveRun(run, filePath);
     runs.push(normalized);
     if (normalized !== run) {
       writeJsonAtomic(filePath, normalized);
@@ -223,12 +224,12 @@ function readRequiredRunRecord(runId: string): RunRecord {
   if (result.issue) {
     throw new Error(`Invalid run record ${currentPath}: ${result.issue.detail}`);
   }
-  return normalizeRunView(result.run!);
+  return normalizeRunView(result.run!, currentPath);
 }
 
 function readRunFile(filePath: string, scope: RunStoreIssue['scope']): RunRecord | null {
   const run = readRunFileResult(filePath, scope).run;
-  return run ? normalizeRunView(run) : null;
+  return run ? normalizeRunView(run, filePath) : null;
 }
 
 function readRunFileIssue(filePath: string, scope: RunStoreIssue['scope']): RunStoreIssue | null {
@@ -254,7 +255,7 @@ function readRunFileResult(filePath: string, scope: RunStoreIssue['scope']): { r
   }
 }
 
-function normalizeTerminalActiveRun(run: RunRecord): RunRecord {
+function normalizeTerminalActiveRun(run: RunRecord, filePath?: string): RunRecord {
   const status = typeof run.status === 'string' ? run.status : '';
   const effectiveStatus = effectiveRunStatus(run);
   const activeStatusNeedsRepair = effectiveStatus === status && isActiveRunStatus(status);
@@ -263,7 +264,7 @@ function normalizeTerminalActiveRun(run: RunRecord): RunRecord {
     ? terminalRunOutcomeFromDeadProcess(run, status)
     : undefined;
   const staleProcesslessStatus = activeStatusNeedsRepair && !logStatus
-    ? terminalRunOutcomeFromStaleProcesslessRun(run, status)
+    ? terminalRunOutcomeFromStaleProcesslessRun(run, status, filePath)
     : undefined;
   const repairedStatus = logStatus || deadProcessStatus || staleProcesslessStatus;
   const nextStatus = repairedStatus || effectiveStatus;
@@ -322,10 +323,20 @@ function terminalRunOutcomeFromDeadProcess(run: RunRecord, status: string): stri
   return processIsGone(pid) ? 'failed' : undefined;
 }
 
-function terminalRunOutcomeFromStaleProcesslessRun(run: RunRecord, status: string): string | undefined {
+function terminalRunOutcomeFromStaleProcesslessRun(run: RunRecord, status: string, filePath?: string): string | undefined {
   if (!PROCESS_BACKED_ACTIVE_STATUSES.has(status)) { return undefined; }
   if (numericPid(run.processPid) !== undefined) { return undefined; }
-  return isStaleActiveRun(run) ? 'needs_human' : undefined;
+  return isStaleActiveRun(run) || isStaleUntimestampedActiveRunRecord(run, filePath) ? 'needs_human' : undefined;
+}
+
+function isStaleUntimestampedActiveRunRecord(run: RunRecord, filePath: string | undefined): boolean {
+  if (dateValue(run.startedAt) || !filePath || !isReadableActiveRunRecord(filePath)) { return false; }
+  try {
+    const stat = fs.statSync(filePath);
+    return Date.now() - stat.mtimeMs >= PROCESSLESS_ACTIVE_RECORD_STALE_MS;
+  } catch {
+    return false;
+  }
 }
 
 function terminalRunOutcomeFromActiveLog(run: RunRecord): string | undefined {
@@ -390,6 +401,13 @@ function logModifiedAt(logPath: unknown): string | undefined {
   return fs.statSync(logPath).mtime.toISOString();
 }
 
+function dateValue(value: unknown): Date | null {
+  const date = typeof value === 'string' || typeof value === 'number' || value instanceof Date
+    ? new Date(value)
+    : null;
+  return date && Number.isFinite(date.getTime()) ? date : null;
+}
+
 function numericPid(value: unknown): number | undefined {
   const pid = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN;
   return Number.isInteger(pid) && pid > 0 ? pid : undefined;
@@ -412,8 +430,8 @@ function stringField(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 }
 
-function normalizeRunView(run: RunRecord): RunRecord {
-  return normalizeTerminalActiveRun(run);
+function normalizeRunView(run: RunRecord, filePath?: string): RunRecord {
+  return normalizeTerminalActiveRun(run, filePath);
 }
 
 function invalidRunRecordIssue(scope: RunStoreIssue['scope'], filePath: string, detail: string): RunStoreIssue {
@@ -431,6 +449,17 @@ function listRunRecordFiles(dir: string, limit: number): string[] {
     .sort((a, b) => b.modifiedMs - a.modifiedMs || b.fileName.localeCompare(a.fileName))
     .slice(0, limit)
     .map(file => file.filePath);
+}
+
+function isReadableActiveRunRecord(filePath: string): boolean {
+  if (!isPathInside(filePath, RUNS_DIR) || isPathInside(filePath, ARCHIVED_RUNS_DIR)) {
+    return false;
+  }
+  try {
+    return fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
 }
 
 function moveRunArtifactIfExists(filePath: string | undefined, destDir: string, warnings: string[], label: string): string | undefined {
