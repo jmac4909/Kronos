@@ -212,6 +212,7 @@ const gitWorkspace = require('../out/services/gitWorkspace.js');
 const processTree = require('../out/services/processTree.js');
 const webviewDiagnostics = require('../out/services/webviewDiagnostics.js');
 const webviewSecurity = require('../out/services/webviewSecurity.js');
+const operatorCommandRouting = require('../out/services/operatorCommandRouting.js');
 const operatorPanel = require('../out/services/operatorPanel.js');
 const promptPanelView = require('../out/services/promptPanelView.js');
 const recoveryPanelView = require('../out/services/recoveryPanelView.js');
@@ -9244,6 +9245,35 @@ test('jira board panel view renders escaped ticket data and packaged script', ()
   assert.doesNotMatch(html, /trace <one>/);
 });
 
+test('operator command routing preserves ticket, run, and item targets', () => {
+  assert.deepEqual(operatorCommandRouting.resolveOperatorCommandRoute({ command: 'missingCommand' }), { kind: 'unknown' });
+  assert.deepEqual(operatorCommandRouting.resolveOperatorCommandRoute({ command: 'addEvidence' }), {
+    kind: 'missingTicket',
+    commandId: 'kronos.addEvidence',
+  });
+  assert.deepEqual(operatorCommandRouting.resolveOperatorCommandRoute({ command: 'addEvidence', ticketKey: 'K-1' }), {
+    kind: 'execute',
+    commandId: 'kronos.addEvidence',
+    argument: { ticketKey: 'K-1' },
+  });
+  assert.deepEqual(operatorCommandRouting.resolveOperatorCommandRoute({ command: 'evidenceGate', ticketKey: 'K-1' }), {
+    kind: 'execute',
+    commandId: 'kronos.evidenceGate',
+    argument: { ticketKey: 'K-1' },
+  });
+  assert.deepEqual(operatorCommandRouting.resolveOperatorCommandRoute({ command: 'evidenceGate' }), {
+    kind: 'execute',
+    commandId: 'kronos.evidenceGate',
+  });
+  assert.deepEqual(operatorCommandRouting.resolveOperatorCommandRoute({ command: 'runCenter', itemId: 'item-1' }), {
+    kind: 'execute',
+    commandId: 'kronos.runCenter',
+    argument: { runId: '', itemId: 'item-1' },
+  });
+  assert.equal(operatorCommandRouting.isTicketOperatorCommand('viewTicket'), true);
+  assert.equal(operatorCommandRouting.isTicketOperatorCommand('runCenter'), false);
+});
+
 test('extension webviews use shared UI shell and board filtering affordances', () => {
   const source = readSourceFixture('src', 'extension.ts');
   const operatorPanelSource = readSourceFixture('src', 'services', 'operatorPanel.ts');
@@ -9259,11 +9289,12 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   const ticketPanelViewSource = readSourceFixture('src', 'services', 'ticketPanelView.ts');
   const webviewMessagesSource = readSourceFixture('src', 'services', 'webviewMessages.ts');
   const webviewCommandRegistrySource = readSourceFixture('src', 'services', 'webviewCommandRegistry.ts');
+  const operatorCommandRoutingSource = readSourceFixture('src', 'services', 'operatorCommandRouting.ts');
   const runActionHelpersSource = readSourceFixture('src', 'services', 'runActionHelpers.ts');
   const collisionDetectorSource = readSourceFixture('src', 'services', 'collisionDetector.ts');
   const mergeRequestFileHintsSource = readSourceFixture('src', 'services', 'mergeRequestFileHints.ts');
   const jiraBoardSource = readSourceFixture('media', 'kronos-jira-board.js');
-  const uiSource = `${source}\n${queuePlannerPanelViewSource}\n${operationsReportPanelViewSource}\n${dashboardPanelViewSource}\n${diffPanelViewSource}\n${jiraBoardPanelViewSource}\n${ticketPanelViewSource}\n${webviewCommandRegistrySource}\n${runActionHelpersSource}\n${collisionDetectorSource}\n${mergeRequestFileHintsSource}\n${jiraBoardSource}`;
+  const uiSource = `${source}\n${queuePlannerPanelViewSource}\n${operationsReportPanelViewSource}\n${dashboardPanelViewSource}\n${diffPanelViewSource}\n${jiraBoardPanelViewSource}\n${ticketPanelViewSource}\n${webviewCommandRegistrySource}\n${operatorCommandRoutingSource}\n${runActionHelpersSource}\n${collisionDetectorSource}\n${mergeRequestFileHintsSource}\n${jiraBoardSource}`;
   const boardHandlerStart = source.indexOf('panel.webview.onDidReceiveMessage(async (msg) => {\n        if (logReady(msg)) { return; }\n        const request = normalizeBoardMessage(msg, BOARD_MESSAGE_COMMANDS);');
   const boardHandlerEnd = source.indexOf("    vscode.commands.registerCommand('kronos.viewTicket'", boardHandlerStart);
   assert.ok(boardHandlerStart >= 0 && boardHandlerEnd > boardHandlerStart, 'Jira board message handler should be present');
@@ -9348,6 +9379,10 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'const EVIDENCE_HANDOFF_OPERATOR_COMMANDS = operatorCommandSet([',
     'const DOCTOR_OPERATOR_COMMANDS = operatorCommandSet([',
     'function operatorCommandSet(commands: string[]): ReadonlySet<string>',
+    'export function resolveOperatorCommandRoute(input: OperatorCommandRouteInput): OperatorCommandRoute',
+    'export function isTicketOperatorCommand(command: string): boolean',
+    'const commandId = OPERATOR_COMMAND_TO_VSCODE_COMMAND.get(input.command)',
+    "return { kind: 'missingTicket', commandId }",
     'function attachOperatorCommandHandler(panel: vscode.WebviewPanel, webviewName: string, allowedCommands: ReadonlySet<string>): ReturnType<typeof createWebviewReadyMonitor>',
     'normalizeActionPanelMessage(msg, allowedCommands)',
     "attachOperatorCommandHandler(panel, 'Kronos Evidence Handoff', EVIDENCE_HANDOFF_OPERATOR_COMMANDS)",
@@ -9367,8 +9402,8 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'executeOperatorCommandAction(request.command, request.ticket, request.runId, request.itemId)',
     'await executeHumanReviewAction(state, request.command, request.ticket, request.runId, request.itemId)',
     "await executeOperatorCommandAction(command, '', runId, itemId)",
-    "if ((command === 'runCenter' || command === 'recoveryCenter') && (runId || itemId))",
-    'await vscode.commands.executeCommand(commandId, { runId, itemId })',
+    "if ((input.command === 'runCenter' || input.command === 'recoveryCenter') && (input.runId || input.itemId))",
+    'await vscode.commands.executeCommand(route.commandId, route.argument)',
     "command === 'runCenter' || command === 'recoveryCenter' || command === 'doctor' || command === 'queuePlanner'",
     'const render = (currentChecks: DoctorCheck[]) =>',
     ".catch((e: unknown) => render([...checks, {",
@@ -9576,12 +9611,13 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "'Failed to discover Kronos projects.'",
     "'Failed to open merge request diff.'",
     'function runQuickPickDetail',
-    'const commandId = OPERATOR_COMMAND_TO_VSCODE_COMMAND.get(command)',
+    'const route = resolveOperatorCommandRoute({ command, ticketKey, runId, itemId })',
     "vscode.window.showWarningMessage('Ignored unknown Kronos operator action.')",
-    'await vscode.commands.executeCommand(commandId, { ticketKey })',
-    'await vscode.commands.executeCommand(commandId)',
+    "if (route.kind === 'missingTicket')",
+    'await vscode.commands.executeCommand(route.commandId, route.argument)',
+    'await vscode.commands.executeCommand(route.commandId)',
     'This Kronos action needs a ticket context.',
-    "if (command === 'evidenceGate' && ticketKey)",
+    'if (!isTicketOperatorCommand(command))',
     'function executePlanPanelAction',
     'function executeBacklogTriageAction',
     'function executeDashboardAction',

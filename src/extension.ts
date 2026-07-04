@@ -85,7 +85,6 @@ import {
   EVIDENCE_PUBLISH_OPERATOR_COMMANDS,
   HUMAN_REVIEW_MESSAGE_COMMANDS,
   INTEGRATION_MANIFEST_OPERATOR_COMMANDS,
-  OPERATOR_COMMAND_TO_VSCODE_COMMAND,
   PLAN_MESSAGE_COMMANDS,
   PROFILES_OPERATOR_COMMANDS,
   PROMPT_HISTORY_OPERATOR_COMMANDS,
@@ -95,9 +94,9 @@ import {
   SESSION_STATS_OPERATOR_COMMANDS,
   STATE_AUDIT_OPERATOR_COMMANDS,
   TICKET_DETAIL_MESSAGE_COMMANDS,
-  TICKET_SCOPED_OPERATOR_COMMANDS,
   TREND_METRICS_OPERATOR_COMMANDS,
 } from './services/webviewCommandRegistry';
+import { isTicketOperatorCommand, resolveOperatorCommandRoute } from './services/operatorCommandRouting';
 import { kronosTerminalOptions } from './services/terminalProfiles';
 import { unknownErrorCode, unknownErrorMessage } from './services/errorUtils';
 import { isKronosScriptMissingError } from './services/scriptClient';
@@ -3887,32 +3886,24 @@ async function executeEvidenceGateAction(command: string, ticketKey: string): Pr
 }
 
 async function executeOperatorCommandAction(command: string, ticketKey = '', runId = '', itemId = ''): Promise<void> {
-  const commandId = OPERATOR_COMMAND_TO_VSCODE_COMMAND.get(command);
-  if (!commandId) {
+  const route = resolveOperatorCommandRoute({ command, ticketKey, runId, itemId });
+  if (route.kind === 'unknown') {
     vscode.window.showWarningMessage('Ignored unknown Kronos operator action.');
     return;
   }
-  if (TICKET_SCOPED_OPERATOR_COMMANDS.has(command)) {
-    if (!ticketKey) {
-      vscode.window.showWarningMessage('This Kronos action needs a ticket context.');
-      return;
-    }
-    await vscode.commands.executeCommand(commandId, { ticketKey });
+  if (route.kind === 'missingTicket') {
+    vscode.window.showWarningMessage('This Kronos action needs a ticket context.');
     return;
   }
-  if (command === 'evidenceGate' && ticketKey) {
-    await vscode.commands.executeCommand(commandId, { ticketKey });
+  if (route.argument) {
+    await vscode.commands.executeCommand(route.commandId, route.argument);
     return;
   }
-  if ((command === 'runCenter' || command === 'recoveryCenter') && (runId || itemId)) {
-    await vscode.commands.executeCommand(commandId, { runId, itemId });
-    return;
-  }
-  await vscode.commands.executeCommand(commandId);
+  await vscode.commands.executeCommand(route.commandId);
 }
 
 async function tryExecuteTicketOperatorCommand(command: string, ticketKey: string): Promise<boolean> {
-  if (!TICKET_SCOPED_OPERATOR_COMMANDS.has(command) && command !== 'evidenceGate') {
+  if (!isTicketOperatorCommand(command)) {
     return false;
   }
   await executeOperatorCommandAction(command, ticketKey);
