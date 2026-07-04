@@ -18,7 +18,7 @@ export interface SessionStats {
   verdict: string;
 }
 
-export interface SavedSessionEvent {
+interface SavedSessionEvent {
   type: string;
   label: string;
   detail: string;
@@ -35,7 +35,7 @@ export interface SavedSession {
   stats?: SessionStats;
 }
 
-export interface AggregateSessionStats extends SessionStats {
+interface AggregateSessionStats extends SessionStats {
   id: string;
   project: string;
   skill: string;
@@ -43,13 +43,13 @@ export interface AggregateSessionStats extends SessionStats {
   startedAt: string;
 }
 
-export interface AggregateStats {
+interface AggregateStats {
   sessions: AggregateSessionStats[];
   lastUpdated?: string;
   [key: string]: unknown;
 }
 
-export interface SessionStoreIssue {
+interface SessionStoreIssue {
   kind: 'invalid_saved_session' | 'invalid_session_stats';
   filePath: string;
   detail: string;
@@ -187,14 +187,14 @@ function readAggregateStatsResult(): { stats?: AggregateStats; issue?: SessionSt
   }
 }
 
-export function normalizeAggregateSessions(value: unknown): AggregateSessionStats[] {
+function normalizeAggregateSessions(value: unknown): AggregateSessionStats[] {
   if (!Array.isArray(value)) { return []; }
   return value
     .map(normalizeAggregateSession)
     .filter((session): session is AggregateSessionStats => Boolean(session));
 }
 
-export function normalizeSavedSessionEvents(value: unknown): SavedSessionEvent[] {
+function normalizeSavedSessionEvents(value: unknown): SavedSessionEvent[] {
   if (!Array.isArray(value)) { return []; }
   return value
     .map(normalizeSavedSessionEvent)

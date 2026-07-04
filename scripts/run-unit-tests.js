@@ -4924,7 +4924,6 @@ test('dispatcher lists saved sessions newest first by startedAt', () => {
   ]);
   assert.ok(issues.some(issue => issue.kind === 'invalid_saved_session' && issue.filePath === malformedSessionPath));
   assert.ok(issues.some(issue => issue.kind === 'invalid_saved_session' && /Unexpected token|Expected property name/.test(issue.detail)));
-  assert.deepEqual(sessionStore.normalizeSavedSessionEvents({ bad: true }), []);
 });
 
 test('session store normalizes aggregate stats rows for rendering', () => {

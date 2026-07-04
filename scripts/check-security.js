@@ -1866,15 +1866,15 @@ for (const marker of [
 }
 
 for (const marker of [
-  'export interface SessionStoreIssue',
+  'interface SessionStoreIssue',
   'export function listSessionStoreIssues',
   'export function listSavedSessions',
   'export function writeSavedSession',
-  'export interface SavedSessionEvent',
-  'export interface AggregateStats',
-  'export function normalizeSavedSessionEvents',
+  'interface SavedSessionEvent',
+  'interface AggregateStats',
+  'function normalizeSavedSessionEvents',
   'function normalizeSavedSessionEvent',
-  'export function normalizeAggregateSessions',
+  'function normalizeAggregateSessions',
   'function normalizeAggregateSession',
   'function finiteNumber',
   'function readSavedSessionFileResult',
