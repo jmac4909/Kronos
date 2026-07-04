@@ -26,6 +26,8 @@ export interface DoctorChecksInput {
   dispatchModel: string;
   kronosDir?: string;
   env?: Record<string, string | undefined>;
+  platform?: string;
+  gcloudExistsSync?: (filePath: string) => boolean;
   commandRunner?: DoctorCommandRunner;
 }
 
@@ -87,7 +89,12 @@ export function runDoctorChecks(input: DoctorChecksInput): DoctorCheck[] {
   commandCheck(checks, commandRunner, 'Git', 'git', ['--version']);
   claudeVersionCheck(checks, commandRunner);
   const readableGacFile = readableGoogleApplicationCredentials({ env: env as NodeJS.ProcessEnv });
-  const gcloudResolution = readableGacFile ? undefined : resolveGcloudCommandStatus({ env: env as NodeJS.ProcessEnv });
+  const gcloudResolutionOptions: { env: NodeJS.ProcessEnv; platform?: string; existsSync?: (filePath: string) => boolean } = {
+    env: env as NodeJS.ProcessEnv,
+  };
+  if (input.platform) { gcloudResolutionOptions.platform = input.platform; }
+  if (input.gcloudExistsSync) { gcloudResolutionOptions.existsSync = input.gcloudExistsSync; }
+  const gcloudResolution = readableGacFile ? undefined : resolveGcloudCommandStatus(gcloudResolutionOptions);
   const gcloudCommand = gcloudResolution?.command || '';
   if (readableGacFile) {
     add('GCloud CLI', 'pass', 'Skipped because GOOGLE_APPLICATION_CREDENTIALS points to a readable file.');

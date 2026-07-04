@@ -2474,7 +2474,7 @@ test('CLI probes centralize Claude and GCloud argv checks', () => {
 
   assert.deepEqual(cliProbes.readClaudeAgents({ commandRunner }), [{ id: 'agent-1', status: 'running' }]);
   assert.equal(cliProbes.checkClaudeModelAccess('claude-sonnet-4-6', { commandRunner }).ok, true);
-  assert.equal(cliProbes.checkGcloudApplicationDefaultAuth({ commandRunner }).ok, true);
+  assert.equal(cliProbes.checkGcloudApplicationDefaultAuth({ platform: 'linux', commandRunner }).ok, true);
 
   assert.deepEqual(calls.map(call => [mockCommandName(call.command), call.args, call.options.timeoutMs]), [
     ['claude', ['agents', '--json'], 5000],
@@ -2513,6 +2513,7 @@ test('CLI probes centralize Claude and GCloud argv checks', () => {
 
 test('CLI probes normalize failures and invalid Claude agent output', () => {
   const failed = cliProbes.checkGcloudApplicationDefaultAuth({
+    platform: 'linux',
     commandRunner: () => { throw new Error('expired application default credentials'); },
   });
   assert.equal(failed.ok, false);
@@ -5959,10 +5960,12 @@ test('doctor checks centralize command, credential, project config, and reachabi
     JIRA_BASE_URL: 'https://jira.example',
     JIRA_EMAIL: 'dev@example.com',
     JIRA_API_TOKEN: 'jira-secret',
+    Path: 'C:\\Tools\\Google Cloud SDK\\bin',
     GITLAB_TOKEN: 'gitlab-secret',
     GITLAB_HOST: 'gitlab.example',
     SONAR_HOST_URL: 'https://sonar.example',
   };
+  const gcloudCmd = 'C:\\Tools\\Google Cloud SDK\\bin\\gcloud.cmd';
   const commandRunner = (command, args) => {
     const joined = mockCommandLine(command, args);
     if (joined === 'python --version') { return 'Python 3.12.0\n'; }
@@ -5980,6 +5983,8 @@ test('doctor checks centralize command, credential, project config, and reachabi
     requiredPrompts: [],
     dispatchModel: 'bad model ; rm',
     env,
+    platform: 'win32',
+    gcloudExistsSync: filePath => filePath === gcloudCmd,
     commandRunner,
     kronosDir: process.env.KRONOS_DIR,
   });
@@ -6065,6 +6070,8 @@ test('doctor checks centralize command, credential, project config, and reachabi
     requiredPrompts: [],
     dispatchModel: 'claude-opus-4-6',
     env,
+    platform: 'win32',
+    gcloudExistsSync: filePath => filePath === gcloudCmd,
     commandRunner,
     kronosDir: process.env.KRONOS_DIR,
   });
@@ -6107,6 +6114,8 @@ test('doctor checks centralize command, credential, project config, and reachabi
     requiredPrompts: [],
     dispatchModel: 'claude-opus-4-6',
     env,
+    platform: 'win32',
+    gcloudExistsSync: filePath => filePath === gcloudCmd,
     commandRunner: (command, args) => {
       const joined = mockCommandLine(command, args);
       if (joined === 'python --version') { throw { message: '   ' }; }
