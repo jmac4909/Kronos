@@ -1,6 +1,7 @@
 import { KronosState, QueueDecision, QueueItem, QueueState } from '../state/types';
 import { QUEUE_FILE, STATE_FILE, readQueueFile, readStateFile, validateQueueState, validateStateFileShape, writeJsonFileAtomic } from './stateStore';
 import { PlannedAction, clearQueueDecision, planNextActions, planToQueueItem, recordQueueDecision } from './queuePlanner';
+import { recordFromUnknown } from './records';
 
 interface AddTicketToQueueResult {
   added: boolean;
@@ -272,7 +273,7 @@ function fallbackQueueItem(state: KronosState, ticketKey: string): QueueItem {
 }
 
 function normalizeQueueItem(item: unknown): QueueItem {
-  const record = queueRecord(item);
+  const record = recordFromUnknown(item);
   const queueItem: QueueItem = {
     id: queueString(record['id']) || `queued-${queueString(record['ticket']) || Date.now()}`,
     ticket: queueNullableString(record['ticket']),
@@ -285,10 +286,6 @@ function normalizeQueueItem(item: unknown): QueueItem {
   const summary = queueNullableString(record['ticket_summary']);
   if (summary) { queueItem.ticket_summary = summary; }
   return queueItem;
-}
-
-function queueRecord(value: unknown): Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value)) ? value as Record<string, unknown> : {};
 }
 
 function queueString(value: unknown): string {

@@ -5,6 +5,7 @@ import { evidenceChecks, evidenceNotes, evidenceString } from './evidenceData';
 import { runProgressSummary } from './runProgress';
 import { terminalRunOutcome } from './runStatus';
 import { escapeRegExp } from './regexp';
+import { recordFromUnknown } from './records';
 
 type PostRunReadinessStatus = 'ready' | 'needs_human' | 'blocked' | 'not_ready' | 'unknown';
 export type RunFailureKind = 'none' | 'auth' | 'model' | 'script' | 'git' | 'build' | 'test' | 'sonar' | 'timeout' | 'cancelled' | 'unknown';
@@ -88,7 +89,7 @@ export function resolvePostRunTicket(input: {
     return runResolved;
   }
 
-  const projectName = trimmedString(input.projectName) || runString(runRecord(input.run)['project']);
+  const projectName = trimmedString(input.projectName) || runString(recordFromUnknown(input.run)['project']);
   if (!projectName) {
     return postRunTicketResolution(ticketKey);
   }
@@ -107,7 +108,7 @@ function postRunTicketResolution(ticketKey: string | undefined): PostRunTicketRe
 
 export function shouldRecordRunCompletionEvidence(input: { run: unknown; ticket?: Ticket }): boolean {
   if (!input.ticket) { return false; }
-  const record = runRecord(input.run);
+  const record = recordFromUnknown(input.run);
   const runId = completionEvidenceRunId(record);
   return runCompletedForEvidence(record)
     && runString(record['skill']) === 'implement'
@@ -154,7 +155,7 @@ export function buildRunCompletionEvidenceCheck(run: unknown, ticket?: Ticket): 
 }
 
 function runCompletionEvidenceContext(run: unknown, ticket?: Ticket): RunCompletionEvidenceContext {
-  const record = runRecord(run);
+  const record = recordFromUnknown(run);
   const exitCode = Number(record['exitCode']);
   return {
     record,
@@ -177,7 +178,7 @@ export function evaluatePostRunReadiness(input: {
   now?: Date;
 }): PostRunReadiness {
   const now = input.now || new Date();
-  const inputRun = runRecord(input.run);
+  const inputRun = recordFromUnknown(input.run);
   const runStatus = runString(inputRun['status']);
   const failureKind = classifyRunFailure(input.run);
   const failureReason = runFailureReason(inputRun);
@@ -264,7 +265,7 @@ export function evaluatePostRunReadiness(input: {
 }
 
 export function postRunReadinessRunPatch(run: unknown, readiness: PostRunReadiness): PostRunReadinessRunPatch {
-  const record = runRecord(run);
+  const record = recordFromUnknown(run);
   const currentStatus = runString(record['status']);
   const patch: PostRunReadinessRunPatch = {
     readiness,
@@ -289,7 +290,7 @@ function postRunReadinessStatusTransition(runStatus: string, readiness: PostRunR
 }
 
 export function classifyRunFailure(run: unknown): RunFailureKind {
-  const record = runRecord(run);
+  const record = recordFromUnknown(run);
   const status = runString(record['status']);
   if (!status && Object.keys(record).length === 0) { return 'unknown'; }
   if (SUCCESS_RUN_STATUSES.has(status)) { return 'none'; }
@@ -315,10 +316,6 @@ export function classifyRunFailure(run: unknown): RunFailureKind {
   if (skill.includes('build') || skill === 'fix_build') { return 'build'; }
   if (skill.includes('verify') || skill.includes('test')) { return 'test'; }
   return status === 'failed' || status === 'needs_human' ? 'unknown' : 'none';
-}
-
-function runRecord(value: unknown): Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value)) ? value as Record<string, unknown> : {};
 }
 
 function runCompletedForEvidence(record: Record<string, unknown>): boolean {
@@ -384,13 +381,13 @@ function failureSummaryDetail(kind: RunFailureKind, reason: string): string {
 function runEventDetails(value: unknown): unknown[] {
   if (!Array.isArray(value)) { return []; }
   return value.flatMap(event => {
-    const record = runRecord(event);
+    const record = recordFromUnknown(event);
     return [record['label'], record['detail']];
   });
 }
 
 function resolveTicketFromRunRecord(tickets: Record<string, Ticket>, run: unknown): PostRunTicketResolution | undefined {
-  const searchValues = runSearchStrings(runRecord(run));
+  const searchValues = runSearchStrings(recordFromUnknown(run));
   if (searchValues.length === 0) { return undefined; }
   const matches = Object.entries(tickets).filter(([key]) => ticketKeyAppearsInStrings(key, searchValues));
   if (matches.length !== 1) { return undefined; }
@@ -399,8 +396,8 @@ function resolveTicketFromRunRecord(tickets: Record<string, Ticket>, run: unknow
 }
 
 function runSearchStrings(record: Record<string, unknown>): string[] {
-  const branch = runRecord(record['branch']);
-  const promptMetadata = runRecord(record['promptMetadata']);
+  const branch = recordFromUnknown(record['branch']);
+  const promptMetadata = recordFromUnknown(record['promptMetadata']);
   return [
     record['ticket'],
     record['ticketKey'],
@@ -437,7 +434,7 @@ function mergeRequestChangedFileCount(ticket?: Ticket): number | undefined {
 }
 
 function ticketSonarStatus(ticket?: Ticket): string | undefined {
-  return firstStringField(runRecord(ticket), [
+  return firstStringField(recordFromUnknown(ticket), [
     'sonar_status',
     'sonarStatus',
     'sonar_quality_gate',

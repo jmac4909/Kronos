@@ -1614,8 +1614,8 @@ test('queue mutation helpers centralize queue membership and ticket project link
 
   const source = readSourceFixture('src', 'services', 'queueMutations.ts');
   for (const marker of [
+    "import { recordFromUnknown } from './records'",
     'function normalizeQueueItem(item: unknown): QueueItem',
-    'function queueRecord(value: unknown): Record<string, unknown>',
     'function queueString(value: unknown): string',
     'function queueNullableString(value: unknown): string | null',
     'function queueStringArray(value: unknown): string[]',
@@ -1623,6 +1623,7 @@ test('queue mutation helpers centralize queue membership and ticket project link
     assert.ok(source.includes(marker), marker);
   }
   assert.equal(source.includes('function normalizeQueueItem(item: any): QueueItem'), false);
+  assert.equal(source.includes('function queueRecord(value: unknown): Record<string, unknown>'), false);
 });
 
 test('project mutation helpers centralize project config, scan dirs, and removal', () => {
@@ -8241,7 +8242,7 @@ test('post-run readiness distinguishes process completion from handoff readiness
     'function isPassingBuild',
     'function isPassingSonar',
     'export function classifyRunFailure(run: unknown): RunFailureKind',
-    'function runRecord(value: unknown): Record<string, unknown>',
+    "import { recordFromUnknown } from './records'",
     'function runCompletedForEvidence(record: Record<string, unknown>): boolean',
     'function runString(value: unknown): string',
     'function runText(value: unknown): string | undefined',

@@ -2046,7 +2046,7 @@ for (const marker of [
   'queue-add-ticket',
   'ticket-link-project',
   'function normalizeQueueItem(item: unknown): QueueItem',
-  'function queueRecord(value: unknown): Record<string, unknown>',
+  "import { recordFromUnknown } from './records'",
   'function queueString(value: unknown): string',
   'function queueNullableString(value: unknown): string | null',
   'function queueStringArray(value: unknown): string[]',
@@ -2291,6 +2291,8 @@ for (const [name, source, marker] of [
   ['src/services/runAttention.ts', runAttention, "import { recordFromUnknown } from './records'"],
   ['src/services/runCompletionNotification.ts', runCompletionNotification, "import { recordFromUnknown, recordString } from './records'"],
   ['src/services/runProgress.ts', runProgress, "import { isRecord, recordFromUnknown } from './records'"],
+  ['src/services/queueMutations.ts', queueMutations, "import { recordFromUnknown } from './records'"],
+  ['src/services/postRunReadiness.ts', postRunReadiness, "import { recordFromUnknown } from './records'"],
 ]) {
   if (!source.includes(marker)) {
     fail(`${name} must import the shared unknown-record helper.`);
@@ -2299,6 +2301,7 @@ for (const [name, source, marker] of [
     source.includes('function runRecord(value: unknown): Record<string, unknown>')
     || source.includes('function objectRecord(value: unknown): Record<string, unknown>')
     || source.includes('function objectRecordOrNull(value: unknown): value is Record<string, unknown>')
+    || source.includes('function queueRecord(value: unknown): Record<string, unknown>')
   ) {
     fail(`${name} must not carry a local unknown-record helper.`);
   }
@@ -3887,7 +3890,7 @@ for (const marker of [
   'exitCode === 124',
   "skill.includes('sonar')",
   "skill.includes('verify')",
-  'function runRecord(value: unknown): Record<string, unknown>',
+  "import { recordFromUnknown } from './records'",
   'function runString(value: unknown): string',
   'function runText(value: unknown): string | undefined',
   'function runFailureReason(record: Record<string, unknown>): string',
