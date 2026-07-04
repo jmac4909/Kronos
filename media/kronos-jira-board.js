@@ -124,9 +124,8 @@
   }
 
   function claimKronosJiraBoard() {
-    var boardHandlerKey = Symbol.for('kronos.jiraBoardAttached');
-    var root = typeof globalThis === 'object' ? globalThis : window;
-    if (root[boardHandlerKey]) {
+    var boardHandlerKey = '__kronosJiraBoardAttached';
+    if (document[boardHandlerKey]) {
       try {
         document.documentElement.setAttribute('data-kronos-actions-ready', 'true');
       } catch (error) {
@@ -134,7 +133,12 @@
       }
       return false;
     }
-    root[boardHandlerKey] = true;
+    document[boardHandlerKey] = true;
+    try {
+      document.documentElement.setAttribute('data-kronos-jira-board-attached', 'true');
+    } catch (error) {
+      console.warn('Kronos Jira Board could not mark action handler attachment', error);
+    }
     return true;
   }
 

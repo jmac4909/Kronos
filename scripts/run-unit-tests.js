@@ -2222,7 +2222,9 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(actionScript, /document\.addEventListener\('click', postKronosAction, true\)/);
   assert.match(actionScript, /DOMContentLoaded/);
   assert.match(actionScript, /data-kronos-actions-ready/);
-  assert.match(actionScript, /Symbol\.for\('kronos\.actionHandlerAttached'\)/);
+  assert.match(actionScript, /__kronosActionHandlerAttached/);
+  assert.match(actionScript, /data-kronos-action-handler-attached/);
+  assert.doesNotMatch(actionScript, /Symbol\.for\('kronos\.actionHandlerAttached'\)/);
   assert.match(actionScript, /message\[field\.messageKey\]/);
   assert.match(actionScript, /kronosVsCodeApi\(\)\.postMessage/);
   assert.match(actionScript, /function closestKronosActionTarget/);
@@ -2302,6 +2304,36 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.equal(duplicateListeners.length, 1);
   duplicateListeners.forEach(handler => handler({ target: fakeButton, preventDefault() {} }));
   assert.equal(duplicateAcquireCalls, 1);
+  const rerenderListeners = [];
+  const rerenderDocuments = [];
+  const makeRerenderDocument = () => {
+    const attributes = {};
+    const doc = {
+      readyState: 'complete',
+      documentElement: {
+        setAttribute(name, value) { attributes[name] = value; },
+      },
+      addEventListener(type, handler) {
+        if (type === 'click') { rerenderListeners.push(handler); }
+      },
+    };
+    rerenderDocuments.push({ doc, attributes });
+    return doc;
+  };
+  const rerenderSandbox = vm.createContext({
+    acquireVsCodeApi: () => ({ postMessage() {} }),
+    console: { info() {}, warn() {}, error() {} },
+    navigator: { userAgent: 'Kronos Windows Webview Rerender Test' },
+    window: { addEventListener() {} },
+    document: makeRerenderDocument(),
+  });
+  vm.runInContext(actionScript, rerenderSandbox);
+  assert.equal(rerenderListeners.length, 1);
+  assert.equal(rerenderDocuments[0].attributes['data-kronos-action-handler-attached'], 'true');
+  rerenderSandbox.document = makeRerenderDocument();
+  vm.runInContext(actionScript, rerenderSandbox);
+  assert.equal(rerenderListeners.length, 2);
+  assert.equal(rerenderDocuments[1].attributes['data-kronos-action-handler-attached'], 'true');
   const diagnosticActionScript = webviewSecurity.webviewActionPostScript('Kronos Actions', [
     { messageKey: 'ticket', dataAttribute: 'data-ticket' },
   ], { readyCommand: webviewSecurity.WEBVIEW_READY_COMMAND });
@@ -2324,7 +2356,9 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(externalActionScript, /data-kronos-action-fields/);
   assert.match(externalActionScript, /function postKronosAction/);
   assert.match(externalActionScript, /function claimKronosActionHandler/);
-  assert.match(externalActionScript, /Symbol\.for\('kronos\.actionHandlerAttached'\)/);
+  assert.match(externalActionScript, /__kronosActionHandlerAttached/);
+  assert.match(externalActionScript, /data-kronos-action-handler-attached/);
+  assert.doesNotMatch(externalActionScript, /Symbol\.for\('kronos\.actionHandlerAttached'\)/);
   assert.doesNotMatch(externalActionScript, /const vscode =/);
   const externalPostedMessages = [];
   const externalDocumentListeners = {};
@@ -2376,7 +2410,9 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(jiraBoardScript, /document\.currentScript/);
   assert.match(jiraBoardScript, /function initKronosJiraBoard/);
   assert.match(jiraBoardScript, /function claimKronosJiraBoard/);
-  assert.match(jiraBoardScript, /Symbol\.for\('kronos\.jiraBoardAttached'\)/);
+  assert.match(jiraBoardScript, /__kronosJiraBoardAttached/);
+  assert.match(jiraBoardScript, /data-kronos-jira-board-attached/);
+  assert.doesNotMatch(jiraBoardScript, /Symbol\.for\('kronos\.jiraBoardAttached'\)/);
   assert.match(jiraBoardScript, /kronos-jira-ticket-data/);
   assert.match(jiraBoardScript, /data-kronos-actions-ready/);
   assert.match(jiraBoardScript, /Kronos webview script ready/);

@@ -49,9 +49,8 @@
   }
 
   function claimKronosActionHandler() {
-    var actionHandlerKey = Symbol.for('kronos.actionHandlerAttached');
-    var root = typeof globalThis === 'object' ? globalThis : window;
-    if (root[actionHandlerKey]) {
+    var actionHandlerKey = '__kronosActionHandlerAttached';
+    if (document[actionHandlerKey]) {
       try {
         document.documentElement.setAttribute('data-kronos-actions-ready', 'true');
       } catch (error) {
@@ -59,7 +58,12 @@
       }
       return false;
     }
-    root[actionHandlerKey] = true;
+    document[actionHandlerKey] = true;
+    try {
+      document.documentElement.setAttribute('data-kronos-action-handler-attached', 'true');
+    } catch (error) {
+      console.warn('Kronos webview could not mark action handler attachment', error);
+    }
     return true;
   }
 

@@ -2358,7 +2358,8 @@ for (const marker of [
   "document.addEventListener('click', postKronosAction, true)",
   "document.addEventListener('DOMContentLoaded', attachKronosActionHandler, { once: true })",
   "document.documentElement.setAttribute('data-kronos-actions-ready', 'true')",
-  "Symbol.for('kronos.actionHandlerAttached')",
+  '__kronosActionHandlerAttached',
+  'data-kronos-action-handler-attached',
   'message[field.messageKey]',
   'options.readyCommand ? webviewReadyPostScript(webviewName, options.readyCommand) :',
   'export function webviewActionScriptTag',
@@ -2402,7 +2403,8 @@ for (const marker of [
   "typeof acquireVsCodeApi !== 'function'",
   "document.documentElement.setAttribute('data-kronos-script-ready', 'true')",
   "document.documentElement.setAttribute('data-kronos-actions-ready', 'true')",
-  "Symbol.for('kronos.actionHandlerAttached')",
+  '__kronosActionHandlerAttached',
+  'data-kronos-action-handler-attached',
   "console.info('Kronos webview script ready', webviewName, navigator.userAgent)",
   "console.error('Kronos webview script error', webviewName",
   "console.error('Kronos webview unhandled rejection', webviewName",
@@ -2419,10 +2421,20 @@ for (const marker of [
 
 for (const marker of [
   'function claimKronosJiraBoard()',
-  "Symbol.for('kronos.jiraBoardAttached')",
+  '__kronosJiraBoardAttached',
+  'data-kronos-jira-board-attached',
 ]) {
   if (!jiraBoardScript.includes(marker)) {
     fail(`Missing packaged Jira board script guard marker: ${marker}`);
+  }
+}
+for (const [label, source, marker] of [
+  ['inline action script', webviewSecurity, "Symbol.for('kronos.actionHandlerAttached')"],
+  ['packaged action script', webviewActionPanelScript, "Symbol.for('kronos.actionHandlerAttached')"],
+  ['packaged Jira board script', jiraBoardScript, "Symbol.for('kronos.jiraBoardAttached')"],
+]) {
+  if (source.includes(marker)) {
+    fail(`${label} should use document-scoped handler guards, not ${marker}`);
   }
 }
 for (const marker of [
