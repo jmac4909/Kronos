@@ -15,7 +15,7 @@ export const STATE_AUDIT_FILE = path.join(KRONOS_DIR, 'audit.jsonl');
 const BACKUP_DIR = path.join(KRONOS_DIR, 'backups');
 const WRITE_LOCK_STALE_MS = 5 * 60 * 1000;
 
-export interface StateBackup {
+interface StateBackup {
   filePath: string;
   targetPath: string;
   targetName: 'state.json' | 'queue.json';
@@ -29,7 +29,7 @@ export interface StateFileLoadIssue {
   detail: string;
 }
 
-export interface StateFileReadResult {
+interface StateFileReadResult {
   state: KronosState | null;
   issues: StateFileLoadIssue[];
 }

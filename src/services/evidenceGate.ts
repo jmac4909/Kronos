@@ -3,8 +3,8 @@ import { extractCriterionTexts } from './acceptanceCriteria';
 import { isReviewReadyAction } from './actionSemantics';
 import { evidenceAcceptanceCriteria, evidenceChecked, evidenceChecks, evidenceEnvironmentResults, evidenceNotes, evidenceRecordCount, evidenceRiskNotes, evidenceString } from './evidenceData';
 
-export type EvidenceGateStatus = 'pass' | 'warn' | 'fail';
-export type EvidenceGateCheckKind = 'project' | 'notes' | 'test' | 'acceptance' | 'build' | 'mr' | 'risk' | 'environment';
+type EvidenceGateStatus = 'pass' | 'warn' | 'fail';
+type EvidenceGateCheckKind = 'project' | 'notes' | 'test' | 'acceptance' | 'build' | 'mr' | 'risk' | 'environment';
 
 export interface EvidenceGateCheck {
   kind: EvidenceGateCheckKind;

@@ -1,9 +1,9 @@
 import type { RunStoreIssue } from './runStore';
 import { runAttentionDetail } from './runAttention';
 
-export type RecoverySeverity = 'critical' | 'warning' | 'info';
-export type RecoveryKind = 'run' | 'worktree' | 'backup' | 'integration' | 'merge_request';
-export type RecoveryAction =
+type RecoverySeverity = 'critical' | 'warning' | 'info';
+type RecoveryKind = 'run' | 'worktree' | 'backup' | 'integration' | 'merge_request';
+type RecoveryAction =
   | 'openRunCenter'
   | 'resumeRun'
   | 'retryRun'
@@ -15,7 +15,7 @@ export type RecoveryAction =
   | 'restoreBackup'
   | 'openDoctor';
 
-export interface RecoveryRun {
+interface RecoveryRun {
   id: string;
   project?: string;
   skill?: string;
@@ -29,14 +29,14 @@ export interface RecoveryRun {
   events?: Array<{ label?: string; detail?: string; timestamp?: string }>;
 }
 
-export interface RecoveryBackup {
+interface RecoveryBackup {
   filePath: string;
   targetName: string;
   createdAt: string;
   size: number;
 }
 
-export interface RecoveryWorktreeResult {
+interface RecoveryWorktreeResult {
   entry: {
     projectPath: string;
     worktreePath: string;

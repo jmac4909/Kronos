@@ -3,8 +3,8 @@ import * as https from 'https';
 import { Ticket } from '../state/types';
 import { unknownErrorMessage } from './errorUtils';
 
-export type EvidencePublishKind = 'jira' | 'gitlab_mr';
-export type EvidencePublishStatus = 'ready' | 'missing_config' | 'unsupported_url' | 'skipped' | 'posted' | 'failed';
+type EvidencePublishKind = 'jira' | 'gitlab_mr';
+type EvidencePublishStatus = 'ready' | 'missing_config' | 'unsupported_url' | 'skipped' | 'posted' | 'failed';
 
 export interface EvidencePublishDestination {
   kind: EvidencePublishKind;
@@ -16,7 +16,7 @@ export interface EvidencePublishDestination {
   body?: unknown;
 }
 
-export interface EvidencePublishPlan {
+interface EvidencePublishPlan {
   ticketKey: string;
   comment: string;
   destinations: EvidencePublishDestination[];

@@ -5,7 +5,7 @@ import { evidenceChecks, evidenceNotes, evidenceString } from './evidenceData';
 import { runProgressSummary } from './runProgress';
 import { terminalRunOutcome } from './runStatus';
 
-export type PostRunReadinessStatus = 'ready' | 'needs_human' | 'blocked' | 'not_ready' | 'unknown';
+type PostRunReadinessStatus = 'ready' | 'needs_human' | 'blocked' | 'not_ready' | 'unknown';
 export type RunFailureKind = 'none' | 'auth' | 'model' | 'script' | 'git' | 'build' | 'test' | 'sonar' | 'timeout' | 'cancelled' | 'unknown';
 
 export interface PostRunReadiness {

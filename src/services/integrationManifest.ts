@@ -37,7 +37,7 @@ export interface IntegrationManifestStatus {
   warnings: string[];
 }
 
-export type ManifestAuditStatus = 'pass' | 'warn' | 'fail';
+type ManifestAuditStatus = 'pass' | 'warn' | 'fail';
 
 export interface ManifestArtifactAudit {
   kind: 'script' | 'prompt';
@@ -55,7 +55,7 @@ export interface IntegrationManifestAudit {
   artifacts: ManifestArtifactAudit[];
 }
 
-export interface IntegrationManifestSnapshotResult {
+interface IntegrationManifestSnapshotResult {
   path: string;
   manifest: IntegrationManifest;
   status: IntegrationManifestStatus;

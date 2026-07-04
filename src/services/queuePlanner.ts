@@ -31,7 +31,7 @@ export interface ScoreBreakdownItem {
   detail: string;
 }
 
-export type BacklogTriageKind =
+type BacklogTriageKind =
   | 'unlinked'
   | 'blocked'
   | 'build_failed'
@@ -40,7 +40,7 @@ export type BacklogTriageKind =
   | 'stale'
   | 'ready_to_plan';
 
-export interface BacklogTriageItem {
+interface BacklogTriageItem {
   ticketKey: string;
   summary: string;
   kind: BacklogTriageKind;

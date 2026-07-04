@@ -14,12 +14,12 @@ export interface TicketFilter {
   linked?: 'linked' | 'unlinked';
 }
 
-export interface TicketViewState {
+interface TicketViewState {
   filter: TicketFilter;
   groupBy: TicketGroupBy;
 }
 
-export interface TicketFilterPreset {
+interface TicketFilterPreset {
   id: string;
   label: string;
   view: TicketViewState;
