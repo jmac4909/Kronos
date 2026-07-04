@@ -238,6 +238,7 @@ const reviewMonitor = require('../out/services/reviewMonitor.js');
 const deployMonitorHandoff = require('../out/services/deployMonitorHandoff.js');
 const sonarReportView = require('../out/services/sonarReportView.js');
 const agingReportView = require('../out/services/agingReportView.js');
+const ticketPanelView = require('../out/services/ticketPanelView.js');
 const webviewHtml = require('../out/services/webviewHtml.js');
 const fileNames = require('../out/services/fileNames.js');
 const sessionStore = require('../out/services/sessionStore.js');
@@ -3514,9 +3515,9 @@ test('build status helper centralizes Jenkins status classification', () => {
     ['src/services/postRunReadiness.ts', "import { isPassingBuildStatus } from './buildStatus'"],
     ['src/services/queuePlanner.ts', "import { isFailingBuildStatus, isPassingBuildStatus } from './buildStatus'"],
     ['src/services/ticketTimeline.ts', "import { buildStatusKind } from './buildStatus'"],
+    ['src/services/ticketPanelView.ts', "import { buildStatusKind } from './buildStatus'"],
     ['src/services/trendMetrics.ts', "import { isFailingBuildStatus, isPassingBuildStatus } from './buildStatus'"],
     ['src/views/TicketTreeProvider.ts', "import { buildStatusKind } from '../services/buildStatus'"],
-    ['src/extension.ts', "import { buildStatusKind } from './services/buildStatus'"],
   ]) {
     assert.ok(readSourceFixture(...file.split('/')).includes(marker), `${file} should use shared build status helper`);
   }
@@ -3697,7 +3698,9 @@ test('date value helper centralizes valid date coercion', () => {
   const extensionSource = readSourceFixture('src', 'extension.ts');
   assert.ok(extensionSource.includes("import { toValidDate } from './services/dateValues'"));
   assert.ok(extensionSource.includes('return toValidDate(value)?.toLocaleString() || fallback'));
-  assert.ok(extensionSource.includes('return toValidDate(value)?.toLocaleDateString() || fallback'));
+  const ticketPanelViewSource = readSourceFixture('src', 'services', 'ticketPanelView.ts');
+  assert.ok(ticketPanelViewSource.includes("import { toValidDate } from './dateValues'"));
+  assert.ok(ticketPanelViewSource.includes('return toValidDate(value)?.toLocaleDateString() || fallback'));
 
   const sessionTreeSource = readSourceFixture('src', 'views', 'SessionTreeProvider.ts');
   assert.ok(sessionTreeSource.includes("import { toValidDate } from '../services/dateValues'"));
@@ -8699,9 +8702,10 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   const evidencePanelViewSource = readSourceFixture('src', 'services', 'evidencePanelView.ts');
   const queuePlannerPanelViewSource = readSourceFixture('src', 'services', 'queuePlannerPanelView.ts');
   const operationsReportPanelViewSource = readSourceFixture('src', 'services', 'operationsReportPanelView.ts');
+  const ticketPanelViewSource = readSourceFixture('src', 'services', 'ticketPanelView.ts');
   const webviewMessagesSource = readSourceFixture('src', 'services', 'webviewMessages.ts');
   const jiraBoardSource = readSourceFixture('media', 'kronos-jira-board.js');
-  const uiSource = `${source}\n${queuePlannerPanelViewSource}\n${operationsReportPanelViewSource}\n${jiraBoardSource}`;
+  const uiSource = `${source}\n${queuePlannerPanelViewSource}\n${operationsReportPanelViewSource}\n${ticketPanelViewSource}\n${jiraBoardSource}`;
   const boardHandlerStart = source.indexOf('panel.webview.onDidReceiveMessage(async (msg) => {\n        if (logReady(msg)) { return; }\n        const request = normalizeBoardMessage(msg, BOARD_MESSAGE_COMMANDS);');
   const boardHandlerEnd = source.indexOf("    vscode.commands.registerCommand('kronos.viewTicket'", boardHandlerStart);
   assert.ok(boardHandlerStart >= 0 && boardHandlerEnd > boardHandlerStart, 'Jira board message handler should be present');
@@ -9951,11 +9955,27 @@ test('extension Sonar commands normalize webview and issue payloads', () => {
 
 test('ticket detail rendering uses typed tickets and evidence records', () => {
   const extensionSource = readSourceFixture('src', 'extension.ts');
+  const ticketPanelViewSource = readSourceFixture('src', 'services', 'ticketPanelView.ts');
   const evidenceData = readSourceFixture('src', 'services', 'evidenceData.ts');
   for (const marker of [
     'import type { DiscoveredProject, MergeRequestChangedFile, QueueItem, Ticket }',
     'function evidenceRecordCount(ticket: Ticket | null | undefined): number',
-    'function buildTicketHtml(key: string, ticket: Ticket',
+    "import { buildTicketHtml } from './services/ticketPanelView'",
+    'buildTicketHtml(ticketKey, freshTicket, {',
+    'runs: listRuns()',
+    'function existingAcceptanceCriterion(record: object)',
+  ]) {
+    assert.ok(marker.startsWith('function evidenceRecordCount')
+      ? evidenceData.includes(marker)
+      : extensionSource.includes(marker), marker);
+  }
+  for (const marker of [
+    'export function buildTicketHtml(key: string, ticket: Ticket',
+    'export function buildTicketGateHtml',
+    'export function buildTicketTimelineHtml',
+    'interface TicketPanelRenderInput',
+    'queue?: QueueState | null',
+    'runs?: TicketTimelineRuns',
     'const mr = ticket.mr',
     'const build = ticket.build',
     'function mergeRequestComments(record: object | null | undefined)',
@@ -9963,7 +9983,13 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
     'class="mr-comments"',
     "const discussionCount = ticketStringField(mr, 'discussion_count')",
     'Discussions: ${esc(discussionCount ||',
-    'function existingAcceptanceCriterion(record: object)',
+    'const timeline = buildTicketTimeline({',
+    '...(input.runs !== undefined ? { runs: input.runs } : {})',
+    "kronosActionPanelScript(input.nonce, 'Kronos Ticket Detail', input.actionScriptUri)",
+  ]) {
+    assert.ok(ticketPanelViewSource.includes(marker), marker);
+  }
+  for (const marker of [
     "import { isRecord } from './records'",
     'type EvidenceRecord = object',
     'if (!isRecord(record)) { return fallback; }',
@@ -9971,10 +9997,43 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
     "return isRecord(record) && record['checked'] === true",
     'return Array.isArray(value) ? value.filter(isRecord) : []',
   ]) {
-    assert.ok((marker.includes('records') || marker.startsWith('type EvidenceRecord') || marker.startsWith('if (!isRecord') || marker.startsWith('const value') || marker.startsWith('return isRecord') || marker.startsWith('return Array') || marker.startsWith('function evidenceRecordCount'))
-      ? evidenceData.includes(marker)
-      : extensionSource.includes(marker), marker);
+    assert.ok(evidenceData.includes(marker), marker);
   }
+  const html = ticketPanelView.buildTicketHtml('K-DETAIL', ticket({
+    summary: '<b>unsafe</b>',
+    description: 'quote " amp & tag <x>',
+    next_action: 'await_review',
+    jira_url: 'javascript:alert(1)',
+    mr: {
+      iid: 7,
+      state: 'opened',
+      review_status: 'approved',
+      url: 'https://gitlab.example/mr/7?x=1&name="bad"',
+      comments: [
+        { author: 'Reviewer <A>', created: '2026-07-01T12:00:00.000Z', body: 'Looks <good> & safe' },
+      ],
+      discussion_count: 2,
+      unresolved_discussion_count: 1,
+      discussions_resolved: false,
+    },
+    build: { number: 77, status: 'SUCCESS', url: 'https://jenkins.example/job?x=1&name="bad"' },
+    evidence: {
+      notes: [{ at: '2026-07-01T13:00:00.000Z', kind: 'test', text: 'npm test <passed>' }],
+      checks: [{ id: 'check-1', at: '2026-07-01T13:05:00.000Z', name: 'unit <suite>', result: 'pass', artifact_path: 'javascript:alert(2)' }],
+    },
+  }), {
+    queue: { items: [{ id: 'q1', ticket: 'K-DETAIL', action: 'verify' }], last_computed: '2026-07-01T11:00:00.000Z' },
+    runs: [{ id: 'run-1', ticket: 'K-DETAIL', skill: 'verify-local', status: 'completed', startedAt: '2026-07-01T10:00:00.000Z', logPath: '/tmp/run.log' }],
+  });
+  assert.match(html, /&lt;b&gt;unsafe&lt;\/b&gt;/);
+  assert.match(html, /quote &quot; amp &amp; tag &lt;x&gt;/);
+  assert.match(html, /Reviewer &lt;A&gt;/);
+  assert.match(html, /Looks &lt;good&gt; &amp; safe/);
+  assert.match(html, /Remove Queue/);
+  assert.match(html, /Run completed: verify-local/);
+  assert.match(html, /href="https:\/\/gitlab\.example\/mr\/7\?x=1&amp;name=%22bad%22"/);
+  assert.match(html, /href="https:\/\/jenkins\.example\/job\?x=1&amp;name=%22bad%22"/);
+  assert.doesNotMatch(html, /href="javascript:/);
   for (const marker of [
     'function ticketEvidenceItemCount(ticket: any)',
     'function buildTicketHtml(key: string, ticket: any',
@@ -9985,7 +10044,7 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
     'type EvidenceRecord = Record<string, any>',
     'const ticketData: Record<string, any>',
   ]) {
-    assert.equal(extensionSource.includes(marker) || evidenceData.includes(marker), false, marker);
+    assert.equal(extensionSource.includes(marker) || ticketPanelViewSource.includes(marker) || evidenceData.includes(marker), false, marker);
   }
   for (const marker of [
     'type EvidenceRecord = Record<string, unknown>',

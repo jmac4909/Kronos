@@ -108,6 +108,7 @@ const safetyGate = readSource('src/services/safetyGate.ts');
 const trendMetrics = readSource('src/services/trendMetrics.ts');
 const dashboardWorklist = readSource('src/services/dashboardWorklist.ts');
 const ticketTimeline = readSource('src/services/ticketTimeline.ts');
+const ticketPanelView = readSource('src/services/ticketPanelView.ts');
 const integrationAdapters = readSource('src/services/integrationAdapters.ts');
 const mergeRequestComments = readSource('src/services/mergeRequestComments.ts');
 const mergeRequestNotifications = readSource('src/services/mergeRequestNotifications.ts');
@@ -357,7 +358,7 @@ for (const requiredIgnore of ['.git/**', '.claude/**', 'node_modules/**', 'scrip
     fail(`.vscodeignore must exclude ${requiredIgnore}`);
   }
 }
-const extensionUiSource = `${extension}\n${queuePlannerPanelView}\n${operationsReportPanelView}\n${jiraBoardScript}`;
+const extensionUiSource = `${extension}\n${queuePlannerPanelView}\n${operationsReportPanelView}\n${ticketPanelView}\n${jiraBoardScript}`;
 for (const marker of [
   'function mockCommandName(command)',
   'function mockCommandLine(command, args)',
@@ -530,8 +531,9 @@ for (const marker of [
   'function executeRecoveryAction',
   'function recoveryActionForRequest',
   'function openRecoveryPanel',
-  'buildTicketTimeline',
-  'function buildTicketTimelineHtml',
+  "import { buildTicketHtml } from './services/ticketPanelView'",
+  'buildTicketHtml(ticketKey, freshTicket, {',
+  'runs: listRuns()',
   'confirmDispatchCollisions',
   'detectDispatchCollisions',
   'kronos.extractAcceptanceCriteria',
@@ -540,9 +542,6 @@ for (const marker of [
   "from './services/evidenceData'",
   'const existingCriteria = evidenceAcceptanceCriteria(ticket)',
   'const criteria = evidenceAcceptanceCriteria(ticket)',
-  'const notes = evidenceNotes(ticket)',
-  'const checks = evidenceChecks(ticket)',
-  'const environmentResults = evidenceEnvironmentResults(ticket)',
   'evidenceCount: evidenceRecordCount(t)',
   'function ticketStringArray',
   'function ticketAttachments',
@@ -551,8 +550,6 @@ for (const marker of [
   'const ticketData: Record<string, JiraBoardTicketPayload>',
   'const linkedProjects = ticketStringArray(t.projects)',
   'const attachments = ticketAttachments(t.attachments)',
-  'const projectList = ticketStringArray(ticket.projects)',
-  'const mr = ticket.mr',
   'kronos.addEvidenceCheck',
   'kronos.recordEnvironmentResult',
   'addTicketEvidenceNote',
@@ -1562,6 +1559,33 @@ for (const marker of [
 ]) {
   if (!evidencePanelView.includes(marker)) {
     fail(`Missing evidence panel view marker: ${marker}`);
+  }
+}
+
+for (const marker of [
+  'export function buildTicketHtml',
+  'export function buildTicketGateHtml',
+  'export function buildTicketTimelineHtml',
+  'interface TicketPanelRenderInput',
+  'queue?: QueueState | null',
+  'runs?: TicketTimelineRuns',
+  'const timeline = buildTicketTimeline({',
+  '...(input.runs !== undefined ? { runs: input.runs } : {})',
+  'const projectList = ticketStringArray(ticket.projects)',
+  'const mr = ticket.mr',
+  'const build = ticket.build',
+  'const comments = mergeRequestComments(mr).slice(-5).reverse()',
+  'class="mr-comments"',
+  "const discussionCount = ticketStringField(mr, 'discussion_count')",
+  'Discussions: ${esc(discussionCount ||',
+  'const notes = evidenceNotes(ticket)',
+  'const checks = evidenceChecks(ticket)',
+  'const environmentResults = evidenceEnvironmentResults(ticket)',
+  'safeHttpHref',
+  "kronosActionPanelScript(input.nonce, 'Kronos Ticket Detail', input.actionScriptUri)",
+]) {
+  if (!ticketPanelView.includes(marker)) {
+    fail(`Missing ticket panel view marker: ${marker}`);
   }
 }
 
@@ -3800,9 +3824,9 @@ for (const [name, source, marker] of [
   ['agent quality score', agentQualityScore, "import { isFailingBuildStatus, isPassingBuildStatus } from './buildStatus'"],
   ['aging analyzer', agingAnalyzer, "import { isFailingBuildStatus } from './buildStatus'"],
   ['evidence gate', evidenceGate, "import { buildStatusKind } from './buildStatus'"],
-  ['extension', sources['src/extension.ts'], "import { buildStatusKind } from './services/buildStatus'"],
   ['post-run readiness', postRunReadiness, "import { isPassingBuildStatus } from './buildStatus'"],
   ['queue planner', queuePlanner, "import { isFailingBuildStatus, isPassingBuildStatus } from './buildStatus'"],
+  ['ticket panel view', ticketPanelView, "import { buildStatusKind } from './buildStatus'"],
   ['ticket timeline', ticketTimeline, "import { buildStatusKind } from './buildStatus'"],
   ['ticket tree', ticketTreeProvider, "import { buildStatusKind } from '../services/buildStatus'"],
   ['trend metrics', trendMetrics, "import { isFailingBuildStatus, isPassingBuildStatus } from './buildStatus'"],
