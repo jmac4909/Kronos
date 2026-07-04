@@ -31,19 +31,19 @@ export interface EvidencePublishResult {
   httpStatus?: number;
 }
 
-export interface HttpRequest {
+interface HttpRequest {
   method: string;
   url: string;
   headers: Record<string, string>;
   body: string;
 }
 
-export interface HttpResponse {
+interface HttpResponse {
   statusCode: number;
   body: string;
 }
 
-export type EvidenceHttpTransport = (request: HttpRequest) => Promise<HttpResponse>;
+type EvidenceHttpTransport = (request: HttpRequest) => Promise<HttpResponse>;
 
 export function buildEvidencePublishPlan(
   ticketKey: string,
