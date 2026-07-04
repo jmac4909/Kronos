@@ -4020,7 +4020,7 @@ test('run store archives run record, log, and prompt artifacts', () => {
   assert.equal(fs.existsSync(archived.logPath), true);
   assert.equal(fs.existsSync(archived.promptPath), true);
   assert.equal(fs.readFileSync(archived.promptPath, 'utf8'), 'saved prompt');
-  assert.equal(runStore.readRuns().some(r => r.id === run.id), false);
+  assert.equal(runStore.readRunRecord(run.id), null);
   assert.equal(runStore.readArchivedRuns().some(r => r.id === run.id), true);
   assert.equal(JSON.parse(fs.readFileSync(archived.runPath, 'utf8')).id, run.id);
 });
@@ -4036,10 +4036,10 @@ test('run store reads UTF-8 BOM-prefixed JSON files from Windows tools', () => {
   fs.mkdirSync(runStore.RUNS_DIR, { recursive: true });
   fs.writeFileSync(runStore.runRecordPath(run.id), `\ufeff${JSON.stringify(run, null, 2)}`, 'utf8');
 
-  const runs = runStore.readRuns();
+  const read = runStore.readRunRecord(run.id);
   const issues = runStore.listRunStoreIssues();
 
-  assert.equal(runs.some(r => r.id === run.id), true);
+  assert.equal(read.id, run.id);
   assert.equal(issues.some(issue => issue.filePath === runStore.runRecordPath(run.id)), false);
 });
 
@@ -4200,7 +4200,7 @@ test('run store returns normalized active views and repairs only on explicit req
   const archived = runStore.archiveRun(failed.id);
   const archivedRun = JSON.parse(fs.readFileSync(archived.runPath, 'utf8'));
   assert.equal(archivedRun.status, 'failed');
-  assert.equal(runStore.readRuns().some(run => run.id === failed.id), false);
+  assert.equal(runStore.readRunRecord(failed.id), null);
   assert.equal(archivedRun.id, failed.id);
 });
 
@@ -4303,11 +4303,9 @@ test('run store limit selects newest records before repairing active runs', () =
   fs.utimesSync(runStore.runRecordPath(oldRun.id), new Date('2035-01-01T00:00:00.000Z'), new Date('2035-01-01T00:00:00.000Z'));
   fs.utimesSync(runStore.runRecordPath(newRun.id), new Date('2035-01-02T00:00:00.000Z'), new Date('2035-01-02T00:00:00.000Z'));
 
-  const limitedRuns = runStore.readRuns(1);
-  assert.deepEqual(limitedRuns.map(run => run.id), [newRun.id]);
-
   const repaired = runStore.repairActiveRunRecords(1);
-  assert.equal(repaired.runs.some(run => run.id === newRun.id), true);
+  assert.deepEqual(repaired.runs.map(run => run.id), [newRun.id]);
+  assert.equal(repaired.repaired, 1);
   assert.equal(JSON.parse(fs.readFileSync(runStore.runRecordPath(newRun.id), 'utf8')).status, 'needs_human');
   assert.equal(JSON.parse(fs.readFileSync(runStore.runRecordPath(oldRun.id), 'utf8')).status, 'running');
 });
@@ -4507,7 +4505,7 @@ test('run store surfaces invalid records and blocks strict mutations', () => {
   fs.writeFileSync(missingIdPath, JSON.stringify({ status: 'running' }));
   fs.writeFileSync(mismatchedIdPath, JSON.stringify({ id: 'run-mismatched-other', status: 'running' }));
 
-  const runs = runStore.readRuns();
+  const runs = runStore.repairActiveRunRecords().runs;
   const issues = runStore.listRunStoreIssues();
 
   assert.ok(runs.some(r => r.id === valid.id));
@@ -4632,12 +4630,14 @@ test('dispatcher marks run failed when managed worktree setup fails before launc
       });
 
       assert.equal(result.launched, false);
+      assert.equal(typeof result.runId, 'string');
       assert.equal(result.status, 'failed');
       assert.match(result.failureReason, /Git worktree setup failed: git worktree add timed out/);
 
-      const runs = runStore.readRuns();
-      assert.equal(runs.length, 1);
-      const run = runs[0];
+      const runRecords = fs.readdirSync(runStore.RUNS_DIR).filter(name => name.endsWith('.json'));
+      assert.equal(runRecords.length, 1);
+      const run = runStore.readRunRecord(result.runId);
+      assert.ok(run);
       assert.equal(run.status, 'failed');
       assert.equal(run.exitCode, 1);
       assert.equal(run.failureKind, 'git');

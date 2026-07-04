@@ -1634,6 +1634,7 @@ for (const marker of [
 for (const marker of [
   'export const ARCHIVED_RUNS_DIR',
   'export function archivedRunRecordPath',
+  'export function readRuns',
 ]) {
   if (runStore.includes(marker)) {
     fail(`Run store archive path helper should stay private: ${marker}`);

@@ -67,12 +67,6 @@ function archivedRunRecordPath(runId: string): string {
   return path.join(ARCHIVED_RUNS_DIR, `${safeRunId(runId)}.json`);
 }
 
-export function readRuns(limit = 100): RunRecord[] {
-  return listRunRecordFiles(RUNS_DIR, limit)
-    .map(filePath => readRunFile(filePath, 'active'))
-    .filter((r): r is RunRecord => Boolean(r));
-}
-
 export function readArchivedRuns(limit = 100): RunRecord[] {
   return listRunRecordFiles(ARCHIVED_RUNS_DIR, limit)
     .map(filePath => readRunFile(filePath, 'archived'))
