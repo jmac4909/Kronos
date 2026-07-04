@@ -3621,6 +3621,15 @@ test('evidence publisher plans and posts Jira and GitLab comments through inject
   assert.equal(gitlab.endpoint, 'https://gitlab.example/api/v4/projects/group%2Fapp/merge_requests/12/notes');
   assert.equal(evidencePublisher.readyPublishDestinations(plan).length, 2);
 
+  const jiraWithBasePath = evidencePublisher.buildEvidencePublishPlan('K-77', ticket({
+    summary: 'Publish evidence with Jira context path',
+  }), 'body', {
+    JIRA_BASE_URL: 'https://jira.example/jira/',
+    JIRA_EMAIL: 'dev@example.com',
+    JIRA_API_TOKEN: 'jira-token',
+  }).destinations.find(destination => destination.kind === 'jira');
+  assert.equal(jiraWithBasePath.endpoint, 'https://jira.example/jira/rest/api/3/issue/K-77/comment');
+
   const configuredGitlab = evidencePublisher.buildEvidencePublishPlan('K-77', {
     ...t,
     mr: { iid: 12, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/group/app/-/merge_requests/34/diffs' },
@@ -3704,6 +3713,8 @@ test('evidence publisher plans and posts Jira and GitLab comments through inject
     "import { unknownErrorMessage } from './errorUtils'",
     'catch (e: unknown)',
     "unknownErrorMessage(e, 'Evidence publish request failed.')",
+    'function jiraCommentEndpoint(jiraBase: string, ticketKey: string): string',
+    "new URL(`rest/api/3/issue/${encodeURIComponent(ticketKey)}/comment`, base).toString()",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -6664,6 +6675,20 @@ test('evidence gate fails objective blockers and warns on incomplete proof', () 
   assert.ok(structuredOnly.checks.some(check => check.kind === 'notes' && check.status === 'warn' && check.title === 'No narrative evidence note'));
   assert.equal(structuredOnly.checks.some(check => check.kind === 'notes' && check.status === 'fail'), false);
   assert.ok(structuredOnly.checks.some(check => check.kind === 'test' && check.status === 'pass'));
+
+  const structuredRisk = evidenceGate.evaluateEvidenceGate('K-RISK', ticket({
+    projects: ['app'],
+    next_action: 'await_review',
+    mr: { iid: 6, state: 'opened', review_status: 'approved', url: 'https://gitlab.example/6' },
+    build: { number: 15, status: 'SUCCESS', url: 'https://jenkins.example/15' },
+    evidence: {
+      notes: [{ at: 'now', kind: 'test', text: 'npm test passed' }],
+      risk_notes: [{ at: 'now', text: 'Manual QA should recheck data refresh', severity: 'medium' }],
+    },
+  }));
+  assert.equal(structuredRisk.status, 'warn');
+  assert.equal(structuredRisk.ready, true);
+  assert.ok(structuredRisk.checks.some(check => check.kind === 'risk' && check.status === 'warn' && check.title === '1 risk note recorded'));
 
   const warningOnlyCheck = evidenceGate.evaluateEvidenceGate('K-WARN-CHECK', ticket({
     projects: ['app'],

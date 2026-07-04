@@ -156,7 +156,7 @@ function buildJiraDestination(ticketKey: string, ticket: Ticket, comment: string
   if (!isHttpUrl(jiraBase)) {
     return unsupported('jira', 'Jira ticket comment', 'Jira URL must use HTTP or HTTPS.');
   }
-  const endpoint = new URL(`/rest/api/3/issue/${encodeURIComponent(ticketKey)}/comment`, jiraBase).toString();
+  const endpoint = jiraCommentEndpoint(jiraBase, ticketKey);
   return {
     kind: 'jira',
     label: 'Jira ticket comment',
@@ -242,6 +242,14 @@ function baseUrlFromIssueUrl(issueUrl: string | undefined): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function jiraCommentEndpoint(jiraBase: string, ticketKey: string): string {
+  const base = new URL(jiraBase);
+  base.pathname = `${base.pathname.replace(/\/+$/, '')}/`;
+  base.search = '';
+  base.hash = '';
+  return new URL(`rest/api/3/issue/${encodeURIComponent(ticketKey)}/comment`, base).toString();
 }
 
 function firstNonEmpty(...values: Array<string | undefined>): string | undefined {

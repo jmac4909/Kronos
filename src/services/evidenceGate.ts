@@ -1,7 +1,7 @@
 import { Ticket } from '../state/types';
 import { extractCriterionTexts } from './acceptanceCriteria';
 import { isReviewReadyAction } from './actionSemantics';
-import { evidenceAcceptanceCriteria, evidenceChecked, evidenceChecks, evidenceEnvironmentResults, evidenceNotes, evidenceRecordCount, evidenceString } from './evidenceData';
+import { evidenceAcceptanceCriteria, evidenceChecked, evidenceChecks, evidenceEnvironmentResults, evidenceNotes, evidenceRecordCount, evidenceRiskNotes, evidenceString } from './evidenceData';
 
 export type EvidenceGateStatus = 'pass' | 'warn' | 'fail';
 export type EvidenceGateCheckKind = 'project' | 'notes' | 'test' | 'acceptance' | 'build' | 'mr' | 'risk' | 'environment';
@@ -117,7 +117,10 @@ export function evaluateEvidenceGate(ticketKey: string, ticket: Ticket): Evidenc
     }
   }
 
-  const riskNotes = notes.filter(note => evidenceString(note, 'kind') === 'risk');
+  const riskNotes = [
+    ...notes.filter(note => evidenceString(note, 'kind') === 'risk'),
+    ...evidenceRiskNotes(ticket),
+  ];
   if (riskNotes.length > 0) {
     checks.push(warn('risk', `${riskNotes.length} risk note${riskNotes.length === 1 ? '' : 's'} recorded`, 'Review risk notes before handoff.'));
   }
