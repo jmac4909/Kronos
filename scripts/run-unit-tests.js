@@ -4466,21 +4466,30 @@ test('run store surfaces invalid records and blocks strict mutations', () => {
   runStore.writeRunRecord(valid);
   const invalidJsonPath = runStore.runRecordPath('run-bad-json');
   const missingIdPath = path.join(runStore.RUNS_DIR, 'run-missing-id.json');
+  const mismatchedIdPath = runStore.runRecordPath('run-mismatched-request');
   fs.writeFileSync(invalidJsonPath, '{ invalid json');
   fs.writeFileSync(missingIdPath, JSON.stringify({ status: 'running' }));
+  fs.writeFileSync(mismatchedIdPath, JSON.stringify({ id: 'run-mismatched-other', status: 'running' }));
 
   const runs = runStore.readRuns();
   const issues = runStore.listRunStoreIssues();
 
   assert.ok(runs.some(r => r.id === valid.id));
   assert.equal(runs.some(r => r.id === 'run-bad-json'), false);
+  assert.equal(runs.some(r => r.id === 'run-mismatched-other'), false);
   assert.ok(issues.some(issue => issue.filePath === invalidJsonPath && issue.scope === 'active' && issue.kind === 'invalid_run_record'));
   assert.ok(issues.some(issue => issue.filePath === invalidJsonPath && /Unexpected token|Expected property name/.test(issue.detail)));
   assert.ok(issues.some(issue => issue.filePath === missingIdPath && /id/.test(issue.detail)));
+  assert.ok(issues.some(issue => issue.filePath === mismatchedIdPath && /does not match file name/.test(issue.detail)));
   assert.throws(
     () => runStore.markRunCancelled('run-bad-json', 'operator stopped it'),
     /Invalid run record/,
   );
+  assert.throws(
+    () => runStore.markRunPaused('run-mismatched-request', 'operator pause'),
+    /Invalid run record/,
+  );
+  assert.equal(fs.existsSync(runStore.runRecordPath('run-mismatched-other')), false);
 
   const source = readSourceFixture('src', 'services', 'runStore.ts');
   for (const marker of [
@@ -4488,6 +4497,8 @@ test('run store surfaces invalid records and blocks strict mutations', () => {
     '[key: string]: unknown',
     'catch (e: unknown)',
     "unknownErrorMessage(e, 'Unable to parse JSON.')",
+    "path.basename(filePath) !== expectedFileName",
+    'does not match file name',
     'const PROCESS_BACKED_ACTIVE_STATUSES',
     'function terminalRunOutcomeFromDeadProcess',
     'function terminalRunOutcomeFromStaleProcesslessRun',

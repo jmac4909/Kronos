@@ -227,6 +227,10 @@ function readRunFileResult(filePath: string, scope: RunStoreIssue['scope']): { r
     if (typeof parsed['id'] !== 'string' || parsed['id'].trim().length === 0) {
       return { issue: invalidRunRecordIssue(scope, filePath, 'Run record id must be a non-empty string.') };
     }
+    const expectedFileName = `${safeRunId(parsed['id'])}.json`;
+    if (scope === 'active' && path.basename(filePath) !== expectedFileName) {
+      return { issue: invalidRunRecordIssue(scope, filePath, `Run record id ${parsed['id']} does not match file name ${path.basename(filePath)}.`) };
+    }
     return { run: parsed as RunRecord };
   } catch (e: unknown) {
     return { issue: invalidRunRecordIssue(scope, filePath, unknownErrorMessage(e, 'Unable to parse JSON.')) };
