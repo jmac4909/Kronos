@@ -7282,6 +7282,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "unlinkTicketFromProject(ticket, project);\n              state.reloadAndNotify();\n              renderBoard();",
     "const result = addTicketToQueue(ticket);\n              state.reloadAndNotify();\n              renderBoard();",
     "await removeTicketFromQueue(state, ticket, true, context.extensionUri);\n            renderBoard();",
+    "await startTicketFromActionPanel(state, ticket);",
     "unknownErrorMessage(e, 'Failed to link ticket.')",
     "unknownErrorMessage(e, 'Failed to unlink ticket.')",
     "unknownErrorMessage(e, 'Failed to add ticket to queue.')",
@@ -7813,6 +7814,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   for (const marker of [
     'catch (e: any)',
     'e?.message',
+    "await vscode.commands.executeCommand('kronos.implement', { ticketKey: ticket });",
   ]) {
     assert.equal(boardHandlerSource.includes(marker), false, marker);
   }

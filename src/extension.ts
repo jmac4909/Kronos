@@ -1913,7 +1913,7 @@ export function activate(context: vscode.ExtensionContext) {
             await removeTicketFromQueue(state, ticket, true, context.extensionUri);
             renderBoard();
           } else if (command === 'start' && hasTicket(ticket)) {
-            await vscode.commands.executeCommand('kronos.implement', { ticketKey: ticket });
+            await startTicketFromActionPanel(state, ticket);
             return;
           } else if (command === 'openJira' && hasTicket(ticket)) {
             openKnownTicketUrl(ticket, 'jira');
