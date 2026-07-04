@@ -2471,10 +2471,16 @@ export function activate(context: vscode.ExtensionContext) {
       const queueData = resolveQueueCommandItem(treeItemOrData);
       if (!queueData) { return; }
 
-      const projs = queueData.projects;
-      const projLabel = projs.join(', ') || 'unlinked';
+      const pathProject = getProjectNameForPath(state, queueData.projectPath);
+      const projs = queueData.projects.length > 0 ? queueData.projects : pathProject ? [pathProject] : [];
+      const directProjectPath = projs.length === 0 ? queueData.projectPath : undefined;
+      const projLabel = projs.join(', ') || directProjectPath || 'unlinked';
 
       if (queueData.action === 'refresh') {
+        if (projs.length === 0) {
+          vscode.window.showWarningMessage(`Cannot refresh ${projLabel}; it is not registered as a Kronos project.`);
+          return;
+        }
         for (const p of projs) { await state.refresh(p); }
         vscode.window.showInformationMessage(`Refreshed ${projLabel}.`);
         return;
@@ -2491,7 +2497,7 @@ export function activate(context: vscode.ExtensionContext) {
       const codeAction = isCodeAction(queueData.action);
       const extraPrompt = extra ? `\n\nADDITIONAL CONTEXT FROM USER: ${extra}` : '';
 
-      if (projs.length === 0) {
+      if (projs.length === 0 && !directProjectPath) {
         vscode.window.showWarningMessage(`${queueData.ticket} is not linked to any project.`);
         return;
       }
@@ -2505,18 +2511,26 @@ export function activate(context: vscode.ExtensionContext) {
       const canStart = await confirmDispatchCollisions(state, collisionTarget, context.extensionUri);
       if (!canStart) { return; }
 
+      const dispatchTargets: Array<{ projectName?: string; projectPath: string }> = [];
       for (const projName of projs) {
         const projectPath = getProjectPath(state, projName);
-        if (!projectPath) { continue; }
-        const otherProjects = projs.filter(p => p !== projName);
-        const scopeHint = otherProjects.length > 0 ? `\nYou are working in ${projName}. Focus ONLY on this codebase. Other projects: ${otherProjects.join(', ')}.` : '';
+        if (projectPath) { dispatchTargets.push({ projectName: projName, projectPath }); }
+      }
+      if (dispatchTargets.length === 0 && directProjectPath) {
+        dispatchTargets.push({ projectPath: directProjectPath });
+      }
+
+      for (const target of dispatchTargets) {
+        const otherProjects = target.projectName ? projs.filter(p => p !== target.projectName) : [];
+        const projectLabel = target.projectName || target.projectPath;
+        const scopeHint = otherProjects.length > 0 ? `\nYou are working in ${projectLabel}. Focus ONLY on this codebase. Other projects: ${otherProjects.join(', ')}.` : '';
         const dispatchOptions: DispatchOptions = {
-          onComplete: refreshAfterDispatch(state, projName, queueData.ticket),
+          onComplete: refreshAfterDispatch(state, target.projectName, queueData.ticket),
           parallel: codeAction,
         };
         const appendSystemPrompt = codeAction ? getImplementPrompt(state) + scopeHint + extraPrompt : extraPrompt || undefined;
         if (appendSystemPrompt) { dispatchOptions.appendSystemPrompt = appendSystemPrompt; }
-        await startClaudeDispatch(projectPath, skill, queueData.ticket || undefined, dispatchOptions);
+        await startClaudeDispatch(target.projectPath, skill, queueData.ticket || undefined, dispatchOptions);
       }
     }),
 
@@ -5296,6 +5310,21 @@ function getProjectPath(state: KronosState, projectName?: string): string | unde
   return state.state.projects[projectName]?.path;
 }
 
+function getProjectNameForPath(state: KronosState, projectPath?: string): string | undefined {
+  const targetPath = projectPathKey(projectPath);
+  if (!targetPath || !state.state) { return undefined; }
+  for (const [projectName, project] of Object.entries(state.state.projects)) {
+    if (projectPathKey(project.path) === targetPath) { return projectName; }
+  }
+  return undefined;
+}
+
+function projectPathKey(projectPath?: string): string {
+  if (!projectPath?.trim()) { return ''; }
+  const normalized = path.normalize(projectPath.trim()).replace(/[\\/]+$/, '');
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
 function getActiveProfile(): KronosProfile {
   const config = vscode.workspace.getConfiguration('kronos');
   return resolveProfile(config.get<string>('profile'));
@@ -5378,6 +5407,7 @@ interface QueueCommandPayload {
   id?: string;
   ticket?: string;
   projects: string[];
+  projectPath?: string;
   action: string;
 }
 
@@ -5396,9 +5426,11 @@ function queueCommandPayloadFromRecord(record: Record<string, unknown>): QueueCo
     : [];
   const ticket = typeof record['ticket'] === 'string' && record['ticket'].trim() ? record['ticket'].trim() : undefined;
   const id = typeof record['id'] === 'string' && record['id'].trim() ? record['id'].trim() : undefined;
+  const projectPath = stringFromUnknown(record['project_path']) || stringFromUnknown(record['projectPath']);
   const payload: QueueCommandPayload = { projects, action: action.trim() };
   if (id) { payload.id = id; }
   if (ticket) { payload.ticket = ticket; }
+  if (projectPath) { payload.projectPath = projectPath; }
   return payload;
 }
 

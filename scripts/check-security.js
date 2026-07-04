@@ -1224,7 +1224,7 @@ for (const marker of [
   "vscode.commands.registerCommand('kronos.unlinkTicket', async (item: unknown)",
   'const queueData = resolveQueueCommandItem(treeItemOrData);',
   'const idx = resolveQueueIndex(treeItem);',
-  'await startClaudeDispatch(projectPath, skill, queueData.ticket || undefined,',
+  'await startClaudeDispatch(target.projectPath, skill, queueData.ticket || undefined,',
   'interface QueueCommandPayload',
   'function resolveQueueCommandItem(item: unknown): QueueCommandPayload | undefined',
   'function queueCommandPayloadFromRecord(record: Record<string, unknown>): QueueCommandPayload | undefined',
