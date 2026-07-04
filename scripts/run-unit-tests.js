@@ -6595,6 +6595,18 @@ test('doctor checks centralize command, credential, project config, and reachabi
   const commandRunner = (command, args) => {
     const joined = mockCommandLine(command, args);
     if (joined === 'python --version') { return 'Python 3.12.0\n'; }
+    if (command === 'python' && String(args[0]).endsWith('kronos_state.py') && args[1] === '--mr-status') {
+      return JSON.stringify({
+        mr: {
+          state: 'opened',
+          review_status: 'pending_review',
+          comment_count: 0,
+          discussion_count: 0,
+          unresolved_discussion_count: 0,
+          discussions_resolved: true,
+        },
+      });
+    }
     if (joined === 'git --version') { return 'git version 2.45.0\n'; }
     if (joined === 'claude --version') { return 'claude 1.2.3\n'; }
     if (joined === 'gcloud --version') { return 'Google Cloud SDK 500.0.0\n'; }
@@ -6657,6 +6669,30 @@ test('doctor checks centralize command, credential, project config, and reachabi
   const reviewByName = Object.fromEntries(reviewChecks.map(check => [check.name, check]));
   assert.equal(reviewByName['Review MR polling prerequisites'].status, 'pass');
   assert.match(reviewByName['Review MR polling prerequisites'].detail, /1 open review MR\(s\) ready/);
+  assert.match(reviewByName['Review MR polling prerequisites'].detail, /--mr-status contract OK for K-REVIEW/);
+
+  const staleContractChecks = doctorChecks.runDoctorChecks({
+    state: reviewState,
+    queue: null,
+    profile,
+    requiredPrompts: [],
+    dispatchModel: 'claude-opus-4-6',
+    env,
+    platform: 'win32',
+    gcloudExistsSync: filePath => filePath === gcloudCmd,
+    commandRunner: (command, args, options) => {
+      if (command === 'python' && String(args[0]).endsWith('kronos_state.py') && args[1] === '--mr-status') {
+        return JSON.stringify({ mr: { state: 'opened' } });
+      }
+      return commandRunner(command, args, options);
+    },
+    kronosDir: process.env.KRONOS_DIR,
+  });
+  const staleContractByName = Object.fromEntries(staleContractChecks.map(check => [check.name, check]));
+  assert.equal(staleContractByName['Review MR polling prerequisites'].status, 'warn');
+  assert.match(staleContractByName['Review MR polling prerequisites'].detail, /--mr-status K-REVIEW missing review_status or approved flag/);
+  assert.match(staleContractByName['Review MR polling prerequisites'].detail, /comment metadata/);
+  assert.match(staleContractByName['Review MR polling prerequisites'].detail, /discussion metadata/);
 
   const blockedReviewState = baseState({
     'K-BLOCKED': ticket({
@@ -6819,9 +6855,17 @@ test('doctor checks centralize command, credential, project config, and reachabi
     "unknownErrorMessage(e, 'Provider reachability checks failed.')",
     "unknownErrorMessage(e, `${command} unavailable`)",
     "unknownErrorMessage(e, 'claude unavailable')",
+    "import { normalizeMergeRequestStatus } from './integrationAdapters'",
+    "import { stripUtf8Bom } from './jsonFiles'",
     'function addReviewPollingPrerequisiteCheck',
+    'function reviewMergeRequestStatusContractIssue',
+    'function hasMergeRequestCommentSignal',
+    'function hasMergeRequestDiscussionSignal',
+    'function parseDoctorJson',
     "'Review MR polling prerequisites'",
     "ticket.next_action === 'await_review' && ticket.mr?.state === 'opened'",
+    "commandRunner('python', [scriptPath, '--mr-status', ticketKey]",
+    "Invalid JSON from ${label}",
   ]) {
     assert.ok(source.includes(marker), marker);
   }

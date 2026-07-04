@@ -2715,8 +2715,16 @@ for (const marker of [
   "unknownErrorMessage(e, 'Provider reachability checks failed.')",
   "unknownErrorMessage(e, `${command} unavailable`)",
   "unknownErrorMessage(e, 'claude unavailable')",
+  "import { normalizeMergeRequestStatus } from './integrationAdapters'",
+  "import { stripUtf8Bom } from './jsonFiles'",
   'Values are not displayed',
   'DoctorCommandRunner',
+  'function reviewMergeRequestStatusContractIssue',
+  "commandRunner('python', [scriptPath, '--mr-status', ticketKey]",
+  'function hasMergeRequestCommentSignal',
+  'function hasMergeRequestDiscussionSignal',
+  'function parseDoctorJson',
+  'REVIEW_STATUS_SMOKE_TIMEOUT_MS',
 ]) {
   if (!doctorChecks.includes(marker)) {
     fail(`Missing doctor checks marker: ${marker}`);

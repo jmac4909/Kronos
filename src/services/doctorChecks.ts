@@ -9,6 +9,8 @@ import { requiredScripts } from './scriptClient';
 import { KRONOS_DIR } from './stateStore';
 import { defaultCliProbeCommandRunner, readableGoogleApplicationCredentials, resolveGcloudCommandStatus } from './cliProbes';
 import { unknownErrorMessage } from './errorUtils';
+import { normalizeMergeRequestStatus } from './integrationAdapters';
+import { stripUtf8Bom } from './jsonFiles';
 
 export interface DoctorCheck {
   name: string;
@@ -39,6 +41,7 @@ export type DoctorCommandRunner = (command: string, args: string[], options: Doc
 
 const COMMAND_TIMEOUT_MS = 5000;
 const TOKEN_TIMEOUT_MS = 10000;
+const REVIEW_STATUS_SMOKE_TIMEOUT_MS = 10000;
 const MAX_COMMAND_BUFFER = 1024 * 1024;
 
 export function runDoctorChecks(input: DoctorChecksInput): DoctorCheck[] {
@@ -111,7 +114,7 @@ export function runDoctorChecks(input: DoctorChecksInput): DoctorCheck[] {
   credentialCheck(checks, env, 'Jenkins credentials', input.profile.providers.jenkins, ['JENKINS_URL']);
   credentialCheck(checks, env, 'SonarQube credentials', input.profile.providers.sonar, ['SONAR_HOST_URL', 'SONAR_TOKEN']);
   credentialAnyCheck(checks, env, 'GitHub Actions credentials', input.profile.providers.githubActions, ['GITHUB_TOKEN', 'GH_TOKEN']);
-  addReviewPollingPrerequisiteCheck(checks, input.state, input.profile, env, scripts);
+  addReviewPollingPrerequisiteCheck(checks, input.state, input.profile, env, scripts, commandRunner);
 
   if (readableGacFile) {
     add('GCP application default auth', 'pass', 'GOOGLE_APPLICATION_CREDENTIALS file is readable; skipped gcloud token command.');
@@ -325,6 +328,7 @@ function addReviewPollingPrerequisiteCheck(
   profile: KronosProfile,
   env: Record<string, string | undefined>,
   scripts: ReturnType<typeof requiredScripts>,
+  commandRunner: DoctorCommandRunner,
 ): void {
   if (!profile.providers.gitlab) {
     checks.push({ name: 'Review MR polling prerequisites', status: 'pass', detail: 'GitLab provider disabled by active profile.' });
@@ -342,7 +346,8 @@ function addReviewPollingPrerequisiteCheck(
   }
 
   const issues: string[] = [];
-  if (!scripts.find(script => script.name === 'kronos_state.py')?.present) {
+  const kronosStateScript = scripts.find(script => script.name === 'kronos_state.py');
+  if (!kronosStateScript?.present) {
     issues.push('missing kronos_state.py');
   }
   if (!env['GITLAB_TOKEN']) {
@@ -356,14 +361,59 @@ function addReviewPollingPrerequisiteCheck(
       }
     }
   }
+  const smokeTicketKey = openReviewTickets[0]?.[0];
+  if (issues.length === 0 && smokeTicketKey && kronosStateScript) {
+    const smokeIssue = reviewMergeRequestStatusContractIssue(commandRunner, kronosStateScript.path, smokeTicketKey);
+    if (smokeIssue) { issues.push(smokeIssue); }
+  }
 
   checks.push({
     name: 'Review MR polling prerequisites',
     status: issues.length === 0 ? 'pass' : 'warn',
     detail: issues.length === 0
-      ? `${openReviewTickets.length} open review MR(s) ready for background polling.`
+      ? `${openReviewTickets.length} open review MR(s) ready for background polling; --mr-status contract OK for ${smokeTicketKey}.`
       : `${openReviewTickets.length} open review MR(s); ${issues.slice(0, 6).join('; ')}${issues.length > 6 ? `; and ${issues.length - 6} more` : ''}`,
   });
+}
+
+function reviewMergeRequestStatusContractIssue(
+  commandRunner: DoctorCommandRunner,
+  scriptPath: string,
+  ticketKey: string,
+): string | undefined {
+  try {
+    const raw = commandRunner('python', [scriptPath, '--mr-status', ticketKey], { timeoutMs: REVIEW_STATUS_SMOKE_TIMEOUT_MS });
+    const status = normalizeMergeRequestStatus(parseDoctorJson(raw, `MR status for ${ticketKey}`));
+    const missing: string[] = [];
+    if (!status.state) { missing.push('state'); }
+    if (!status.review_status) { missing.push('review_status or approved flag'); }
+    if (!hasMergeRequestCommentSignal(status)) { missing.push('comment metadata'); }
+    if (!hasMergeRequestDiscussionSignal(status)) { missing.push('discussion metadata'); }
+    return missing.length > 0 ? `--mr-status ${ticketKey} missing ${missing.join(', ')}` : undefined;
+  } catch (e: unknown) {
+    return `--mr-status ${ticketKey} failed: ${unknownErrorMessage(e, 'MR status smoke failed')}`;
+  }
+}
+
+function hasMergeRequestCommentSignal(status: ReturnType<typeof normalizeMergeRequestStatus>): boolean {
+  return status.comment_count !== undefined || status.last_comment_at !== undefined || status.comments !== undefined;
+}
+
+function hasMergeRequestDiscussionSignal(status: ReturnType<typeof normalizeMergeRequestStatus>): boolean {
+  return status.discussion_count !== undefined
+    || status.unresolved_discussion_count !== undefined
+    || status.resolved_discussion_count !== undefined
+    || status.last_discussion_at !== undefined
+    || status.discussions_resolved !== undefined;
+}
+
+function parseDoctorJson(raw: string, label: string): unknown {
+  const content = stripUtf8Bom(raw);
+  try {
+    return JSON.parse(content);
+  } catch (e: unknown) {
+    throw new Error(`Invalid JSON from ${label}: ${unknownErrorMessage(e, 'parse failed')}`);
+  }
 }
 
 function firstConfiguredUrl(...values: Array<string | undefined>): string | undefined {
