@@ -4925,6 +4925,7 @@ test('session store normalizes aggregate stats rows for rendering', () => {
     'catch (e: unknown)',
     "unknownErrorMessage(e, 'Unable to parse saved session JSON.')",
     "unknownErrorMessage(e, 'Unable to parse stats.json.')",
+    'stats.sessions = stats.sessions.filter(existing => existing.id !== aggregateSession.id)',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -4934,6 +4935,61 @@ test('session store normalizes aggregate stats rows for rendering', () => {
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }
+});
+
+test('session store updates aggregate stats idempotently for rewritten sessions', () => {
+  const statsPath = path.join(process.env.KRONOS_DIR, 'stats.json');
+  fs.rmSync(statsPath, { force: true });
+
+  sessionStore.writeSavedSession({
+    id: 'same-session',
+    project: 'app',
+    skill: 'implement',
+    ticket: 'K-1',
+    startedAt: '2026-07-01T10:00:00.000Z',
+    events: [],
+    stats: {
+      toolCalls: 1,
+      toolErrors: 0,
+      thinkingCount: 0,
+      filesRead: 1,
+      filesEdited: 0,
+      durationSec: 30,
+      verdict: 'unknown',
+    },
+  });
+  sessionStore.writeSavedSession({
+    id: 'same-session',
+    project: 'app',
+    skill: 'implement',
+    ticket: 'K-1',
+    startedAt: '2026-07-01T10:00:00.000Z',
+    events: [],
+    stats: {
+      toolCalls: 3,
+      toolErrors: 1,
+      thinkingCount: 2,
+      filesRead: 4,
+      filesEdited: 2,
+      durationSec: 90,
+      verdict: 'success',
+    },
+  });
+
+  assert.deepEqual(sessionStore.getAggregateStats().sessions, [{
+    id: 'same-session',
+    project: 'app',
+    skill: 'implement',
+    ticket: 'K-1',
+    startedAt: '2026-07-01T10:00:00.000Z',
+    toolCalls: 3,
+    toolErrors: 1,
+    thinkingCount: 2,
+    filesRead: 4,
+    filesEdited: 2,
+    durationSec: 90,
+    verdict: 'success',
+  }]);
 });
 
 test('run recovery builds resume prompts from saved prompt and log tail', () => {

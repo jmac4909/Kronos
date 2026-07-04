@@ -110,6 +110,7 @@ function saveAggregateStats(session: SavedSession): void {
     ...session.stats,
   });
   if (aggregateSession) {
+    stats.sessions = stats.sessions.filter(existing => existing.id !== aggregateSession.id);
     stats.sessions.push(aggregateSession);
   }
   if (stats.sessions.length > 100) { stats.sessions = stats.sessions.slice(-100); }
