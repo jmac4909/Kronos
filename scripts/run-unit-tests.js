@@ -217,6 +217,7 @@ const queuePlannerPanelView = require('../out/services/queuePlannerPanelView.js'
 const operationsReportPanelView = require('../out/services/operationsReportPanelView.js');
 const runStatus = require('../out/services/runStatus.js');
 const runProgress = require('../out/services/runProgress.js');
+const runRecords = require('../out/services/runRecords.js');
 const activeRunDisplay = require('../out/services/activeRunDisplay.js');
 const queueActiveRun = require('../out/services/queueActiveRun.js');
 const relativeTime = require('../out/services/relativeTime.js');
@@ -3455,6 +3456,10 @@ test('record guard helper centralizes unknown object narrowing', () => {
   assert.deepEqual(records.recordFromUnknown(null), {});
   assert.equal(records.recordString({ ticket: ' K-1 ' }, 'ticket'), 'K-1');
   assert.equal(records.recordString({ ticket: 42 }, 'ticket'), '');
+  assert.equal(runRecords.isRunLikeRecord({ id: 'run-1' }), true);
+  assert.equal(runRecords.isRunLikeRecord([]), false);
+  assert.equal(runRecords.hasRetryMetadata({ promptMetadata: { retryOfRunId: 'run-0' } }), true);
+  assert.equal(runRecords.hasRetryMetadata({ promptMetadata: 'run-0' }), false);
 
   for (const [file, marker] of [
     ['changedFiles.ts', "import { isRecord } from './records'"],
@@ -3462,10 +3467,10 @@ test('record guard helper centralizes unknown object narrowing', () => {
     ['integrationAdapters.ts', "import { isRecord } from './records'"],
     ['queuePlanner.ts', "import { isRecord } from './records'"],
     ['runStatus.ts', "import { isRecord } from './records'"],
+    ['runRecords.ts', "import { isRecord, recordString } from './records'"],
     ['runStore.ts', "import { isRecord, recordString } from './records'"],
     ['sessionStore.ts', "import { isRecord } from './records'"],
     ['sonarReportView.ts', "import { isRecord } from './records'"],
-    ['trendMetrics.ts', "import { isRecord, recordString } from './records'"],
     ['stateStore.ts', "import { isRecord as isPlainObject } from './records'"],
     ['stateScriptAdapter.ts', "import { isRecord as isPlainObject } from './records'"],
   ]) {
@@ -10187,16 +10192,19 @@ test('trend metrics report rework, build pass, verification pass, and cycle time
   const source = readSourceFixture('src', 'services', 'trendMetrics.ts');
   for (const marker of [
     'runs: unknown[]',
-    'type RunMetricRecord = Record<string, unknown>',
-    "import { isRecord, recordString } from './records'",
+    "import { recordString } from './records'",
+    "import { hasRetryMetadata, isRunLikeRecord, type RunLikeRecord } from './runRecords'",
     'const rawRuns = Array.isArray(input.runs) ? input.runs : []',
-    '.filter(isRecord)',
+    '.filter(isRunLikeRecord)',
+    'function cycleTimesHours(tickets: Record<string, Ticket>, runs: RunLikeRecord[]): number[]',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
   for (const marker of [
     'runs: any[]',
     'Record<string, any>',
+    'type RunMetricRecord',
+    'function hasRetryMetadata',
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }
@@ -10297,6 +10305,10 @@ test('agent quality score combines run outcomes, evidence gates, builds, reviews
 
   const source = readSourceFixture('src', 'services', 'agentQualityScore.ts');
   assert.ok(source.includes("import { isActiveRun } from './runStatus'"));
-  assert.ok(source.includes('type RunQualityRecord = RunRecord & Record<string, unknown>'));
+  assert.ok(source.includes("import { hasRetryMetadata, isRunLikeRecord } from './runRecords'"));
+  assert.ok(source.includes('runs: unknown[]'));
+  assert.ok(source.includes('.filter(isRunLikeRecord)'));
+  assert.equal(source.includes('type RunQualityRecord'), false);
   assert.equal(source.includes('type RunQualityRecord = RunRecord & Record<string, any>'), false);
+  assert.equal(source.includes('function hasRetryMetadata'), false);
 });

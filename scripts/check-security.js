@@ -81,6 +81,7 @@ const evidenceGatePolicy = readSource('src/services/evidenceGatePolicy.ts');
 const queueRemovalPolicy = readSource('src/services/queueRemovalPolicy.ts');
 const collisionDetector = readSource('src/services/collisionDetector.ts');
 const runStatus = readSource('src/services/runStatus.ts');
+const runRecords = readSource('src/services/runRecords.ts');
 const runProgress = readSource('src/services/runProgress.ts');
 const activeRunDisplay = readSource('src/services/activeRunDisplay.ts');
 const runCompletionNotification = readSource('src/services/runCompletionNotification.ts');
@@ -2346,10 +2347,11 @@ for (const [name, source, marker] of [
   ['src/services/integrationAdapters.ts', integrationAdapters, "import { isRecord } from './records'"],
   ['src/services/queuePlanner.ts', queuePlanner, "import { isRecord } from './records'"],
   ['src/services/runStatus.ts', runStatus, "import { isRecord } from './records'"],
+  ['src/services/runRecords.ts', runRecords, "import { isRecord, recordString } from './records'"],
   ['src/services/runStore.ts', runStore, "import { isRecord, recordString } from './records'"],
   ['src/services/sessionStore.ts', sessionStore, "import { isRecord } from './records'"],
   ['src/services/sonarReportView.ts', sonarReportView, "import { isRecord } from './records'"],
-  ['src/services/trendMetrics.ts', trendMetrics, "import { isRecord, recordString } from './records'"],
+  ['src/services/trendMetrics.ts', trendMetrics, "import { recordString } from './records'"],
   ['src/services/stateStore.ts', stateStore, "import { isRecord as isPlainObject } from './records'"],
   ['src/services/stateScriptAdapter.ts', stateScriptAdapter, "import { isRecord as isPlainObject } from './records'"],
   ['src/runners/sessionDispatcher.ts', dispatcher, "import { isRecord } from '../services/records'"],
@@ -2404,7 +2406,7 @@ for (const [name, source, marker] of [
   ['src/services/queueActiveRun.ts', queueActiveRun, "import { recordString } from './records'"],
   ['src/services/runProgress.ts', runProgress, "import { isRecord, recordFromUnknown, recordString } from './records'"],
   ['src/services/ticketTimeline.ts', ticketTimeline, "import { recordString } from './records'"],
-  ['src/services/trendMetrics.ts', trendMetrics, "import { isRecord, recordString } from './records'"],
+  ['src/services/trendMetrics.ts', trendMetrics, "import { recordString } from './records'"],
 ]) {
   if (!source.includes(marker)) {
     fail(`${name} must import the shared record string helper.`);
@@ -3747,7 +3749,22 @@ if (/\bany\b/.test(operationsReportPanelView)) {
 }
 
 for (const marker of [
+  'export type RunLikeRecord = Record<string, unknown>',
+  'export function isRunLikeRecord',
+  'return isRecord(value)',
+  'export function hasRetryMetadata',
+  "const promptMetadata = run['promptMetadata']",
+  "recordString(promptMetadata, 'retryOfRunId')",
+]) {
+  if (!runRecords.includes(marker)) {
+    fail(`Missing run records helper marker: ${marker}`);
+  }
+}
+
+for (const marker of [
   'export function computeAgentQualityScore',
+  "import { hasRetryMetadata, isRunLikeRecord } from './runRecords'",
+  'runs: unknown[]',
   'SUCCESS_RUN_STATUSES',
   'waiting_for_review',
   'Run completion',
@@ -3756,14 +3773,20 @@ for (const marker of [
   'Retry discipline',
   "import { isActiveRun } from './runStatus'",
   'gradeForScore',
-  'type RunQualityRecord = RunRecord & Record<string, unknown>',
-  'const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunRecord)',
-  'function hasRetryMetadata',
+  'const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunLikeRecord)',
   "import { recordString } from './records'",
-  'function isRunRecord',
 ]) {
   if (!agentQualityScore.includes(marker)) {
     fail(`Missing agent quality score marker: ${marker}`);
+  }
+}
+for (const forbidden of [
+  'type RunQualityRecord',
+  'function hasRetryMetadata',
+  'function isRunRecord',
+]) {
+  if (agentQualityScore.includes(forbidden)) {
+    fail(`Agent quality score must use shared run record helpers: ${forbidden}`);
   }
 }
 if (agentQualityScore.includes('type RunQualityRecord = RunRecord & Record<string, any>')) {
@@ -3913,7 +3936,6 @@ if (evidencePublisher.includes('} catch (e) {')) {
 for (const marker of [
   'export function computeTrendMetrics',
   'runs: unknown[]',
-  'type RunMetricRecord = Record<string, unknown>',
   'SUCCESS_RUN_STATUSES',
   'FINISHED_RUN_STATUSES',
   'Rework rate',
@@ -3921,13 +3943,14 @@ for (const marker of [
   'Verification pass rate',
   'Average cycle time',
   'Review health',
-  "import { isRecord, recordString } from './records'",
+  "import { recordString } from './records'",
+  "import { hasRetryMetadata, isRunLikeRecord, type RunLikeRecord } from './runRecords'",
   'const rawRuns = Array.isArray(input.runs) ? input.runs : []',
-  '.filter(isRecord)',
+  '.filter(isRunLikeRecord)',
+  'function cycleTimesHours(tickets: Record<string, Ticket>, runs: RunLikeRecord[]): number[]',
   'evidenceChecks(ticket)',
   'evidenceEnvironmentResults(ticket)',
   "evidenceString(check, 'result')",
-  'function hasRetryMetadata',
   "recordString(run, 'status')",
 ]) {
   if (!trendMetrics.includes(marker)) {
@@ -3937,6 +3960,8 @@ for (const marker of [
 for (const forbidden of [
   'runs: any[]',
   'Record<string, any>',
+  'type RunMetricRecord',
+  'function hasRetryMetadata',
 ]) {
   if (trendMetrics.includes(forbidden)) {
     fail(`Trend metrics must normalize raw run payloads instead of using ${forbidden}.`);

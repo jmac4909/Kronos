@@ -1,9 +1,9 @@
 import { Ticket } from '../state/types';
 import { isReviewReadyAction } from './actionSemantics';
-import { RunRecord } from './runStore';
 import { evaluateEvidenceGates } from './evidenceGate';
 import { isActiveRun } from './runStatus';
 import { recordString } from './records';
+import { hasRetryMetadata, isRunLikeRecord } from './runRecords';
 
 interface QualityComponent {
   label: string;
@@ -26,13 +26,12 @@ export interface AgentQualityScore {
 }
 
 const SUCCESS_RUN_STATUSES = new Set(['completed', 'waiting_for_review']);
-type RunQualityRecord = RunRecord & Record<string, unknown>;
 
 export function computeAgentQualityScore(input: {
-  runs: RunRecord[];
+  runs: unknown[];
   tickets: Record<string, Ticket>;
 }): AgentQualityScore {
-  const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunRecord);
+  const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunLikeRecord);
   const tickets = input.tickets || {};
   const totalRuns = runs.length;
   const completedRuns = runs.filter(run => SUCCESS_RUN_STATUSES.has(recordString(run, 'status'))).length;
@@ -116,14 +115,6 @@ export function computeAgentQualityScore(input: {
       { label: 'Changes requested MRs', value: String(changesRequestedMrs) },
     ],
   };
-}
-
-function hasRetryMetadata(run: RunQualityRecord): boolean {
-  return isRunRecord(run['promptMetadata']) && recordString(run['promptMetadata'], 'retryOfRunId').length > 0;
-}
-
-function isRunRecord(value: unknown): value is RunQualityRecord {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function proportionalScore(value: number, total: number, max: number): number {

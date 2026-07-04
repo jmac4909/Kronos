@@ -1,7 +1,8 @@
 import { Ticket } from '../state/types';
 import { evidenceChecks, evidenceEnvironmentResults, evidenceString } from './evidenceData';
-import { isRecord, recordString } from './records';
+import { recordString } from './records';
 import { toValidDate } from './dateValues';
+import { hasRetryMetadata, isRunLikeRecord, type RunLikeRecord } from './runRecords';
 
 interface TrendMetricsInput {
   runs: unknown[];
@@ -28,7 +29,6 @@ export interface TrendMetricsReport {
 
 const SUCCESS_RUN_STATUSES = new Set(['completed', 'waiting_for_review']);
 const FINISHED_RUN_STATUSES = new Set(['completed', 'waiting_for_review', 'failed', 'cancelled', 'needs_human']);
-type RunMetricRecord = Record<string, unknown>;
 
 export function computeTrendMetrics(input: TrendMetricsInput): TrendMetricsReport {
   const now = input.now || new Date();
@@ -36,7 +36,7 @@ export function computeTrendMetrics(input: TrendMetricsInput): TrendMetricsRepor
   const windowStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const rawRuns = Array.isArray(input.runs) ? input.runs : [];
   const runs = rawRuns
-    .filter(isRecord)
+    .filter(isRunLikeRecord)
     .filter(run => isInWindow(recordString(run, 'endedAt') || recordString(run, 'startedAt'), windowStart, now));
   const tickets = Object.entries(input.tickets || {})
     .filter(([_, ticket]) => ticketInWindow(ticket, windowStart, now));
@@ -137,8 +137,8 @@ function isInWindow(value: string | null | undefined, start: Date, end: Date): b
   return Boolean(parsed && parsed >= start && parsed <= end);
 }
 
-function cycleTimesHours(tickets: Record<string, Ticket>, runs: RunMetricRecord[]): number[] {
-  const groupedRuns = new Map<string, RunMetricRecord[]>();
+function cycleTimesHours(tickets: Record<string, Ticket>, runs: RunLikeRecord[]): number[] {
+  const groupedRuns = new Map<string, RunLikeRecord[]>();
   for (const run of runs) {
     const ticketKey = recordString(run, 'ticket');
     if (!ticketKey) { continue; }
@@ -171,10 +171,6 @@ function cycleTimesHours(tickets: Record<string, Ticket>, runs: RunMetricRecord[
 
 function isFailedRunStatus(status: string): boolean {
   return status === 'failed' || status === 'cancelled' || status === 'needs_human';
-}
-
-function hasRetryMetadata(run: RunMetricRecord): boolean {
-  return isRecord(run['promptMetadata']) && recordString(run['promptMetadata'], 'retryOfRunId').length > 0;
 }
 
 function earliestDate(values: Array<Date | null>): Date | null {
