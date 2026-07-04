@@ -268,11 +268,13 @@ interface WorktreeCleanupReport {
   registryIssue?: string;
 }
 
-function computeStats(events: ProgressEvent[]): SessionStats {
+export function computeStats(events: ProgressEvent[]): SessionStats {
   const progress = runProgressSummary({ events });
   const thinkingCount = events.filter(e => e.type === 'thinking').length;
-  const doneEvent = events.find(e => e.type === 'done');
-  const verdict = doneEvent ? (doneEvent.label.includes('Complete') ? 'success' : 'error') : 'unknown';
+  const terminalEvent = lastProgressTerminalEvent(events);
+  const verdict = terminalEvent
+    ? (terminalEvent.type === 'done' && terminalEvent.label.includes('Complete') ? 'success' : 'error')
+    : 'unknown';
   return {
     toolCalls: progress.toolCalls,
     toolErrors: progress.toolErrors,
@@ -299,6 +301,16 @@ function saveSession(project: string, skill: string, ticket: string, events: Pro
   };
   writeSavedSession(session);
   return id;
+}
+
+function lastProgressTerminalEvent(events: ProgressEvent[]): ProgressEvent | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event && (event.type === 'done' || event.type === 'error')) {
+      return event;
+    }
+  }
+  return undefined;
 }
 
 export function openSavedSession(session: SavedSession): void {
@@ -1260,9 +1272,25 @@ function shortenPath(p: string): string {
   return `.../${parts.slice(-3).join('/')}`;
 }
 
+export function progressStatusPresentation(events: ProgressEvent[], run?: Pick<KronosRun, 'status'>): { isDone: boolean; statusColor: string; statusText: string } {
+  const terminalEvent = lastProgressTerminalEvent(events);
+  const isDone = events.some(e => e.type === 'done');
+  if (run && isAttentionRunStatus(run.status)) {
+    return { isDone, statusColor: '#f44336', statusText: 'Needs Attention' };
+  }
+  if (terminalEvent?.type === 'error') {
+    return { isDone, statusColor: '#f44336', statusText: 'Error' };
+  }
+  if (terminalEvent?.type === 'done') {
+    return { isDone, statusColor: '#4caf50', statusText: 'Complete' };
+  }
+  return { isDone, statusColor: '#2196f3', statusText: 'Working...' };
+}
+
 function buildProgressHtml(project: string, skill: string, ticket: string, events: ProgressEvent[], run?: KronosRun): string {
   const progress = runProgressSummary({ events });
   const attentionDetail = run && isAttentionRunStatus(run.status) ? runAttentionDetail(run) : '';
+  const statusPresentation = progressStatusPresentation(events, run);
   const filesEdited = new Set<string>();
   const filesRead = new Set<string>();
   let lastThinking = '';
@@ -1276,10 +1304,7 @@ function buildProgressHtml(project: string, skill: string, ticket: string, event
     if (e.type === 'thinking') { lastThinking = e.label; }
   }
 
-  const isDone = events.some(e => e.type === 'done');
-  const hasError = events.some(e => e.type === 'error');
-  const statusColor = isDone ? '#4caf50' : hasError ? '#f44336' : '#2196f3';
-  const statusText = isDone ? 'Complete' : hasError ? 'Error' : 'Working...';
+  const { isDone, statusColor, statusText } = statusPresentation;
 
   const eventRows = events.slice(-20).map(e => {
     const icon = e.type === 'tool' ? '&#128295;' : e.type === 'text' ? '&#128172;' : e.type === 'thinking' ? '&#128161;' : e.type === 'done' ? '&#10003;' : e.type === 'error' ? '&#10007;' : '&#8226;';

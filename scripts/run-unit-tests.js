@@ -4587,6 +4587,42 @@ test('dispatcher parses every assistant content block for progress metrics', asy
   });
 });
 
+test('dispatcher treats post-completion errors as attention outcomes', async () => {
+  const vscodeStub = createVscodeTestModule();
+  await withPatchedModuleLoad(request => request === 'vscode' ? vscodeStub.vscode : undefined, async () => {
+    const dispatcherPath = require.resolve('../out/runners/sessionDispatcher.js');
+    delete require.cache[dispatcherPath];
+    const dispatcher = require(dispatcherPath);
+    const doneThenError = [
+      { type: 'text', label: 'Starting', detail: '', timestamp: new Date('2026-07-01T10:00:00.000Z') },
+      { type: 'done', label: 'Complete - 2.0s', detail: 'Implemented', timestamp: new Date('2026-07-01T10:00:02.000Z') },
+      { type: 'error', label: 'Post-run completion callback failed', detail: 'Evidence write failed', timestamp: new Date('2026-07-01T10:00:03.000Z') },
+    ];
+    const errorThenDone = [
+      { type: 'error', label: 'Retryable parse error', detail: '', timestamp: new Date('2026-07-01T10:00:01.000Z') },
+      { type: 'done', label: 'Complete - 2.0s', detail: 'Implemented', timestamp: new Date('2026-07-01T10:00:02.000Z') },
+    ];
+
+    assert.equal(dispatcher.computeStats(doneThenError).verdict, 'error');
+    assert.equal(dispatcher.computeStats(errorThenDone).verdict, 'success');
+    assert.deepEqual(dispatcher.progressStatusPresentation(doneThenError), {
+      isDone: true,
+      statusColor: '#f44336',
+      statusText: 'Error',
+    });
+    assert.deepEqual(dispatcher.progressStatusPresentation(doneThenError, { status: 'needs_human' }), {
+      isDone: true,
+      statusColor: '#f44336',
+      statusText: 'Needs Attention',
+    });
+    assert.deepEqual(dispatcher.progressStatusPresentation(errorThenDone), {
+      isDone: true,
+      statusColor: '#4caf50',
+      statusText: 'Complete',
+    });
+  });
+});
+
 test('dispatcher records branch and permission metadata for persisted runs', () => {
   const source = readSourceFixture('src', 'runners', 'sessionDispatcher.ts');
   for (const marker of [
@@ -4651,6 +4687,8 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "unknownErrorMessage(e, 'Invalid dispatch model.')",
     "unknownErrorMessage(e, 'Failed to parse Claude stream event.')",
     "label: 'Failed to parse Claude stream event'",
+    'export function computeStats(events: ProgressEvent[]): SessionStats',
+    'function lastProgressTerminalEvent(events: ProgressEvent[]): ProgressEvent | undefined',
     'writeSavedSession(session)',
     'export { getAggregateStats, listSavedSessions, listSessionStoreIssues }',
     'const id = safeSessionId',
@@ -4688,6 +4726,9 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     'const payload = isRecord(event) ? event : {}',
     "arrayField(message, 'content')",
     'for (const pe of parseStreamEvents(JSON.parse(trimmed)))',
+    "export function progressStatusPresentation(events: ProgressEvent[], run?: Pick<KronosRun, 'status'>)",
+    'const statusPresentation = progressStatusPresentation(events, run)',
+    "statusText: 'Needs Attention'",
     'const sessionStart = progressDateOr(session.startedAt, new Date())',
     'timestamp: progressDateOr(e.timestamp, sessionStart)',
     'const progress = runProgressSummary({ events })',
