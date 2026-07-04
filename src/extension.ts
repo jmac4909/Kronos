@@ -68,6 +68,19 @@ import { isFreshActiveRun } from './services/runStatus';
 import { isAttentionRunStatus, runAttentionDetail, runAttentionLine } from './services/runAttention';
 import { buildRunCompletionNotification } from './services/runCompletionNotification';
 import { isRecord, recordFromUnknown } from './services/records';
+import {
+  explicitProjectName,
+  resolveMergeRequestUrl,
+  resolveProjectName,
+  resolveQueueCommandItem,
+  resolveQueueIndex,
+  resolveRecoveryFocusId,
+  resolveRunId,
+  resolveTaskId,
+  resolveTicketKey,
+  stringFromUnknown,
+  ticketProjectNamesForCommand,
+} from './services/commandPayloads';
 import { openReviewTicketEntries, reviewBranchTickets as buildReviewBranchTickets } from './services/reviewWork';
 import { decideReviewMonitorAction, reviewDeployMonitorActionHandled, reviewTerminalMergeRequestActionKey, type ReviewDeployMonitorResult, type ReviewMonitorDecision, type ReviewTerminalMergeRequestAction } from './services/reviewMonitor';
 import { decideQueueRemoval } from './services/queueRemovalPolicy';
@@ -104,10 +117,6 @@ const REVIEW_SEEN_KEYS_STORAGE_KEY = 'kronos.review.seenKeys.v1';
 const reviewPollFailureNotifications = new Map<string, number>();
 const reviewTerminalMergeRequestActions = new Set<string>();
 const OPTIONAL_SCRIPT_PANEL_WARNING = 'Kronos integration scripts are not installed. Run Kronos: Doctor for setup details.';
-
-function stringFromUnknown(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
 
 function panelIntegrationErrorMessage(error: unknown, fallback: string): string {
   return isKronosScriptMissingError(error) ? OPTIONAL_SCRIPT_PANEL_WARNING : unknownErrorMessage(error, fallback);
@@ -5277,23 +5286,6 @@ function sanitizeBranchName(branch: string): string {
   return sanitizeProfileBranch(branch) || 'develop';
 }
 
-function resolveProjectName(state: KronosState, item: unknown): string | undefined {
-  const record = recordFromUnknown(item);
-  const projectName = record['projectName'];
-  if (typeof projectName === 'string' && projectName.trim()) { return projectName; }
-  const ticket = recordFromUnknown(record['ticket']);
-  const ticketProjects = ticket['projects'];
-  if (Array.isArray(ticketProjects) && typeof ticketProjects[0] === 'string' && ticketProjects[0].trim()) {
-    return ticketProjects[0];
-  }
-  const ticketKey = record['ticketKey'];
-  if (typeof ticketKey === 'string' && state.state) {
-    const t = state.state.tickets[ticketKey];
-    if (t?.projects?.length) { return t.projects[0]; }
-  }
-  return undefined;
-}
-
 async function pickTicketProjectNameForDispatch(
   state: KronosState,
   item: unknown,
@@ -5320,60 +5312,6 @@ async function pickTicketProjectNameForDispatch(
     { placeHolder },
   );
   return picked?.label;
-}
-
-function explicitProjectName(item: unknown): string | undefined {
-  const record = recordFromUnknown(item);
-  const projectName = stringFromUnknown(record['projectName']);
-  if (projectName) { return projectName; }
-  const nestedItem = recordFromUnknown(record['item']);
-  return stringFromUnknown(nestedItem['projectName']);
-}
-
-function ticketProjectNamesForCommand(state: KronosState, item: unknown, ticketKey: string | undefined): string[] {
-  const record = recordFromUnknown(item);
-  const nestedItem = recordFromUnknown(record['item']);
-  const projectSources = [
-    recordFromUnknown(record['ticket'])['projects'],
-    recordFromUnknown(nestedItem['ticket'])['projects'],
-    ticketKey && state.state ? state.state.tickets[ticketKey]?.projects : undefined,
-  ];
-  for (const source of projectSources) {
-    const projects = uniqueProjectNames(source);
-    if (projects.length > 0) { return projects; }
-  }
-  return [];
-}
-
-function uniqueProjectNames(value: unknown): string[] {
-  if (!Array.isArray(value)) { return []; }
-  return [...new Set(value
-    .filter((project): project is string => typeof project === 'string' && project.trim().length > 0)
-    .map(project => project.trim()))];
-}
-
-function resolveRunId(item: unknown): string | undefined {
-  if (typeof item === 'string' && item.trim()) { return item.trim(); }
-  const record = recordFromUnknown(item);
-  const runId = record['runId'];
-  if (typeof runId === 'string' && runId.trim()) { return runId.trim(); }
-  const id = record['id'];
-  if (typeof id === 'string' && id.trim()) { return id.trim(); }
-  return undefined;
-}
-
-function resolveItemId(item: unknown): string | undefined {
-  const itemId = recordFromUnknown(item)['itemId'];
-  return typeof itemId === 'string' && itemId.trim() ? itemId.trim() : undefined;
-}
-
-function resolveWorktreePath(item: unknown): string | undefined {
-  const worktreePath = recordFromUnknown(item)['worktreePath'];
-  return typeof worktreePath === 'string' && worktreePath.trim() ? worktreePath.trim() : undefined;
-}
-
-function resolveRecoveryFocusId(item: unknown): string | undefined {
-  return resolveItemId(item) || resolveRunId(item) || resolveWorktreePath(item);
 }
 
 async function pickProjectName(state: KronosState, placeHolder: string): Promise<string | undefined> {
@@ -5413,63 +5351,6 @@ async function pickOrphanMergeRequestTicket(state: KronosStateSnapshot): Promise
   }
   const picked = await vscode.window.showQuickPick(candidates, { placeHolder: 'Link which orphan MR to a Jira ticket?' });
   return picked?.ticketKey;
-}
-
-function resolveTicketKey(item: unknown): string | undefined {
-  if (typeof item === 'string') { return item; }
-  const record = recordFromUnknown(item);
-  if (typeof record['ticketKey'] === 'string') { return record['ticketKey']; }
-  const nestedItem = recordFromUnknown(record['item']);
-  if (typeof nestedItem['ticket'] === 'string') { return nestedItem['ticket']; }
-  if (typeof record['ticket'] === 'string') { return record['ticket']; }
-  return undefined;
-}
-
-function resolveMergeRequestUrl(item: unknown): string | undefined {
-  const ticket = recordFromUnknown(recordFromUnknown(item)['ticket']);
-  const mr = recordFromUnknown(ticket['mr']);
-  return stringFromUnknown(mr['url']);
-}
-
-interface QueueCommandPayload {
-  id?: string;
-  ticket?: string;
-  projects: string[];
-  projectPath?: string;
-  action: string;
-}
-
-function resolveQueueCommandItem(item: unknown): QueueCommandPayload | undefined {
-  return queueCommandPayloadFromRecord(recordFromUnknown(item))
-    || queueCommandPayloadFromRecord(recordFromUnknown(recordFromUnknown(item)['item']));
-}
-
-function queueCommandPayloadFromRecord(record: Record<string, unknown>): QueueCommandPayload | undefined {
-  const action = record['action'];
-  if (typeof action !== 'string' || !action.trim()) { return undefined; }
-  const projects = Array.isArray(record['projects'])
-    ? record['projects']
-      .filter((project): project is string => typeof project === 'string' && project.trim().length > 0)
-      .map(project => project.trim())
-    : [];
-  const ticket = typeof record['ticket'] === 'string' && record['ticket'].trim() ? record['ticket'].trim() : undefined;
-  const id = typeof record['id'] === 'string' && record['id'].trim() ? record['id'].trim() : undefined;
-  const projectPath = stringFromUnknown(record['project_path']) || stringFromUnknown(record['projectPath']);
-  const payload: QueueCommandPayload = { projects, action: action.trim() };
-  if (id) { payload.id = id; }
-  if (ticket) { payload.ticket = ticket; }
-  if (projectPath) { payload.projectPath = projectPath; }
-  return payload;
-}
-
-function resolveQueueIndex(item: unknown): number | undefined {
-  const index = recordFromUnknown(item)['index'];
-  return typeof index === 'number' && Number.isInteger(index) && index >= 0 ? index : undefined;
-}
-
-function resolveTaskId(item: unknown): string | undefined {
-  const taskId = recordFromUnknown(item)['taskId'];
-  return typeof taskId === 'string' && taskId.trim() ? taskId : undefined;
 }
 
 function startReviewAutomation(state: KronosState): vscode.Disposable {

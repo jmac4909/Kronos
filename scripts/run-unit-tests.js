@@ -226,6 +226,7 @@ const runCompletionNotification = require('../out/services/runCompletionNotifica
 const runCenterSort = require('../out/services/runCenterSort.js');
 const attentionBadge = require('../out/services/attentionBadge.js');
 const intervalConfig = require('../out/services/intervalConfig.js');
+const commandPayloads = require('../out/services/commandPayloads.js');
 const cliProbes = require('../out/services/cliProbes.js');
 const errorUtils = require('../out/services/errorUtils.js');
 const combinedVerification = require('../out/services/combinedVerification.js');
@@ -3526,6 +3527,71 @@ test('record guard helper centralizes unknown object narrowing', () => {
     assert.ok(source.includes(marker), `${file} should import shared record string helper`);
     assert.equal(source.includes('function runString'), false, `${file} should not carry a local runString helper`);
     assert.equal(source.includes('function eventString'), false, `${file} should not carry a local eventString helper`);
+  }
+});
+
+test('command payload helpers normalize tree, webview, queue, and run payloads', () => {
+  const state = {
+    state: {
+      tickets: {
+        'K-1': ticket({ projects: ['api', 'web'] }),
+        'K-2': ticket({ projects: ['svc'] }),
+      },
+    },
+  };
+
+  assert.equal(commandPayloads.stringFromUnknown(' K-1 '), 'K-1');
+  assert.equal(commandPayloads.stringFromUnknown('   '), undefined);
+  assert.equal(commandPayloads.resolveProjectName(state, { projectName: ' api ' }), ' api ');
+  assert.equal(commandPayloads.resolveProjectName(state, { ticket: { projects: ['web'] } }), 'web');
+  assert.equal(commandPayloads.resolveProjectName(state, { ticketKey: 'K-2' }), 'svc');
+  assert.equal(commandPayloads.explicitProjectName({ item: { projectName: 'nested' } }), 'nested');
+  assert.deepEqual(commandPayloads.ticketProjectNamesForCommand(state, { ticket: { projects: [' api ', 'api', '', 42, 'web'] } }, undefined), ['api', 'web']);
+  assert.deepEqual(commandPayloads.ticketProjectNamesForCommand(state, { item: { ticket: { projects: [' nested '] } } }, undefined), ['nested']);
+  assert.deepEqual(commandPayloads.ticketProjectNamesForCommand(state, {}, 'K-1'), ['api', 'web']);
+  assert.deepEqual(commandPayloads.uniqueProjectNames([' api ', 'api', '', 42, 'web']), ['api', 'web']);
+
+  assert.equal(commandPayloads.resolveRunId(' run-1 '), 'run-1');
+  assert.equal(commandPayloads.resolveRunId({ runId: ' run-2 ' }), 'run-2');
+  assert.equal(commandPayloads.resolveRunId({ id: ' run-3 ' }), 'run-3');
+  assert.equal(commandPayloads.resolveRecoveryFocusId({ itemId: ' item-1 ', runId: 'run-1', worktreePath: '/repo/worktree' }), 'item-1');
+  assert.equal(commandPayloads.resolveRecoveryFocusId({ runId: ' run-1 ', worktreePath: '/repo/worktree' }), 'run-1');
+  assert.equal(commandPayloads.resolveRecoveryFocusId({ worktreePath: ' /repo/worktree ' }), '/repo/worktree');
+  assert.equal(commandPayloads.resolveTicketKey('K-1'), 'K-1');
+  assert.equal(commandPayloads.resolveTicketKey({ ticketKey: 'K-2' }), 'K-2');
+  assert.equal(commandPayloads.resolveTicketKey({ item: { ticket: 'K-3' } }), 'K-3');
+  assert.equal(commandPayloads.resolveTicketKey({ ticket: 'K-4' }), 'K-4');
+  assert.equal(commandPayloads.resolveMergeRequestUrl({ ticket: { mr: { url: ' https://gitlab.example/mr/1 ' } } }), 'https://gitlab.example/mr/1');
+
+  assert.deepEqual(commandPayloads.resolveQueueCommandItem({
+    id: ' q-1 ',
+    ticket: ' K-1 ',
+    projects: [' api ', 'api'],
+    project_path: ' /repo/api ',
+    action: ' implement ',
+  }), { id: 'q-1', ticket: 'K-1', projects: ['api', 'api'], projectPath: '/repo/api', action: 'implement' });
+  assert.deepEqual(commandPayloads.resolveQueueCommandItem({
+    item: { ticket: 'K-2', projects: ['svc'], projectPath: 'C:\\Repo\\Svc', action: 'verify' },
+  }), { ticket: 'K-2', projects: ['svc'], projectPath: 'C:\\Repo\\Svc', action: 'verify' });
+  assert.equal(commandPayloads.resolveQueueCommandItem({ ticket: 'K-1' }), undefined);
+  assert.equal(commandPayloads.resolveQueueIndex({ index: 2 }), 2);
+  assert.equal(commandPayloads.resolveQueueIndex({ index: -1 }), undefined);
+  assert.equal(commandPayloads.resolveQueueIndex({ index: 1.5 }), undefined);
+  assert.equal(commandPayloads.resolveTaskId({ taskId: ' task-1 ' }), ' task-1 ');
+
+  const source = readSourceFixture('src', 'services', 'commandPayloads.ts');
+  for (const marker of [
+    "import { recordFromUnknown } from './records'",
+    'export interface QueueCommandPayload',
+    'export function resolveProjectName',
+    'export function ticketProjectNamesForCommand',
+    'export function resolveRecoveryFocusId',
+    'export function resolveQueueCommandItem',
+    'export function queueCommandPayloadFromRecord',
+    "stringFromUnknown(record['project_path']) || stringFromUnknown(record['projectPath'])",
+    "typeof index === 'number' && Number.isInteger(index) && index >= 0",
+  ]) {
+    assert.ok(source.includes(marker), marker);
   }
 });
 
@@ -8878,7 +8944,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'await openRecoveryCenter(state, extensionUri, runId || undefined)',
     'await openRecoveryCenter(state, context.extensionUri, resolveRecoveryFocusId(item))',
     'openRecoveryPanel(state, inventory, backups, focusItemId, extensionUri)',
-    'function resolveRecoveryFocusId(item: unknown): string | undefined',
+    'resolveRecoveryFocusId,',
     "const RECOVERY_MESSAGE_COMMANDS = new Set([\n  'refreshPanel',",
     'startActiveRunPanelRefresh(panel, state, () => render(true))',
     "if (request.command === 'refreshPanel') {\n      await runWebviewPanelAction(() => render(true), 'Kronos recovery action failed.');\n      return;\n    }",
@@ -9377,10 +9443,9 @@ test('extension run recovery helpers use typed run records', () => {
     'function resolveRunItem(item: unknown): KronosRun | undefined',
     'async function pickRun(runs: KronosRun[], placeHolder: string, emptyMessage: string): Promise<KronosRun | undefined>',
     'const run = resolveRunItem(item) || await pickRun',
-    'function resolveProjectName(state: KronosState, item: unknown): string | undefined',
-    "const ticket = recordFromUnknown(record['ticket'])",
-    'function resolveTicketKey(item: unknown): string | undefined',
-    "const nestedItem = recordFromUnknown(record['item'])",
+    "from './services/commandPayloads'",
+    'resolveProjectName,',
+    'resolveTicketKey,',
     'catch (e: unknown)',
     "unknownErrorMessage(e, 'Failed to resume run.')",
     "unknownErrorMessage(e, 'Failed to archive run.')",
@@ -9468,12 +9533,11 @@ test('extension dispatch command handlers normalize tree payloads before use', (
     'async function pickProjectName(state: KronosState, placeHolder: string): Promise<string | undefined>',
     'async function pickTicketProjectNameForDispatch(',
     'if (!ticketKey) {\n      return pickProjectName(state, placeHolder);\n    }',
-    'function ticketProjectNamesForCommand(state: KronosState, item: unknown, ticketKey: string | undefined): string[]',
-    'function uniqueProjectNames(value: unknown): string[]',
+    'ticketProjectNamesForCommand,',
     'const ticketKey = resolveTicketKey(item);',
     'const taskId = resolveTaskId(item);',
     "await startClaudeDispatch(projectPath, 'verify-fix', ticketKey,",
-    'function resolveTaskId(item: unknown): string | undefined',
+    'resolveTaskId,',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -9580,17 +9644,11 @@ test('extension queue command handlers normalize payloads before use', () => {
     'dispatchTargets.push({ projectPath: directProjectPath });',
     'const idx = resolveQueueIndex(treeItem);',
     'await startClaudeDispatch(target.projectPath, skill, queueData.ticket || undefined,',
-    'interface QueueCommandPayload',
-    'projectPath?: string;',
-    'function resolveQueueCommandItem(item: unknown): QueueCommandPayload | undefined',
-    'function queueCommandPayloadFromRecord(record: Record<string, unknown>): QueueCommandPayload | undefined',
-    "const projectPath = stringFromUnknown(record['project_path']) || stringFromUnknown(record['projectPath']);",
-    'if (projectPath) { payload.projectPath = projectPath; }',
+    'resolveQueueCommandItem,',
     'function getProjectNameForPath(state: KronosState, projectPath?: string): string | undefined',
     "import { isExistingRealPathInside, projectPathKey } from './services/pathUtils'",
     'projectPathKey(project.path)',
-    'function resolveQueueIndex(item: unknown): number | undefined',
-    "typeof index === 'number' && Number.isInteger(index) && index >= 0",
+    'resolveQueueIndex,',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -9676,7 +9734,7 @@ test('extension MR and ticket link handlers normalize payloads and unknown error
   ]) {
     assert.ok(commandSource.includes(marker), marker);
   }
-  assert.ok(source.includes('function resolveMergeRequestUrl(item: unknown): string | undefined'));
+  assert.ok(source.includes('resolveMergeRequestUrl,'));
   assert.ok(source.includes('async function pickOrphanMergeRequestTicket(state: KronosStateSnapshot): Promise<string | undefined>'));
   assert.ok(source.includes("vscode.window.showWarningMessage('No orphan merge requests found to link.');"));
   for (const marker of [
@@ -9747,7 +9805,7 @@ test('extension Sonar commands normalize webview and issue payloads', () => {
   for (const marker of [
     "import { buildSonarReport, type SonarIssue }",
     "import { isRecord, recordFromUnknown } from './services/records'",
-    'function stringFromUnknown(value: unknown): string | undefined',
+    'stringFromUnknown,',
     "vscode.commands.registerCommand('kronos.sonarScan', async (item: unknown)",
     "vscode.commands.registerCommand('kronos.sonarReport', async (item: unknown)",
     "vscode.commands.registerCommand('kronos.fixSonarIssues', async (item: unknown)",

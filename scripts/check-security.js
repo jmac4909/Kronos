@@ -93,6 +93,7 @@ const actionCatalog = readSource('src/services/actionCatalog.ts');
 const actionSemantics = readSource('src/services/actionSemantics.ts');
 const severityRank = readSource('src/services/severityRank.ts');
 const records = readSource('src/services/records.ts');
+const commandPayloads = readSource('src/services/commandPayloads.ts');
 const dateValues = readSource('src/services/dateValues.ts');
 const regexp = readSource('src/services/regexp.ts');
 const pathUtils = readSource('src/services/pathUtils.ts');
@@ -763,7 +764,7 @@ for (const marker of [
   'await openRecoveryCenter(state, extensionUri, runId || undefined)',
   'await openRecoveryCenter(state, context.extensionUri, resolveRecoveryFocusId(item))',
   'openRecoveryPanel(state, inventory, backups, focusItemId, extensionUri)',
-  'function resolveRecoveryFocusId(item: unknown): string | undefined',
+  'resolveRecoveryFocusId,',
   "const RECOVERY_MESSAGE_COMMANDS = new Set([\n  'refreshPanel',",
   'startActiveRunPanelRefresh(panel, state, () => render(true))',
   "if (request.command === 'refreshPanel') {\n      await runWebviewPanelAction(() => render(true), 'Kronos recovery action failed.');\n      return;\n    }",
@@ -919,10 +920,10 @@ for (const marker of [
   'unknownErrorMessage(e, `Could not find fallback remote branch for ${ticket.key}.`)',
   "import { buildSonarReport, type SonarIssue }",
   "import { isRecord, recordFromUnknown } from './services/records'",
-  'function resolveProjectName(state: KronosState, item: unknown): string | undefined',
-  "const ticket = recordFromUnknown(record['ticket'])",
-  'function resolveTicketKey(item: unknown): string | undefined',
-  "const nestedItem = recordFromUnknown(record['item'])",
+  "from './services/commandPayloads'",
+  'resolveProjectName,',
+  'resolveQueueCommandItem,',
+  'resolveTicketKey,',
   'panel.webview.onDidReceiveMessage(async (msg: unknown) =>',
   'function normalizeSonarIssueCommandList(value: unknown): SonarIssue[]',
   'function formatSonarIssuePromptLine(issue: SonarIssue): string',
@@ -1293,8 +1294,7 @@ for (const marker of [
   'async function pickProjectName(state: KronosState, placeHolder: string): Promise<string | undefined>',
   'async function pickTicketProjectNameForDispatch(',
   'if (!ticketKey) {\n      return pickProjectName(state, placeHolder);\n    }',
-  'function ticketProjectNamesForCommand(state: KronosState, item: unknown, ticketKey: string | undefined): string[]',
-  'function uniqueProjectNames(value: unknown): string[]',
+  'ticketProjectNamesForCommand,',
   "vscode.commands.registerCommand('kronos.implement', async (item: unknown)",
   "vscode.commands.registerCommand('kronos.deployMonitor', async (item: unknown)",
   'const projectName = await pickTicketProjectNameForDispatch(',
@@ -1348,11 +1348,6 @@ for (const marker of [
   'if (target.projectName) { dispatchOptions.projectNameOverride = target.projectName; }',
   'const idx = resolveQueueIndex(treeItem);',
   'await startClaudeDispatch(target.projectPath, skill, queueData.ticket || undefined,',
-  'interface QueueCommandPayload',
-  'function resolveQueueCommandItem(item: unknown): QueueCommandPayload | undefined',
-  'function queueCommandPayloadFromRecord(record: Record<string, unknown>): QueueCommandPayload | undefined',
-  'function resolveQueueIndex(item: unknown): number | undefined',
-  'function stringFromUnknown(value: unknown): string | undefined',
   "const branch = mode.value === 'new' ? (stringFromUnknown(commandArg['branch']) || baseBranch) : '';",
   "const sourceBranch = stringFromUnknown(commandArg['sourceBranch']) || '';",
   "projectName = await pickProjectName(state, 'Run SonarQube scan for which project?');",
@@ -1362,17 +1357,36 @@ for (const marker of [
   'let projectName = resolveProjectName(state, args);',
   "const projectPath = stringFromUnknown(commandArg['projectPath']) || getProjectPath(state, projectName);",
   'let projectName = resolveProjectName(state, item);',
-  'function resolveMergeRequestUrl(item: unknown): string | undefined',
   'let orphanKey = resolveTicketKey(treeItem);',
   'orphanKey = await pickOrphanMergeRequestTicket(state.state);',
   'async function pickOrphanMergeRequestTicket(state: KronosStateSnapshot): Promise<string | undefined>',
   'const url = resolveMergeRequestUrl(treeItem);',
   'const ticketKey = resolveTicketKey(ticketKeyOrItem);',
   "const projectName = stringFromUnknown(recordFromUnknown(item)['linkedProject']);",
-  'function resolveTaskId(item: unknown): string | undefined',
 ]) {
   if (!extension.includes(marker)) {
     fail(`Extension dispatch command must keep tree payloads unknown: ${marker}`);
+  }
+}
+for (const marker of [
+  'export interface QueueCommandPayload',
+  'export function resolveProjectName',
+  "const ticket = recordFromUnknown(record['ticket'])",
+  'export function resolveTicketKey',
+  "const nestedItem = recordFromUnknown(record['item'])",
+  'export function resolveQueueCommandItem',
+  'export function queueCommandPayloadFromRecord',
+  'export function resolveQueueIndex',
+  "typeof index === 'number' && Number.isInteger(index) && index >= 0",
+  'export function stringFromUnknown',
+  'export function resolveMergeRequestUrl',
+  'export function resolveTaskId',
+  'export function resolveRecoveryFocusId',
+  'export function ticketProjectNamesForCommand',
+  'export function uniqueProjectNames',
+]) {
+  if (!commandPayloads.includes(marker)) {
+    fail(`Missing command payload helper marker: ${marker}`);
   }
 }
 
