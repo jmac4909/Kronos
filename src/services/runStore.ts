@@ -7,6 +7,7 @@ import { effectiveRunStatus, isActiveRunStatus, isStaleActiveRun } from './runSt
 import { readJsonFile } from './jsonFiles';
 import { isRecord } from './records';
 import { isPathInside } from './pathUtils';
+import { toValidDate } from './dateValues';
 
 export const RUNS_DIR = path.join(KRONOS_DIR, 'runs');
 const ARCHIVED_RUNS_DIR = path.join(RUNS_DIR, 'archive');
@@ -332,7 +333,7 @@ function terminalRunOutcomeFromStaleProcesslessRun(run: RunRecord, status: strin
 }
 
 function isStaleUntimestampedActiveRunRecord(run: RunRecord, filePath: string | undefined): boolean {
-  if (dateValue(run.startedAt) || !filePath || !isReadableActiveRunRecord(filePath)) { return false; }
+  if (toValidDate(run.startedAt) || !filePath || !isReadableActiveRunRecord(filePath)) { return false; }
   try {
     const stat = fs.statSync(filePath);
     return Date.now() - stat.mtimeMs >= PROCESSLESS_ACTIVE_RECORD_STALE_MS;
@@ -401,13 +402,6 @@ function readLogTail(logPath: string, maxBytes = 64 * 1024): string {
 function logModifiedAt(logPath: unknown): string | undefined {
   if (typeof logPath !== 'string' || !isReadableActiveRunLog(logPath)) { return undefined; }
   return fs.statSync(logPath).mtime.toISOString();
-}
-
-function dateValue(value: unknown): Date | null {
-  const date = typeof value === 'string' || typeof value === 'number' || value instanceof Date
-    ? new Date(value)
-    : null;
-  return date && Number.isFinite(date.getTime()) ? date : null;
 }
 
 function numericPid(value: unknown): number | undefined {

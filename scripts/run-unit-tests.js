@@ -3478,6 +3478,13 @@ test('date value helper centralizes valid date coercion', () => {
   assert.ok(runCenterSortSource.includes("import { toValidDate } from './dateValues'"));
   assert.equal(runCenterSortSource.includes('function toValidDate'), false);
 
+  for (const file of ['runProgress.ts', 'runStatus.ts', 'runStore.ts']) {
+    const source = readSourceFixture('src', 'services', file);
+    assert.ok(source.includes("import { toValidDate } from './dateValues'"), `${file} should use shared date value helper`);
+    assert.equal(source.includes('function dateValue'), false, `${file} should not carry a local dateValue helper`);
+    assert.equal(source.includes('function validDate'), false, `${file} should not carry a local validDate helper`);
+  }
+
   const dispatcherSource = readSourceFixture('src', 'runners', 'sessionDispatcher.ts');
   assert.ok(dispatcherSource.includes("import { toValidDate } from '../services/dateValues'"));
   assert.equal(dispatcherSource.includes('function toValidDate'), false);
@@ -4825,6 +4832,7 @@ test('run store surfaces invalid records and blocks strict mutations', () => {
   const source = readSourceFixture('src', 'services', 'runStore.ts');
   for (const marker of [
     "import { unknownErrorCode, unknownErrorMessage } from './errorUtils'",
+    "import { toValidDate } from './dateValues'",
     '[key: string]: unknown',
     'catch (e: unknown)',
     "unknownErrorMessage(e, 'Unable to parse JSON.')",
@@ -5985,6 +5993,7 @@ test('run status helper centralizes active persisted run semantics', () => {
 
   const source = readSourceFixture('src', 'services', 'runStatus.ts');
   for (const marker of [
+    "import { toValidDate } from './dateValues'",
     "const ACTIVE_RUN_STATUSES = new Set(['preflight', 'running', 'paused'])",
     "const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['preflight', 'running'])",
     'const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
@@ -6045,6 +6054,7 @@ test('run progress helper summarizes active run activity', () => {
   const source = readSourceFixture('src', 'services', 'runProgress.ts');
   for (const marker of [
     "import { isActiveRunStatus } from './runStatus'",
+    "import { toValidDate } from './dateValues'",
     "import { isRecord, recordFromUnknown } from './records'",
     'export function runProgressSummary',
     'export function formatRunProgress',

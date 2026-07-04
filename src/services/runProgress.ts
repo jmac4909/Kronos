@@ -1,5 +1,6 @@
 import { isActiveRunStatus } from './runStatus';
 import { isRecord, recordFromUnknown } from './records';
+import { toValidDate } from './dateValues';
 
 interface RunProgressSummary {
   toolCalls: number;
@@ -45,12 +46,12 @@ export function formatRunProgress(run: unknown, now = new Date()): string {
 
 function elapsedRunSeconds(record: Record<string, unknown>, events: Array<Record<string, unknown>>, now: Date): number {
   const eventDates = events
-    .map(event => validDate(event['timestamp']))
+    .map(event => toValidDate(event['timestamp']))
     .filter((date): date is Date => Boolean(date));
-  const started = validDate(record['startedAt']) || eventDates[0];
+  const started = toValidDate(record['startedAt']) || eventDates[0];
   if (!started) { return 0; }
-  const ended = validDate(record['endedAt'])
-    || (isActiveRunStatus(record['status']) ? validDate(now) : eventDates[eventDates.length - 1])
+  const ended = toValidDate(record['endedAt'])
+    || (isActiveRunStatus(record['status']) ? toValidDate(now) : eventDates[eventDates.length - 1])
     || started;
   return Math.max(0, Math.round((ended.getTime() - started.getTime()) / 1000));
 }
@@ -88,13 +89,6 @@ function formatElapsed(seconds: number): string {
     return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`;
   }
   return `${seconds}s`;
-}
-
-function validDate(value: unknown): Date | null {
-  const date = value instanceof Date || typeof value === 'string' || typeof value === 'number'
-    ? new Date(value)
-    : null;
-  return date && Number.isFinite(date.getTime()) ? date : null;
 }
 
 function eventString(record: Record<string, unknown>, key: string): string {

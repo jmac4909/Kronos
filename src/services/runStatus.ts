@@ -1,4 +1,5 @@
 import { isRecord } from './records';
+import { toValidDate } from './dateValues';
 
 const ACTIVE_RUN_STATUSES = new Set(['preflight', 'running', 'paused']);
 const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['preflight', 'running']);
@@ -32,7 +33,7 @@ export function isStaleActiveRun(run: RunStatusLike | unknown, now = new Date(),
   if (!STALEABLE_ACTIVE_RUN_STATUSES.has(status)) { return false; }
   if (staleMs <= 0 || !isRecord(run)) { return false; }
   if (hasLiveProcess(run['processPid'])) { return false; }
-  const startedAt = dateValue(run['startedAt']);
+  const startedAt = toValidDate(run['startedAt']);
   if (!startedAt) { return false; }
   return now.getTime() - startedAt.getTime() >= staleMs;
 }
@@ -127,14 +128,7 @@ function numericPid(value: unknown): number | undefined {
 
 function hasDateLikeValue(value: unknown): boolean {
   if (typeof value !== 'string' && typeof value !== 'number') { return false; }
-  return Number.isFinite(new Date(value).getTime());
-}
-
-function dateValue(value: unknown): Date | null {
-  const date = typeof value === 'string' || typeof value === 'number' || value instanceof Date
-    ? new Date(value)
-    : null;
-  return date && Number.isFinite(date.getTime()) ? date : null;
+  return Boolean(toValidDate(value));
 }
 
 function stringValue(value: unknown): string {

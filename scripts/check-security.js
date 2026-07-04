@@ -1654,6 +1654,7 @@ for (const marker of [
   'outside active runs directory',
   'run.archiveWarnings = warnings',
   "import { effectiveRunStatus, isActiveRunStatus, isStaleActiveRun } from './runStatus'",
+  "import { toValidDate } from './dateValues'",
   'function normalizeTerminalActiveRun',
   'const effectiveStatus = effectiveRunStatus(run)',
   'const PROCESS_BACKED_ACTIVE_STATUSES',
@@ -2252,6 +2253,9 @@ for (const [name, source] of [
 
 for (const [name, source, marker] of [
   ['src/services/runCenterSort.ts', runCenterSort, "import { toValidDate } from './dateValues'"],
+  ['src/services/runProgress.ts', runProgress, "import { toValidDate } from './dateValues'"],
+  ['src/services/runStatus.ts', runStatus, "import { toValidDate } from './dateValues'"],
+  ['src/services/runStore.ts', runStore, "import { toValidDate } from './dateValues'"],
   ['src/runners/sessionDispatcher.ts', dispatcher, "import { toValidDate } from '../services/dateValues'"],
 ]) {
   if (!source.includes(marker)) {
@@ -2259,6 +2263,9 @@ for (const [name, source, marker] of [
   }
   if (source.includes('function toValidDate')) {
     fail(`${name} must not carry a local toValidDate helper.`);
+  }
+  if (source.includes('function dateValue') || source.includes('function validDate')) {
+    fail(`${name} must not carry a local date coercion helper.`);
   }
 }
 
@@ -3356,6 +3363,7 @@ for (const marker of [
 }
 
 for (const marker of [
+  "import { toValidDate } from './dateValues'",
   "const ACTIVE_RUN_STATUSES = new Set(['preflight', 'running', 'paused'])",
   "const STALEABLE_ACTIVE_RUN_STATUSES = new Set(['preflight', 'running'])",
   'const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
@@ -3398,6 +3406,7 @@ for (const staleMarker of [
 
 for (const marker of [
   "import { isActiveRunStatus } from './runStatus'",
+  "import { toValidDate } from './dateValues'",
   'export function runProgressSummary',
   'export function formatRunProgress',
   "import { isRecord, recordFromUnknown } from './records'",
