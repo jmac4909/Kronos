@@ -1425,7 +1425,7 @@ for (const marker of [
 
 for (const marker of [
   'export function buildHumanReviewInboxHtml',
-  'HumanReviewInboxHtmlOptions',
+  'interface HumanReviewInboxHtmlOptions',
   'Kronos Human Review Inbox',
   'humanReviewActionButtons',
   "actionButton('refreshPanel', 'Refresh')",

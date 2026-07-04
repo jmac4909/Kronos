@@ -1,7 +1,7 @@
 import { WEBVIEW_READY_COMMAND, webviewActionScriptTag } from './webviewSecurity';
 import { escapeAttr, escapeHtml, kronosWebviewBaseCss } from './webviewHtml';
 
-export interface ActionButtonOptions {
+interface ActionButtonOptions {
   ticket?: string;
   runId?: string;
   planId?: string;

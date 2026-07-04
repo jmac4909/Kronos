@@ -2,7 +2,7 @@ import { PromptHistoryDiff, PromptHistorySnapshot, PromptSmokeResult, PromptTemp
 import { actionButton, kronosActionPanelScript, kronosOperatorPanelCss, operatorCommandRow } from './operatorPanel';
 import { escapeClass, escapeHtml } from './webviewHtml';
 
-export interface ProjectPromptOverride {
+interface ProjectPromptOverride {
   project: string;
   template: PromptTemplateInfo;
 }

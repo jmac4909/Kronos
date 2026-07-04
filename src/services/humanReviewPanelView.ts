@@ -3,7 +3,7 @@ import type { HumanReviewInbox, HumanReviewItem } from './humanReviewInbox';
 import { actionButton, actionRow, kronosActionPanelScript, kronosOperatorPanelCss, operatorCommandRow } from './operatorPanel';
 import { escapeHtml } from './webviewHtml';
 
-export interface HumanReviewInboxHtmlOptions {
+interface HumanReviewInboxHtmlOptions {
   tickets?: Record<string, Ticket>;
   nonce: string;
   actionScriptUri?: string | undefined;

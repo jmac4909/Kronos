@@ -1,7 +1,7 @@
 import { AgingReport } from './agingAnalyzer';
 import { escapeClass, escapeHtml, kronosWebviewBaseCss, safeHttpHref } from './webviewHtml';
 
-export interface AgingReportHtmlOptions {
+interface AgingReportHtmlOptions {
   actionsHtml?: string;
   scriptHtml?: string;
 }

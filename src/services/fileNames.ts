@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 
-export interface SafeFileStemOptions {
+interface SafeFileStemOptions {
   fallback?: string;
   maxLength?: number;
   hashLength?: number;

@@ -8283,7 +8283,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   }
   for (const marker of [
     'export function buildHumanReviewInboxHtml',
-    'HumanReviewInboxHtmlOptions',
+    'interface HumanReviewInboxHtmlOptions',
     'actionScriptUri?: string | undefined',
     'Kronos Human Review Inbox',
     'humanReviewActionButtons',
