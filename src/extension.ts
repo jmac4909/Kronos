@@ -5440,46 +5440,59 @@ async function pollReviewMergeRequests(state: KronosState, shouldContinue: () =>
   if (!shouldContinue()) { return; }
   state.reloadAndNotify();
   if (!shouldContinue()) { return; }
-  await reconcileTerminalReviewMergeRequests(state);
+  await reconcileTerminalReviewMergeRequests(state, shouldContinue);
+  if (!shouldContinue()) { return; }
   for (const candidate of reviewMergeRequestCandidates(state)) {
     if (!shouldContinue()) { return; }
     try {
       const status = await gitlabAdapter.mergeRequestStatus(state, candidate.ticketKey, { timeout: LIVE_MR_DIFF_TIMEOUT_MS });
       if (!shouldContinue()) { return; }
       const update = updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status });
+      if (!shouldContinue()) { return; }
       if (update.changed) {
         state.reloadAndNotify();
       }
+      if (!shouldContinue()) { return; }
       const decision = decideReviewMonitorAction(candidate.ticketKey, update);
       if (decision.kind === 'deploy_monitor') {
+        if (!shouldContinue()) { return; }
         const started = await startDeployMonitorForMergedTicket(state, candidate.ticketKey, update.ticket);
         if (started) {
           rememberReviewTerminalMergeRequestAction(candidate.ticketKey, update.ticket, 'deploy_monitor');
         }
       } else if (decision.kind === 'blocked') {
+        if (!shouldContinue()) { return; }
         notifyReviewMonitorDecision(decision);
       } else if (decision.kind === 'notify') {
+        if (!shouldContinue()) { return; }
         notifyReviewMonitorDecision(decision);
       }
     } catch (e: unknown) {
+      if (!shouldContinue()) { return; }
       console.warn(unknownErrorMessage(e, `Failed to poll MR status for ${candidate.ticketKey}.`));
       notifyReviewMergeRequestPollFailure(candidate.ticketKey, e);
     }
   }
 }
 
-async function reconcileTerminalReviewMergeRequests(state: KronosState): Promise<void> {
+async function reconcileTerminalReviewMergeRequests(state: KronosState, shouldContinue: () => boolean = () => true): Promise<void> {
+  if (!shouldContinue()) { return; }
   const updates = reconcileTerminalMergeRequestState();
+  if (!shouldContinue()) { return; }
   if (updates.some(update => update.changed)) {
     state.reloadAndNotify();
   }
+  if (!shouldContinue()) { return; }
   for (const update of updates) {
+    if (!shouldContinue()) { return; }
     const actionKey = reviewTerminalMergeRequestActionKey(update.ticketKey, update.ticket, update.action);
     if (reviewTerminalMergeRequestActions.has(actionKey)) { continue; }
     if (update.action === 'deploy_monitor') {
+      if (!shouldContinue()) { return; }
       const started = await startDeployMonitorForMergedTicket(state, update.ticketKey, update.ticket);
       if (started) { reviewTerminalMergeRequestActions.add(actionKey); }
     } else if (update.action === 'blocked') {
+      if (!shouldContinue()) { return; }
       reviewTerminalMergeRequestActions.add(actionKey);
       void vscode.window.showWarningMessage(`${update.ticketKey} ${update.message}`);
     }

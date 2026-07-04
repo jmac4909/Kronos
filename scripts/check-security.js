@@ -599,6 +599,8 @@ for (const marker of [
   'function pollReviewMergeRequests(state: KronosState, shouldContinue: () => boolean = () => true)',
   'if (!shouldContinue()) { return; }',
   'state.reloadAndNotify();',
+  'await reconcileTerminalReviewMergeRequests(state, shouldContinue);',
+  'function reconcileTerminalReviewMergeRequests(state: KronosState, shouldContinue: () => boolean = () => true)',
   'gitlabAdapter.mergeRequestStatus',
   'updateTicketMergeRequestStatus({ ticketKey: candidate.ticketKey, status })',
   'const decision = decideReviewMonitorAction(candidate.ticketKey, update)',
