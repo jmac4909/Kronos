@@ -9147,7 +9147,8 @@ test('extension MR and ticket link handlers normalize payloads and unknown error
     "vscode.commands.registerCommand('kronos.linkTicket', async (ticketKeyOrItem: unknown)",
     "vscode.commands.registerCommand('kronos.unlinkTicket', async (item: unknown)",
     'const ticketKey = resolveTicketKey(treeItem);',
-    'const orphanKey = resolveTicketKey(treeItem);',
+    'let orphanKey = resolveTicketKey(treeItem);',
+    'orphanKey = await pickOrphanMergeRequestTicket(state.state);',
     'const url = resolveMergeRequestUrl(treeItem);',
     'const ticketKey = resolveTicketKey(ticketKeyOrItem);',
     "const projectName = stringFromUnknown(recordFromUnknown(item)['linkedProject']);",
@@ -9159,6 +9160,8 @@ test('extension MR and ticket link handlers normalize payloads and unknown error
     assert.ok(commandSource.includes(marker), marker);
   }
   assert.ok(source.includes('function resolveMergeRequestUrl(item: unknown): string | undefined'));
+  assert.ok(source.includes('async function pickOrphanMergeRequestTicket(state: KronosStateSnapshot): Promise<string | undefined>'));
+  assert.ok(source.includes("vscode.window.showWarningMessage('No orphan merge requests found to link.');"));
   for (const marker of [
     'catch (e: any)',
     'e?.message',

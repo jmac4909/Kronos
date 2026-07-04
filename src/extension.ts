@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import type { DiscoveredProject, MergeRequestChangedFile, QueueItem, Ticket } from './state/types';
+import type { KronosState as KronosStateSnapshot } from './state/types';
 import { dispatchClaudeSession, openInClaude, ensureAuth, cleanupStaleWorktrees, listSavedSessions, listSessionStoreIssues, openSavedSession, getAggregateStats, openRunCenter, listRuns, type DispatchOptions, type KronosRun, type PromptRunMetadata, type RunCenterActionRequest } from './runners/sessionDispatcher';
 import { PromptHistoryDiff, PromptSmokeTest, PromptTemplateInfo, buildDefaultPromptSmokeTests, createPromptHistorySnapshot, diffPromptHistorySnapshots, latestPromptHistorySnapshot, listPromptHistorySnapshots, listPromptTemplates, repairRequiredPromptTemplates, runPromptSmokeTests } from './services/promptManager';
 import { KRONOS_DIR, STATE_AUDIT_FILE, listBackups, listStateAuditEvents, restoreBackup } from './services/stateStore';
@@ -3336,10 +3337,16 @@ export function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand('kronos.linkMrToTicket', async (treeItem: unknown) => {
-      const orphanKey = resolveTicketKey(treeItem);
+      let orphanKey = resolveTicketKey(treeItem);
+      if (!orphanKey && state.state) {
+        orphanKey = await pickOrphanMergeRequestTicket(state.state);
+      }
       if (!orphanKey || !state.state) { return; }
       const orphan = state.state.tickets[orphanKey];
-      if (!orphan?.mr) { return; }
+      if (!orphan?.mr) {
+        vscode.window.showWarningMessage('No merge request found to link.');
+        return;
+      }
 
       const ticketKey = await vscode.window.showInputBox({
         prompt: `Link MR !${orphan.mr.iid} to which Jira ticket?`,
@@ -5380,6 +5387,27 @@ async function pickProjectName(state: KronosState, placeHolder: string): Promise
     { placeHolder }
   );
   return picked?.label;
+}
+
+async function pickOrphanMergeRequestTicket(state: KronosStateSnapshot): Promise<string | undefined> {
+  const candidates = Object.entries(state.tickets)
+    .filter(([, ticket]) => ticket.source === 'adhoc' && Boolean(ticket.mr))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ticketKey, ticket]) => ({
+      label: `${ticketKey} - MR !${ticket.mr?.iid || '?'}`,
+      description: ticket.mr?.review_status.replace(/_/g, ' ') || 'merge request',
+      detail: ticket.summary,
+      ticketKey,
+    }));
+  if (candidates.length === 0) {
+    vscode.window.showWarningMessage('No orphan merge requests found to link.');
+    return undefined;
+  }
+  if (candidates.length === 1) {
+    return candidates[0]?.ticketKey;
+  }
+  const picked = await vscode.window.showQuickPick(candidates, { placeHolder: 'Link which orphan MR to a Jira ticket?' });
+  return picked?.ticketKey;
 }
 
 function resolveTicketKey(item: unknown): string | undefined {
