@@ -3,6 +3,7 @@ import { MergeRequest, MergeRequestChangedFile, MergeRequestComment } from '../s
 import { normalizeChangedFiles } from './changedFiles';
 import { unknownErrorMessage } from './errorUtils';
 import { stripUtf8Bom } from './jsonFiles';
+import { sortMergeRequestCommentsByCreated } from './mergeRequestComments';
 
 interface KronosScriptRunner {
   runScript(args: string[], options?: ScriptRunOptions): Promise<string>;
@@ -298,7 +299,8 @@ function isUnsupportedMergeRequestStatusText(value: string): boolean {
 function normalizeMergeRequestComments(value: unknown): MergeRequestComment[] {
   if (!Array.isArray(value)) { return []; }
   const flattened = value.flatMap(item => isRecord(item) && Array.isArray(item['notes']) ? item['notes'] : [item]);
-  return flattened.slice(0, 100).map(normalizeMergeRequestComment);
+  const comments = sortMergeRequestCommentsByCreated(flattened.map(normalizeMergeRequestComment));
+  return comments.some(comment => comment.created) ? comments.slice(-100) : comments.slice(0, 100);
 }
 
 function normalizeJiraComment(value: unknown): JiraComment {

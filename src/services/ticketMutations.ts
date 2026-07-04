@@ -13,6 +13,7 @@ import { STATE_FILE, readStateFile, validateStateFileShape, writeJsonFileAtomic 
 import { isReviewReadyAction } from './actionSemantics';
 import { setAcceptanceCriteriaChecked } from './acceptanceCriteria';
 import { decideEvidenceHandoff } from './evidenceGatePolicy';
+import { sortMergeRequestCommentsByCreated } from './mergeRequestComments';
 
 type EvidenceNoteKind = TicketEvidenceNote['kind'];
 type EvidenceResult = TicketEvidenceCheck['result'];
@@ -431,9 +432,9 @@ function setMergeRequestComments(target: MergeRequest, value: unknown): boolean 
 }
 
 function normalizeStoredMergeRequestComments(value: unknown[]): MergeRequestComment[] {
-  return value
+  return sortMergeRequestCommentsByCreated(value
     .map(normalizeStoredMergeRequestComment)
-    .filter((comment): comment is MergeRequestComment => Boolean(comment))
+    .filter((comment): comment is MergeRequestComment => Boolean(comment)))
     .slice(-10);
 }
 

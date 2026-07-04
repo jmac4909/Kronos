@@ -1099,8 +1099,8 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
       last_discussion_at: '2026-07-02T01:00:00.000Z',
       discussions_resolved: false,
       comments: [
-        { id: '1', author: 'Reviewer', created: '2026-07-02T00:30:00.000Z', body: 'Looks close.' },
         { id: '2', author: 'Reviewer', created: '2026-07-02T01:00:00.000Z', body: 'Please add a Windows check.' },
+        { id: '1', author: 'Reviewer', created: '2026-07-02T00:30:00.000Z', body: 'Looks close.' },
       ],
     },
     now: new Date('2026-07-02T01:05:00.000Z'),
@@ -6505,6 +6505,14 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
   assert.equal(paginatedStatus.comments.length, 1);
   assert.equal(paginatedStatus.last_comment_at, '2026-07-02T05:00:00.000Z');
   assert.equal(paginatedStatus.last_discussion_at, '2026-07-02T06:00:00.000Z');
+  const newestFirstStatus = integrationAdapters.normalizeMergeRequestStatus({
+    comments: [
+      { id: 'new', body: 'newest first', created_at: '2026-07-02T07:00:00.000Z' },
+      { id: 'old', body: 'older second', created_at: '2026-07-02T06:00:00.000Z' },
+    ],
+  });
+  assert.deepEqual(newestFirstStatus.comments.map(comment => comment.id), ['old', 'new']);
+  assert.equal(newestFirstStatus.last_comment_at, '2026-07-02T07:00:00.000Z');
   assert.deepEqual(integrationAdapters.normalizeMergeRequestStatus({
     mr: {
       state: 'opened',
