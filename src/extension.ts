@@ -57,7 +57,8 @@ import { checkClaudeModelAccess } from './services/cliProbes';
 import { buildCombinedVerificationPlan, buildCombinedVerificationPromptVars } from './services/combinedVerification';
 import { buildDiscoveryQuickPickEntries, discoveryCandidateNeedsJiraKey, type DiscoveryQuickPickEntry } from './services/discoveryQuickPick';
 import { buildPromptWorkspaceModel, promptHistoryTemplatesForProjects } from './services/promptWorkspaceModel';
-import { buildSonarReport, type SonarIssue } from './services/sonarReportView';
+import { buildSonarReport } from './services/sonarReportView';
+import { buildSonarFixBranchStrategy, buildSonarFixInstructionBlock } from './services/sonarCommandPlan';
 import { buildAgingReportHtml } from './services/agingReportView';
 import { buildTicketHtml } from './services/ticketPanelView';
 import { buildDashboardHtml } from './services/dashboardPanelView';
@@ -354,31 +355,6 @@ async function startClaudeDispatch(
     vscode.window.showErrorMessage(unknownErrorMessage(e, `Failed to start ${skill} session.`));
     return false;
   }
-}
-
-function normalizeSonarIssueCommandList(value: unknown): SonarIssue[] {
-  if (!Array.isArray(value)) { return []; }
-  return value
-    .map(normalizeSonarIssueCommandValue)
-    .filter((issue): issue is SonarIssue => Boolean(issue));
-}
-
-function normalizeSonarIssueCommandValue(value: unknown): SonarIssue | null {
-  const record = recordFromUnknown(value);
-  const issue: SonarIssue = {};
-  if (typeof record['severity'] === 'string') { issue.severity = record['severity']; }
-  if (typeof record['rule'] === 'string') { issue.rule = record['rule']; }
-  if (typeof record['component'] === 'string') { issue.component = record['component']; }
-  if (record['line'] !== undefined) { issue.line = record['line']; }
-  if (typeof record['message'] === 'string') { issue.message = record['message']; }
-  return issue.severity || issue.rule || issue.component || issue.message || issue.line !== undefined ? issue : null;
-}
-
-function formatSonarIssuePromptLine(issue: SonarIssue): string {
-  const file = String(issue.component || '').replace(/^[^:]+:/, '') || '?';
-  const rule = String(issue.rule || '').replace(/^[^:]+:/, '') || '-';
-  const line = issue.line === undefined || issue.line === null || issue.line === '' ? '?' : String(issue.line);
-  return `- [${issue.severity || '-'}] ${rule}: ${file}:${line} — ${issue.message || ''}`;
 }
 
 function agingThresholdsFromConfig(): Partial<AgingThresholds> {
@@ -2620,23 +2596,12 @@ export function activate(context: vscode.ExtensionContext) {
       const commandArg = recordFromUnknown(item);
       const sourceBranch = stringFromUnknown(commandArg['sourceBranch']) || '';
       const isProtected = !sourceBranch || sourceBranch === 'develop' || sourceBranch === 'main' || sourceBranch === 'master';
-      const branchStrategy = isProtected
-        ? `You are fixing issues from the ${sourceBranch || 'develop'} branch. Create a NEW branch: bugfix/sonar-${projectName.toLowerCase()} from ${sourceBranch || 'develop'}. After fixing and pushing, create a GitLab MR from your branch into ${sourceBranch || 'develop'} using: python ~/.claude/scripts/gitlab_api.py --create-mr`
-        : `You are fixing issues on branch ${sourceBranch}. Stay on this branch — push directly, it already has an open MR.`;
-
-      // Format pre-fetched issues if available
-      let issuesBlock = '';
-      const issuesData = normalizeSonarIssueCommandList(commandArg['issuesData']);
-      if (issuesData.length > 0) {
-        const lines = issuesData.map(formatSonarIssuePromptLine);
-        issuesBlock = `KNOWN ISSUES (already fetched — do NOT re-query SonarQube for the issue list):\n${lines.join('\n')}`;
-      }
-
-      const instructionBlock = [
-        customInstructions ? `CUSTOM INSTRUCTIONS (follow these overrides):\n${customInstructions}` : '',
-        `BRANCH STRATEGY:\n${branchStrategy}`,
-        issuesBlock,
-      ].filter(Boolean).join('\n\n');
+      const branchStrategy = buildSonarFixBranchStrategy(projectName, sourceBranch);
+      const instructionBlock = buildSonarFixInstructionBlock({
+        customInstructions,
+        branchStrategy,
+        issuesData: commandArg['issuesData'],
+      });
 
       const safetyPlan: SafetyPlan = {
         operationId: 'kronos.fixSonarIssues',

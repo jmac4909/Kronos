@@ -244,6 +244,7 @@ const changedFiles = require('../out/services/changedFiles.js');
 const reviewWork = require('../out/services/reviewWork.js');
 const reviewMonitor = require('../out/services/reviewMonitor.js');
 const deployMonitorHandoff = require('../out/services/deployMonitorHandoff.js');
+const sonarCommandPlan = require('../out/services/sonarCommandPlan.js');
 const sonarReportView = require('../out/services/sonarReportView.js');
 const agingReportView = require('../out/services/agingReportView.js');
 const ticketPanelView = require('../out/services/ticketPanelView.js');
@@ -3513,6 +3514,58 @@ test('sonar report view renders escaped report data and command buttons', () => 
   });
   assert.equal(nonHttpDashboard.dashboardUrl, undefined);
   assert.doesNotMatch(nonHttpDashboard.html, /Open in SonarQube/);
+});
+
+test('sonar command plan normalizes issue payloads and builds fix instructions', () => {
+  const issues = sonarCommandPlan.normalizeSonarIssueCommandList([
+    null,
+    'bad',
+    { severity: 'CRITICAL', rule: 'java:S123', component: 'app:src/App.java', line: 12, message: 'Fix it' },
+    { line: 0 },
+    { message: 42 },
+  ]);
+  assert.deepEqual(issues, [
+    { severity: 'CRITICAL', rule: 'java:S123', component: 'app:src/App.java', line: 12, message: 'Fix it' },
+    { line: 0 },
+  ]);
+  assert.equal(
+    sonarCommandPlan.formatSonarIssuePromptLine(issues[0]),
+    '- [CRITICAL] S123: src/App.java:12 — Fix it',
+  );
+  assert.equal(
+    sonarCommandPlan.buildKnownSonarIssuesBlock(issues),
+    'KNOWN ISSUES (already fetched — do NOT re-query SonarQube for the issue list):\n- [CRITICAL] S123: src/App.java:12 — Fix it\n- [-] -: ?:0 — ',
+  );
+  assert.equal(sonarCommandPlan.buildKnownSonarIssuesBlock([]), '');
+  assert.match(
+    sonarCommandPlan.buildSonarFixBranchStrategy('AppSvc', ''),
+    /Create a NEW branch: bugfix\/sonar-appsvc from develop/,
+  );
+  assert.match(
+    sonarCommandPlan.buildSonarFixBranchStrategy('AppSvc', 'feature/K-1'),
+    /Stay on this branch — push directly/,
+  );
+  const instructions = sonarCommandPlan.buildSonarFixInstructionBlock({
+    customInstructions: 'skip S1192',
+    branchStrategy: sonarCommandPlan.buildSonarFixBranchStrategy('AppSvc', 'main'),
+    issuesData: issues,
+  });
+  assert.match(instructions, /CUSTOM INSTRUCTIONS/);
+  assert.match(instructions, /BRANCH STRATEGY/);
+  assert.match(instructions, /KNOWN ISSUES/);
+
+  const source = readSourceFixture('src', 'services', 'sonarCommandPlan.ts');
+  for (const marker of [
+    "import type { SonarIssue } from './sonarReportView'",
+    "import { recordFromUnknown } from './records'",
+    'export function normalizeSonarIssueCommandList(value: unknown): SonarIssue[]',
+    'export function formatSonarIssuePromptLine(issue: SonarIssue): string',
+    'export function buildKnownSonarIssuesBlock(value: unknown): string',
+    'export function buildSonarFixBranchStrategy(projectName: string, sourceBranch: string): string',
+    'export function buildSonarFixInstructionBlock',
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
 });
 
 test('queue planner records decisions, filters suppressed plans, and selects planning horizons', () => {
@@ -10395,12 +10448,14 @@ test('extension command handlers normalize remaining unknown errors', () => {
 
 test('extension Sonar commands normalize webview and issue payloads', () => {
   const source = readSourceFixture('src', 'extension.ts');
+  const sonarCommandPlanSource = readSourceFixture('src', 'services', 'sonarCommandPlan.ts');
   const sonarCommandStart = source.indexOf("vscode.commands.registerCommand('kronos.sonarScan'");
   const sonarCommandEnd = source.indexOf("    vscode.commands.registerCommand('kronos.verifyTest'", sonarCommandStart);
   assert.ok(sonarCommandStart >= 0 && sonarCommandEnd > sonarCommandStart, 'Sonar command handler block should be present');
   const sonarCommandSource = source.slice(sonarCommandStart, sonarCommandEnd);
   for (const marker of [
-    "import { buildSonarReport, type SonarIssue }",
+    "import { buildSonarReport }",
+    "import { buildSonarFixBranchStrategy, buildSonarFixInstructionBlock } from './services/sonarCommandPlan'",
     "import { isRecord, recordFromUnknown, recordString } from './services/records'",
     'stringFromUnknown,',
     "vscode.commands.registerCommand('kronos.sonarScan', async (item: unknown)",
@@ -10418,14 +10473,21 @@ test('extension Sonar commands normalize webview and issue payloads', () => {
     "const projectPath = stringFromUnknown(commandArg['projectPath']) || getProjectPath(state, projectName);",
     'let projectName = resolveProjectName(state, item);',
     'panel.webview.onDidReceiveMessage(async (msg: unknown) =>',
-    'function normalizeSonarIssueCommandList(value: unknown): SonarIssue[]',
-    'function normalizeSonarIssueCommandValue(value: unknown): SonarIssue | null',
-    'function formatSonarIssuePromptLine(issue: SonarIssue): string',
     'const commandArg = recordFromUnknown(item)',
-    "const issuesData = normalizeSonarIssueCommandList(commandArg['issuesData'])",
-    'const lines = issuesData.map(formatSonarIssuePromptLine)',
+    'const branchStrategy = buildSonarFixBranchStrategy(projectName, sourceBranch)',
+    'const instructionBlock = buildSonarFixInstructionBlock({',
   ]) {
     assert.ok(source.includes(marker), marker);
+  }
+  for (const marker of [
+    'function normalizeSonarIssueCommandValue(value: unknown): SonarIssue | null',
+    'export function normalizeSonarIssueCommandList(value: unknown): SonarIssue[]',
+    'export function formatSonarIssuePromptLine(issue: SonarIssue): string',
+    'export function buildKnownSonarIssuesBlock(value: unknown): string',
+    'export function buildSonarFixBranchStrategy(projectName: string, sourceBranch: string): string',
+    'export function buildSonarFixInstructionBlock',
+  ]) {
+    assert.ok(sonarCommandPlanSource.includes(marker), marker);
   }
   for (const marker of [
     'panel.webview.onDidReceiveMessage(async (msg: any)',

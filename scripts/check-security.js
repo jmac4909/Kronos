@@ -36,6 +36,7 @@ const namedFiles = [
   'src/services/recoveryPanelView.ts',
   'src/services/humanReviewPanelView.ts',
   'src/services/evidencePanelView.ts',
+  'src/services/sonarCommandPlan.ts',
   'src/services/sonarReportView.ts',
   'src/services/agingReportView.ts',
   'src/services/webviewHtml.ts',
@@ -151,6 +152,7 @@ const evidencePanelView = sources['src/services/evidencePanelView.ts'];
 const cliProbes = readSource('src/services/cliProbes.ts');
 const combinedVerification = readSource('src/services/combinedVerification.ts');
 const changedFiles = readSource('src/services/changedFiles.ts');
+const sonarCommandPlan = sources['src/services/sonarCommandPlan.ts'];
 const sonarReportView = sources['src/services/sonarReportView.ts'];
 const agingReportView = sources['src/services/agingReportView.ts'];
 const webviewHtml = sources['src/services/webviewHtml.ts'];
@@ -987,17 +989,16 @@ for (const marker of [
   'unknownErrorMessage(e, `Could not inspect run workspace ${candidate}.`)',
   'unknownErrorMessage(e, `Could not resolve MR branch for ${ticket.key}.`)',
   'unknownErrorMessage(e, `Could not find fallback remote branch for ${ticket.key}.`)',
-  "import { buildSonarReport, type SonarIssue }",
+  "import { buildSonarReport }",
+  "import { buildSonarFixBranchStrategy, buildSonarFixInstructionBlock } from './services/sonarCommandPlan'",
   "import { isRecord, recordFromUnknown, recordString } from './services/records'",
   "from './services/commandPayloads'",
   'resolveProjectName,',
   'resolveQueueCommandItem,',
   'resolveTicketKey,',
   'panel.webview.onDidReceiveMessage(async (msg: unknown) =>',
-  'function normalizeSonarIssueCommandList(value: unknown): SonarIssue[]',
-  'function formatSonarIssuePromptLine(issue: SonarIssue): string',
-  "const issuesData = normalizeSonarIssueCommandList(commandArg['issuesData'])",
-  'const lines = issuesData.map(formatSonarIssuePromptLine)',
+  'const branchStrategy = buildSonarFixBranchStrategy(projectName, sourceBranch)',
+  'const instructionBlock = buildSonarFixInstructionBlock({',
   "from './services/stateStore'",
   "from './services/integrationAdapters'",
   "from './services/projectMutations'",
@@ -3251,6 +3252,20 @@ for (const forbidden of [
 ]) {
   if (sonarReportView.includes(forbidden)) {
     fail(`Sonar report view must use the packaged action-panel runtime: ${forbidden}`);
+  }
+}
+for (const marker of [
+  "import type { SonarIssue } from './sonarReportView'",
+  "import { recordFromUnknown } from './records'",
+  'export function normalizeSonarIssueCommandList(value: unknown): SonarIssue[]',
+  'export function formatSonarIssuePromptLine(issue: SonarIssue): string',
+  'export function buildKnownSonarIssuesBlock(value: unknown): string',
+  'export function buildSonarFixBranchStrategy(projectName: string, sourceBranch: string): string',
+  'export function buildSonarFixInstructionBlock',
+  'function normalizeSonarIssueCommandValue(value: unknown): SonarIssue | null',
+]) {
+  if (!sonarCommandPlan.includes(marker)) {
+    fail(`Missing Sonar command plan marker: ${marker}`);
   }
 }
 
