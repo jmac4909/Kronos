@@ -8849,8 +8849,9 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   const jiraBoardPanelViewSource = readSourceFixture('src', 'services', 'jiraBoardPanelView.ts');
   const ticketPanelViewSource = readSourceFixture('src', 'services', 'ticketPanelView.ts');
   const webviewMessagesSource = readSourceFixture('src', 'services', 'webviewMessages.ts');
+  const webviewCommandRegistrySource = readSourceFixture('src', 'services', 'webviewCommandRegistry.ts');
   const jiraBoardSource = readSourceFixture('media', 'kronos-jira-board.js');
-  const uiSource = `${source}\n${queuePlannerPanelViewSource}\n${operationsReportPanelViewSource}\n${dashboardPanelViewSource}\n${diffPanelViewSource}\n${jiraBoardPanelViewSource}\n${ticketPanelViewSource}\n${jiraBoardSource}`;
+  const uiSource = `${source}\n${queuePlannerPanelViewSource}\n${operationsReportPanelViewSource}\n${dashboardPanelViewSource}\n${diffPanelViewSource}\n${jiraBoardPanelViewSource}\n${ticketPanelViewSource}\n${webviewCommandRegistrySource}\n${jiraBoardSource}`;
   const boardHandlerStart = source.indexOf('panel.webview.onDidReceiveMessage(async (msg) => {\n        if (logReady(msg)) { return; }\n        const request = normalizeBoardMessage(msg, BOARD_MESSAGE_COMMANDS);');
   const boardHandlerEnd = source.indexOf("    vscode.commands.registerCommand('kronos.viewTicket'", boardHandlerStart);
   assert.ok(boardHandlerStart >= 0 && boardHandlerEnd > boardHandlerStart, 'Jira board message handler should be present');
@@ -8858,6 +8859,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   for (const marker of [
     "import { WEBVIEW_ACTION_PANEL_SCRIPT, WEBVIEW_JIRA_BOARD_SCRIPT, createWebviewNonce, webviewScriptCspOptions, withWebviewCsp } from './services/webviewSecurity'",
     "import { normalizeBoardMessage, normalizeWebviewCommand } from './services/webviewMessages'",
+    "from './services/webviewCommandRegistry'",
     "import { actionButton, kronosActionPanelScript, normalizeActionPanelMessage, operatorCommandRow, type ActionPanelMessage } from './services/operatorPanel'",
     "import { buildPromptHistoryHtml, buildPromptManagerHtml, buildPromptSmokeTestsHtml } from './services/promptPanelView'",
     "import { buildRecoveryHtml, buildStateAuditLogHtml } from './services/recoveryPanelView'",

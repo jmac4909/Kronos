@@ -394,6 +394,15 @@ const dashboardRendererSafetyMarkers = new Set([
 const serviceOwnedSafetyMarkers = new Set([
   "from './changedFiles'",
   "from './webviewHtml'",
+  'const HUMAN_REVIEW_MESSAGE_COMMANDS = new Set',
+  'const OPERATOR_COMMAND_TO_VSCODE_COMMAND = new Map<string, string>',
+  'const OPERATOR_COMMAND_MESSAGE_COMMANDS = new Set(OPERATOR_COMMAND_TO_VSCODE_COMMAND.keys())',
+  'const EVIDENCE_HANDOFF_OPERATOR_COMMANDS = operatorCommandSet([',
+  'const DOCTOR_OPERATOR_COMMANDS = operatorCommandSet([',
+  'function operatorCommandSet(commands: string[]): ReadonlySet<string>',
+  'const EVIDENCE_GATE_MESSAGE_COMMANDS = new Set',
+  "const RECOVERY_MESSAGE_COMMANDS = new Set([\n  'refreshPanel',",
+  'const AGING_REPORT_MESSAGE_COMMANDS = new Set',
 ]);
 
 for (const marker of [

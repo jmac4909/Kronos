@@ -61,6 +61,31 @@ import { signalProcessTree, stopProcessTree, supportsProcessTreeSuspend } from '
 import { createWebviewReadyMonitor } from './services/webviewDiagnostics';
 import { WEBVIEW_ACTION_PANEL_SCRIPT, WEBVIEW_JIRA_BOARD_SCRIPT, createWebviewNonce, webviewScriptCspOptions, withWebviewCsp } from './services/webviewSecurity';
 import { normalizeBoardMessage, normalizeWebviewCommand } from './services/webviewMessages';
+import {
+  AGENT_QUALITY_OPERATOR_COMMANDS,
+  AGING_REPORT_MESSAGE_COMMANDS,
+  BACKLOG_TRIAGE_MESSAGE_COMMANDS,
+  BOARD_MESSAGE_COMMANDS,
+  DASHBOARD_MESSAGE_COMMANDS,
+  DOCTOR_OPERATOR_COMMANDS,
+  EVIDENCE_GATE_MESSAGE_COMMANDS,
+  EVIDENCE_HANDOFF_OPERATOR_COMMANDS,
+  EVIDENCE_PUBLISH_OPERATOR_COMMANDS,
+  HUMAN_REVIEW_MESSAGE_COMMANDS,
+  INTEGRATION_MANIFEST_OPERATOR_COMMANDS,
+  OPERATOR_COMMAND_TO_VSCODE_COMMAND,
+  PLAN_MESSAGE_COMMANDS,
+  PROFILES_OPERATOR_COMMANDS,
+  PROMPT_HISTORY_OPERATOR_COMMANDS,
+  PROMPT_MANAGER_OPERATOR_COMMANDS,
+  PROMPT_SMOKE_OPERATOR_COMMANDS,
+  RECOVERY_MESSAGE_COMMANDS,
+  SESSION_STATS_OPERATOR_COMMANDS,
+  STATE_AUDIT_OPERATOR_COMMANDS,
+  TICKET_DETAIL_MESSAGE_COMMANDS,
+  TICKET_SCOPED_OPERATOR_COMMANDS,
+  TREND_METRICS_OPERATOR_COMMANDS,
+} from './services/webviewCommandRegistry';
 import { kronosTerminalOptions } from './services/terminalProfiles';
 import { unknownErrorCode, unknownErrorMessage } from './services/errorUtils';
 import { isKronosScriptMissingError } from './services/scriptClient';
@@ -310,237 +335,6 @@ async function startClaudeDispatch(
     vscode.window.showErrorMessage(unknownErrorMessage(e, `Failed to start ${skill} session.`));
     return false;
   }
-}
-
-const BOARD_MESSAGE_COMMANDS = new Set([
-  'link',
-  'unlink',
-  'addToQueue',
-  'removeFromQueue',
-  'start',
-  'openJira',
-  'openMr',
-  'getComments',
-  'addEvidence',
-  'addEvidenceCheck',
-  'recordEnvironmentResult',
-  'exportEvidence',
-  'evidenceHandoff',
-  'publishEvidence',
-]);
-const EVIDENCE_GATE_MESSAGE_COMMANDS = new Set([
-  'refreshPanel',
-  'addEvidence',
-  'addEvidenceCheck',
-  'recordEnvironmentResult',
-  'extractAcceptanceCriteria',
-  'updateAcceptanceCriteria',
-  'viewTicket',
-  'evidenceHandoff',
-  'publishEvidence',
-]);
-const HUMAN_REVIEW_MESSAGE_COMMANDS = new Set([
-  'refreshPanel',
-  'addEvidence',
-  'addEvidenceCheck',
-  'extractAcceptanceCriteria',
-  'updateAcceptanceCriteria',
-  'startTicket',
-  'addToQueue',
-  'viewTicket',
-  'evidenceGate',
-  'runCenter',
-  'recoveryCenter',
-  'doctor',
-  'queuePlanner',
-]);
-const DASHBOARD_MESSAGE_COMMANDS = new Set([
-  'refreshPanel',
-  'nextBestAction',
-  'queuePlanner',
-  'runCenter',
-  'humanReviewInbox',
-  'evidenceGate',
-  'recoveryCenter',
-  'addEvidence',
-  'addEvidenceCheck',
-  'startTicket',
-  'viewTicket',
-]);
-const PLAN_MESSAGE_COMMANDS = new Set([
-  'startPlan',
-  'queuePlan',
-  'pinPlan',
-  'snoozePlan',
-  'snoozePlanToday',
-  'rejectPlan',
-  'viewTicket',
-  'addEvidence',
-]);
-const BACKLOG_TRIAGE_MESSAGE_COMMANDS = new Set([
-  'linkTicket',
-  'startTicket',
-  'addToQueue',
-  'addEvidence',
-  'addEvidenceCheck',
-  'viewTicket',
-]);
-const TICKET_DETAIL_MESSAGE_COMMANDS = new Set([
-  'startTicket',
-  'addToQueue',
-  'removeFromQueue',
-  'linkTicket',
-  'addEvidence',
-  'addEvidenceCheck',
-  'recordEnvironmentResult',
-  'evidenceGate',
-  'exportEvidence',
-  'evidenceHandoff',
-  'publishEvidence',
-  'openJira',
-  'openMr',
-  'openBuild',
-]);
-const RECOVERY_MESSAGE_COMMANDS = new Set([
-  'refreshPanel',
-  'executeRecoveryItem',
-]);
-const OPERATOR_COMMAND_TO_VSCODE_COMMAND = new Map<string, string>([
-  ['addToQueue', 'kronos.addToQueue'],
-  ['addEvidence', 'kronos.addEvidence'],
-  ['addEvidenceCheck', 'kronos.addEvidenceCheck'],
-  ['linkTicket', 'kronos.linkTicket'],
-  ['setup', 'kronos.setup'],
-  ['settings', 'kronos.settings'],
-  ['doctor', 'kronos.doctor'],
-  ['integrationManifest', 'kronos.integrationManifest'],
-  ['snapshotIntegrationManifest', 'kronos.snapshotIntegrationManifest'],
-  ['profiles', 'kronos.profiles'],
-  ['queuePlanner', 'kronos.queuePlanner'],
-  ['humanReviewInbox', 'kronos.humanReviewInbox'],
-  ['promptManager', 'kronos.promptManager'],
-  ['promptSmokeTests', 'kronos.promptSmokeTests'],
-  ['snapshotPromptPack', 'kronos.snapshotPromptPack'],
-  ['promptHistory', 'kronos.promptHistory'],
-  ['repairPromptPack', 'kronos.repairPromptPack'],
-  ['runCenter', 'kronos.runCenter'],
-  ['stats', 'kronos.stats'],
-  ['sessionHistory', 'kronos.sessionHistory'],
-  ['viewTicket', 'kronos.viewTicket'],
-  ['recordEnvironmentResult', 'kronos.recordEnvironmentResult'],
-  ['extractAcceptanceCriteria', 'kronos.extractAcceptanceCriteria'],
-  ['updateAcceptanceCriteria', 'kronos.updateAcceptanceCriteria'],
-  ['evidenceGate', 'kronos.evidenceGate'],
-  ['exportEvidence', 'kronos.exportEvidence'],
-  ['evidenceHandoff', 'kronos.evidenceHandoff'],
-  ['publishEvidence', 'kronos.publishEvidence'],
-  ['agentQualityScore', 'kronos.agentQualityScore'],
-  ['trendMetrics', 'kronos.trendMetrics'],
-  ['agingReport', 'kronos.agingReport'],
-  ['recoveryCenter', 'kronos.recoveryCenter'],
-  ['stateAuditLog', 'kronos.stateAuditLog'],
-]);
-const OPERATOR_COMMAND_MESSAGE_COMMANDS = new Set(OPERATOR_COMMAND_TO_VSCODE_COMMAND.keys());
-const SESSION_STATS_OPERATOR_COMMANDS = operatorCommandSet([
-  'runCenter',
-  'sessionHistory',
-  'agentQualityScore',
-  'trendMetrics',
-]);
-const PROMPT_MANAGER_OPERATOR_COMMANDS = operatorCommandSet([
-  'promptSmokeTests',
-  'snapshotPromptPack',
-  'promptHistory',
-  'repairPromptPack',
-]);
-const PROMPT_SMOKE_OPERATOR_COMMANDS = operatorCommandSet([
-  'promptManager',
-  'snapshotPromptPack',
-  'promptHistory',
-  'repairPromptPack',
-]);
-const PROMPT_HISTORY_OPERATOR_COMMANDS = operatorCommandSet([
-  'snapshotPromptPack',
-  'promptManager',
-  'promptSmokeTests',
-  'repairPromptPack',
-]);
-const STATE_AUDIT_OPERATOR_COMMANDS = operatorCommandSet([
-  'recoveryCenter',
-  'doctor',
-  'stats',
-]);
-const EVIDENCE_HANDOFF_OPERATOR_COMMANDS = operatorCommandSet([
-  'viewTicket',
-  'evidenceGate',
-  'exportEvidence',
-  'publishEvidence',
-]);
-const EVIDENCE_PUBLISH_OPERATOR_COMMANDS = operatorCommandSet([
-  'viewTicket',
-  'evidenceGate',
-  'exportEvidence',
-  'evidenceHandoff',
-]);
-const AGENT_QUALITY_OPERATOR_COMMANDS = operatorCommandSet([
-  'runCenter',
-  'stats',
-  'trendMetrics',
-  'evidenceGate',
-]);
-const TREND_METRICS_OPERATOR_COMMANDS = operatorCommandSet([
-  'runCenter',
-  'stats',
-  'agentQualityScore',
-  'agingReport',
-]);
-const INTEGRATION_MANIFEST_OPERATOR_COMMANDS = operatorCommandSet([
-  'snapshotIntegrationManifest',
-  'doctor',
-  'profiles',
-  'promptManager',
-]);
-const PROFILES_OPERATOR_COMMANDS = operatorCommandSet([
-  'settings',
-  'doctor',
-  'integrationManifest',
-]);
-const DOCTOR_OPERATOR_COMMANDS = operatorCommandSet([
-  'setup',
-  'settings',
-  'integrationManifest',
-  'profiles',
-  'recoveryCenter',
-  'stateAuditLog',
-]);
-const AGING_REPORT_MESSAGE_COMMANDS = new Set([
-  'refreshPanel',
-  'queuePlanner',
-  'humanReviewInbox',
-  'trendMetrics',
-  'evidenceGate',
-]);
-const TICKET_SCOPED_OPERATOR_COMMANDS = new Set([
-  'addToQueue',
-  'addEvidence',
-  'addEvidenceCheck',
-  'linkTicket',
-  'recordEnvironmentResult',
-  'extractAcceptanceCriteria',
-  'updateAcceptanceCriteria',
-  'viewTicket',
-  'exportEvidence',
-  'evidenceHandoff',
-  'publishEvidence',
-]);
-
-function operatorCommandSet(commands: string[]): ReadonlySet<string> {
-  for (const command of commands) {
-    if (!OPERATOR_COMMAND_MESSAGE_COMMANDS.has(command)) {
-      throw new Error(`Unknown Kronos operator command: ${command}`);
-    }
-  }
-  return new Set(commands);
 }
 
 function normalizeSonarIssueCommandList(value: unknown): SonarIssue[] {
