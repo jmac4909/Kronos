@@ -2139,7 +2139,7 @@ for (const marker of [
   'export function refreshKronosState',
   'function discoverProjects(',
   'export function discoverProjectsJson',
-  'export function normalizeDiscoveredProjects',
+  'function normalizeDiscoveredProjects',
   'function normalizeDiscoveredProject',
   "normalizeDiscoveredProjects(data['candidates'])",
   'export function registerProject',

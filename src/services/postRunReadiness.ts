@@ -23,14 +23,14 @@ export interface PostRunReadiness {
   failureKind: RunFailureKind;
 }
 
-export interface PostRunReadinessRunPatch {
+interface PostRunReadinessRunPatch {
   readiness: PostRunReadiness;
   failureKind: RunFailureKind;
   status?: 'waiting_for_review' | 'needs_human';
   failureReason?: string;
 }
 
-export interface RunCompletionEvidenceCheck {
+interface RunCompletionEvidenceCheck {
   name: string;
   result: 'pass' | 'warn';
   environment: string;
@@ -39,7 +39,7 @@ export interface RunCompletionEvidenceCheck {
   confidence: 'medium' | 'high';
 }
 
-export interface PostRunTicketResolution {
+interface PostRunTicketResolution {
   ticketKey?: string;
   ticket?: Ticket;
 }

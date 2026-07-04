@@ -45,7 +45,7 @@ export function discoverProjectsJson(options: StateScriptAdapterOptions = {}): D
   };
 }
 
-export function normalizeDiscoveredProjects(value: unknown): DiscoveredProject[] {
+function normalizeDiscoveredProjects(value: unknown): DiscoveredProject[] {
   if (!Array.isArray(value)) { return []; }
   const normalized: DiscoveredProject[] = [];
   const seenPaths = new Set<string>();

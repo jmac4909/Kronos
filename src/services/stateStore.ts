@@ -23,7 +23,7 @@ interface StateBackup {
   size: number;
 }
 
-export interface StateFileLoadIssue {
+interface StateFileLoadIssue {
   target: 'state.json' | 'queue.json';
   filePath: string;
   detail: string;

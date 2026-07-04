@@ -111,7 +111,7 @@ function runPythonScript(scriptName: RequiredScriptName, args: string[], options
   });
 }
 
-export async function runJsonScript<T = unknown>(scriptName: RequiredScriptName, args: string[], options: ScriptRunOptions = {}): Promise<T> {
+async function runJsonScript<T = unknown>(scriptName: RequiredScriptName, args: string[], options: ScriptRunOptions = {}): Promise<T> {
   const raw = await runPythonScript(scriptName, args, options);
   return parseScriptJson<T>(scriptName, args, raw);
 }

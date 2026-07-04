@@ -1,6 +1,6 @@
 import { Ticket } from '../state/types';
 
-export type EvidenceRecord = object;
+type EvidenceRecord = object;
 
 export function evidenceNotes(ticket: Ticket): EvidenceRecord[] {
   return arrayRecords(ticket.evidence?.notes);

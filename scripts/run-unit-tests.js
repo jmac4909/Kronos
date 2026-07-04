@@ -6126,7 +6126,7 @@ test('script client keeps raw JSON and process errors unknown by default', () =>
     'value.startsWith(MISSING_SCRIPT_MESSAGE_PREFIX)',
     "value.startsWith('Kronos script missing: ')",
     'throw new KronosScriptMissingError(scriptName, filePath)',
-    'export async function runJsonScript<T = unknown>',
+    'async function runJsonScript<T = unknown>',
     'export function runGitlabJson<T = unknown>',
     'export function runPipelineJson<T = unknown>',
     'function parseScriptJson<T = unknown>',
@@ -9206,11 +9206,11 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
     "const discussionCount = ticketStringField(mr, 'discussion_count')",
     'Discussions: ${esc(discussionCount ||',
     'function existingAcceptanceCriterion(record: object)',
-    'export type EvidenceRecord = object',
+    'type EvidenceRecord = object',
     'Reflect.get(record, key)',
     "Reflect.get(record, 'checked')",
   ]) {
-    assert.ok((marker.startsWith('export type') || marker.startsWith('Reflect.') || marker.startsWith('function evidenceRecordCount'))
+    assert.ok((marker === 'type EvidenceRecord = object' || marker.startsWith('Reflect.') || marker.startsWith('function evidenceRecordCount'))
       ? evidenceData.includes(marker)
       : extensionSource.includes(marker), marker);
   }
@@ -9221,7 +9221,7 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
     'notes.slice().reverse().map((note: any)',
     'checks.slice().reverse().map((check: any)',
     'environmentResults.map((result: any)',
-    'export type EvidenceRecord = Record<string, any>',
+    'type EvidenceRecord = Record<string, any>',
     'const ticketData: Record<string, any>',
   ]) {
     assert.equal(extensionSource.includes(marker) || evidenceData.includes(marker), false, marker);
