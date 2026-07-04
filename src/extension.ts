@@ -17,6 +17,7 @@ import { KRONOS_DIR, STATE_AUDIT_FILE, listBackups, listStateAuditEvents, restor
 import { PlannedAction, buildBacklogTriageReport, overnightCandidatePlans, planByProject, planByRelease, planForMinutes, planNextActions as buildNextActionPlan, planToQueueItem as buildQueueItemFromPlan } from './services/queuePlanner';
 import { actionDisplayLabel as actionToLabel } from './services/actionCatalog';
 import { isCodeAction, isProofSensitiveAction } from './services/actionSemantics';
+import { toValidDate } from './services/dateValues';
 import { writeEvidenceExport } from './services/evidenceStore';
 import { evidenceAcceptanceCriteria, evidenceChecked, evidenceChecks, evidenceEnvironmentResults, evidenceNotes, evidenceRecordCount, evidenceString } from './services/evidenceData';
 import { EvidenceHandoffPlan, buildEvidenceHandoffPlan } from './services/evidenceHandoff';
@@ -129,15 +130,11 @@ async function runWebviewPanelAction(action: () => Promise<void> | void, fallbac
 }
 
 function formatWebviewDateTime(value: unknown, fallback = 'N/A'): string {
-  if (typeof value !== 'string' && typeof value !== 'number') { return fallback; }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? fallback : date.toLocaleString();
+  return toValidDate(value)?.toLocaleString() || fallback;
 }
 
 function formatWebviewDate(value: unknown, fallback = 'N/A'): string {
-  if (typeof value !== 'string' && typeof value !== 'number') { return fallback; }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? fallback : date.toLocaleDateString();
+  return toValidDate(value)?.toLocaleDateString() || fallback;
 }
 
 function openExternalHttpUrl(url: string): void {
@@ -3502,12 +3499,12 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       const items = sessions.map(s => {
-        const date = new Date(s.startedAt);
+        const date = toValidDate(s.startedAt);
         const isDone = s.events.some(e => e.type === 'done');
         const icon = isDone ? '$(check)' : '$(error)';
         return {
           label: `${icon} ${s.project} — ${s.skill} ${s.ticket}`,
-          description: date.toLocaleString(),
+          description: date?.toLocaleString() || 'Unknown',
           detail: s.events.find(e => e.type === 'done')?.label || s.events[s.events.length - 1]?.label || '',
           session: s,
         };

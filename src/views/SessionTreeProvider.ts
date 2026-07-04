@@ -7,6 +7,7 @@ import { isFreshActiveRun } from '../services/runStatus';
 import { formatRunProgress } from '../services/runProgress';
 import { isAttentionRunStatus, runAttentionLine } from '../services/runAttention';
 import { unknownErrorMessage } from '../services/errorUtils';
+import { toValidDate } from '../services/dateValues';
 
 type SessionTreeEntry =
   | { kind: 'run'; run: KronosRun }
@@ -104,8 +105,8 @@ class SessionTreeItem extends vscode.TreeItem {
     const session = entry.session;
     this.contextValue = 'session';
     this.description = session.status;
-    const started = new Date(session.startedAt);
-    this.tooltip = `PID: ${session.pid}\nDirectory: ${session.cwd}\nStatus: ${session.status}\nStarted: ${started.toLocaleTimeString()}`;
+    const started = toValidDate(session.startedAt)?.toLocaleTimeString() || 'unknown';
+    this.tooltip = `PID: ${session.pid}\nDirectory: ${session.cwd}\nStatus: ${session.status}\nStarted: ${started}`;
 
     const icon = session.status === 'busy' ? 'play' : 'circle-outline';
     const color = session.status === 'busy'

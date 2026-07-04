@@ -2252,6 +2252,7 @@ for (const [name, source] of [
 }
 
 for (const [name, source, marker] of [
+  ['src/extension.ts', extension, "import { toValidDate } from './services/dateValues'"],
   ['src/services/agingAnalyzer.ts', agingAnalyzer, "import { toValidDate } from './dateValues'"],
   ['src/services/agingReportView.ts', agingReportView, "import { toValidDate } from './dateValues'"],
   ['src/services/collisionDetector.ts', collisionDetector, "import { toValidDate } from './dateValues'"],
@@ -2267,6 +2268,7 @@ for (const [name, source, marker] of [
   ['src/services/ticketTimeline.ts', ticketTimeline, "import { toValidDate } from './dateValues'"],
   ['src/services/trendMetrics.ts', trendMetrics, "import { toValidDate } from './dateValues'"],
   ['src/runners/sessionDispatcher.ts', dispatcher, "import { toValidDate } from '../services/dateValues'"],
+  ['src/views/SessionTreeProvider.ts', sessionTreeProvider, "import { toValidDate } from '../services/dateValues'"],
 ]) {
   if (!source.includes(marker)) {
     fail(`${name} must import the shared date value helper.`);

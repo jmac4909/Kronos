@@ -3489,6 +3489,15 @@ test('date value helper centralizes valid date coercion', () => {
   const dispatcherSource = readSourceFixture('src', 'runners', 'sessionDispatcher.ts');
   assert.ok(dispatcherSource.includes("import { toValidDate } from '../services/dateValues'"));
   assert.equal(dispatcherSource.includes('function toValidDate'), false);
+
+  const extensionSource = readSourceFixture('src', 'extension.ts');
+  assert.ok(extensionSource.includes("import { toValidDate } from './services/dateValues'"));
+  assert.ok(extensionSource.includes('return toValidDate(value)?.toLocaleString() || fallback'));
+  assert.ok(extensionSource.includes('return toValidDate(value)?.toLocaleDateString() || fallback'));
+
+  const sessionTreeSource = readSourceFixture('src', 'views', 'SessionTreeProvider.ts');
+  assert.ok(sessionTreeSource.includes("import { toValidDate } from '../services/dateValues'"));
+  assert.equal(sessionTreeSource.includes('new Date(session.startedAt)'), false);
 });
 
 test('regexp helper centralizes regex literal escaping', () => {
