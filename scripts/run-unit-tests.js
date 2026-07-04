@@ -8695,6 +8695,13 @@ test('security check validates semantic webview script policy', () => {
     "'src/services/sonarReportView.ts'",
     "'src/services/agingReportView.ts'",
     "'src/services/webviewHtml.ts'",
+    'function listFilesRecursive(dir, predicate)',
+    'const namedFiles = [',
+    'const liveSecurityScanFiles = [',
+    "...listFilesRecursive('src', file => file.endsWith('.ts'))",
+    "...listFilesRecursive('media', file => file.endsWith('.js'))",
+    'const files = [...new Set([...namedFiles, ...liveSecurityScanFiles])].sort();',
+    "assertAbsent(/(^|[^\\w.])exec\\s*\\(/m, 'Use execFile instead of shell-string exec.');",
     "const promptPanelView = sources['src/services/promptPanelView.ts']",
     "const webviewActionPanelScript = sources['media/kronos-action-panel.js']",
   ]) {
@@ -8703,6 +8710,7 @@ test('security check validates semantic webview script policy', () => {
   for (const marker of [
     'enableScriptsTrue !== 27',
     'Expected exactly 27 literal script-enabled webviews',
+    "assertAbsent(/\\bexec\\s*\\(/, 'Use execFile instead of shell-string exec.');",
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }

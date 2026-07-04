@@ -12,7 +12,9 @@ CLAUDE.md
 *.tgz
 *.log
 .env*
+out/**/*.map
 GOOD_TO_GREAT_REVIEW.md
+HUMAN_FEEDBACK_CHECKLIST.md
 WINDOWS_FEEDBACK_*.md
 push-master.sh
 cache-github-token.sh

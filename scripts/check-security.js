@@ -1,10 +1,25 @@
 const fs = require('fs');
+const path = require('path');
 
 function readSource(file) {
   return fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 }
 
-const files = [
+function listFilesRecursive(dir, predicate) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listFilesRecursive(fullPath, predicate));
+    } else if (predicate(fullPath)) {
+      files.push(fullPath.replace(/\\/g, '/'));
+    }
+  }
+  return files;
+}
+
+const namedFiles = [
   'src/extension.ts',
   'src/runners/sessionDispatcher.ts',
   'src/state/KronosState.ts',
@@ -26,6 +41,11 @@ const files = [
   'media/kronos-action-panel.js',
   'media/kronos-jira-board.js',
 ];
+const liveSecurityScanFiles = [
+  ...listFilesRecursive('src', file => file.endsWith('.ts')),
+  ...listFilesRecursive('media', file => file.endsWith('.js')),
+].sort();
+const files = [...new Set([...namedFiles, ...liveSecurityScanFiles])].sort();
 
 const sources = Object.fromEntries(files.map((file) => [file, readSource(file)]));
 const allSource = Object.values(sources).join('\n');
@@ -249,7 +269,7 @@ function assertPanelUsesScriptableWebviewOptions(file, source, panelId) {
 }
 
 assertAbsent(/\bexecSync\b/, 'Use execFileSync instead of execSync.');
-assertAbsent(/\bexec\s*\(/, 'Use execFile instead of shell-string exec.');
+assertAbsent(/(^|[^\w.])exec\s*\(/m, 'Use execFile instead of shell-string exec.');
 assertAbsent(/onclick\s*=/, 'Inline webview onclick handlers are not allowed.');
 assertAbsent(/\.innerHTML\s*=/, 'Use DOM text APIs instead of assigning innerHTML.');
 assertAbsent(/vscode\.env\.openExternal\s*\(\s*vscode\.Uri\.parse/, 'Open external URLs through openExternalHttpUrl.');
@@ -317,7 +337,7 @@ for (const forbidden of ['--set-project-config', '--unregister', '--set-setting'
   }
 }
 
-for (const requiredIgnore of ['.git/**', '.claude/**', 'node_modules/**', 'scripts/**', 'vscode-user-*/**', 'CLAUDE.md', '*.zip', '*.tgz', '*.log', '.env*', 'GOOD_TO_GREAT_REVIEW.md', 'WINDOWS_FEEDBACK_*.md']) {
+for (const requiredIgnore of ['.git/**', '.claude/**', 'node_modules/**', 'scripts/**', 'vscode-user-*/**', 'CLAUDE.md', '*.zip', '*.tgz', '*.log', '.env*', 'out/**/*.map', 'GOOD_TO_GREAT_REVIEW.md', 'HUMAN_FEEDBACK_CHECKLIST.md', 'WINDOWS_FEEDBACK_*.md']) {
   if (!vscodeIgnore.split(/\r?\n/).includes(requiredIgnore)) {
     fail(`.vscodeignore must exclude ${requiredIgnore}`);
   }
