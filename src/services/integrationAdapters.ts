@@ -2,6 +2,7 @@ import { ScriptRunOptions, runGitlabJson, runPipelineJson } from './scriptClient
 import { MergeRequest, MergeRequestChangedFile, MergeRequestComment } from '../state/types';
 import { normalizeChangedFiles } from './changedFiles';
 import { unknownErrorMessage } from './errorUtils';
+import { stripUtf8Bom } from './jsonFiles';
 
 export interface KronosScriptRunner {
   runScript(args: string[], options?: ScriptRunOptions): Promise<string>;
@@ -358,8 +359,9 @@ function normalizeSonarBranchStatus(value: Record<string, unknown>): SonarBranch
 }
 
 function parseJson(raw: string, label: string): unknown {
+  const content = stripUtf8Bom(raw);
   try {
-    return JSON.parse(raw);
+    return JSON.parse(content);
   } catch (e: unknown) {
     throw new Error(`Invalid JSON from ${label}: ${unknownErrorMessage(e, 'parse failed')}`);
   }

@@ -5597,10 +5597,10 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
     async runScript(args) {
       calls.push(args);
       if (args[0] === '--ticket-comments') {
-        return '[{"body":"ok"}]';
+        return '\ufeff[{"body":"ok"}]';
       }
       if (args[0] === '--mr-diff' || args[0] === '--mr-status') {
-        return JSON.stringify({
+        return `\ufeff${JSON.stringify({
           mr: {
             title: 'Fix it',
             iid: 7,
@@ -5618,10 +5618,10 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
             { id: 'd2', notes: [{ body: 'still failing', created_at: '2026-07-02T03:00:00.000Z', resolvable: true, resolved: false }] },
           ],
           files: [{ path: 'src/app.ts' }],
-        });
+        })}`;
       }
       if (args[0] === '--mr-branch') {
-        return JSON.stringify({ branch: 'feature/K-7' });
+        return '\ufeff' + JSON.stringify({ branch: 'feature/K-7' });
       }
       return '{}';
     },
@@ -5855,6 +5855,8 @@ test('integration adapters keep raw provider payloads unknown until normalized',
     'issues(sonarKey: string, branch: string): Promise<unknown>',
     'return runPipelineJson<unknown>',
     'function parseJson(raw: string, label: string): unknown',
+    "import { stripUtf8Bom } from './jsonFiles'",
+    'const content = stripUtf8Bom(raw)',
     'catch (e: unknown)',
     'function isRecord(value: unknown): value is Record<string, unknown>',
     "import { unknownErrorMessage } from './errorUtils'",
