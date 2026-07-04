@@ -3978,6 +3978,26 @@ test('run action helpers resolve safe artifacts and quick-pick labels', () => {
     cwd: '/repo/app',
     events: [{ label: 'Session complete' }],
   }), /Session complete$/);
+  assert.deepEqual(
+    runActionHelpers.RUN_ACTION_QUICK_PICK_ITEMS.map(item => item.runCommand),
+    ['openRunLog', 'openRunPrompt', 'openRunRecord', 'openRunWorkspace', 'openRunDiff', 'markNeedsHuman', 'pauseRun', 'continueRun', 'cancelRun', 'resumeRun', 'retryRun', 'archiveRun'],
+  );
+  assert.deepEqual(runActionHelpers.buildRunQuickPickItems([{
+    project: 'app',
+    skill: 'implement',
+    ticket: 'K-1',
+    status: 'completed',
+    startedAt: '2026-07-01T12:00:00.000Z',
+    events: [{ label: 'Done' }],
+  }]).map(item => ({
+    label: item.label,
+    description: item.description,
+    run: item.run.ticket,
+  })), [{
+    label: 'app - implement K-1',
+    description: 'completed',
+    run: 'K-1',
+  }]);
   assert.equal(runActionHelpers.runProcessPid({ processPid: '1234' }), 1234);
   assert.equal(runActionHelpers.runProcessPid({ pid: '5678' }), 5678);
   assert.equal(runActionHelpers.runProcessPid({ processPid: '-1' }), undefined);
@@ -10187,7 +10207,10 @@ test('extension run recovery helpers use typed run records', () => {
     "import { isAttentionRunStatus, runAttentionDetail, runAttentionLine } from './runAttention'",
     'function runQuickPickDetail(run: RunActionRecord)',
     'function runQuickPickDescription(run: RunActionRecord)',
+    'export const RUN_ACTION_QUICK_PICK_ITEMS',
+    'export function buildRunQuickPickItems<T extends RunActionRecord>',
     'description: runQuickPickDescription(run)',
+    'const picked = await vscode.window.showQuickPick(buildRunQuickPickItems(runs), { placeHolder })',
     'function runProcessPid(run: RunActionRecord)',
     "Reflect.get(run, 'pid')",
     'function findRunById(runId: string): KronosRun | undefined',

@@ -115,13 +115,14 @@ import { isFreshActiveRun } from './services/runStatus';
 import { buildRunCompletionNotification } from './services/runCompletionNotification';
 import { LIVE_MR_DIFF_TIMEOUT_MS, loadMrFileHints } from './services/mergeRequestFileHints';
 import {
+  RUN_ACTION_QUICK_PICK_ITEMS,
+  buildRunQuickPickItems,
   isResumableRun,
   isRetryableRun,
   resolveRunArtifactFile,
   resolveRunWorkspace,
   runProcessPid,
-  runQuickPickDescription,
-  runQuickPickDetail,
+  type RunActionQuickPickItem,
   type RunArtifactPathResult,
 } from './services/runActionHelpers';
 import { isRecord, recordFromUnknown, recordString } from './services/records';
@@ -727,12 +728,7 @@ async function pickRun(runs: KronosRun[], placeHolder: string, emptyMessage: str
     vscode.window.showInformationMessage(emptyMessage);
     return undefined;
   }
-  const picked = await vscode.window.showQuickPick(runs.map(run => ({
-    label: `${run.project} - ${run.skill}${run.ticket ? ` ${run.ticket}` : ''}`,
-    description: runQuickPickDescription(run),
-    detail: runQuickPickDetail(run),
-    run,
-  })), { placeHolder });
+  const picked = await vscode.window.showQuickPick(buildRunQuickPickItems(runs), { placeHolder });
   return picked?.run;
 }
 
@@ -853,25 +849,6 @@ async function executeRunAction(state: KronosState, run: KronosRun, command: str
     await archiveSelectedRun(run.id);
   }
 }
-
-interface RunActionQuickPickItem extends vscode.QuickPickItem {
-  runCommand: string;
-}
-
-const RUN_ACTION_QUICK_PICK_ITEMS: RunActionQuickPickItem[] = [
-  { label: 'Open Log', runCommand: 'openRunLog' },
-  { label: 'Open Prompt', runCommand: 'openRunPrompt' },
-  { label: 'Open Run Record', runCommand: 'openRunRecord' },
-  { label: 'Open Workspace Terminal', runCommand: 'openRunWorkspace' },
-  { label: 'Open Workspace Diff', runCommand: 'openRunDiff' },
-  { label: 'Mark Needs Human', runCommand: 'markNeedsHuman' },
-  { label: 'Pause Run', runCommand: 'pauseRun' },
-  { label: 'Continue Run', runCommand: 'continueRun' },
-  { label: 'Cancel Run', runCommand: 'cancelRun' },
-  { label: 'Resume Run', runCommand: 'resumeRun' },
-  { label: 'Retry Saved Prompt', runCommand: 'retryRun' },
-  { label: 'Archive Run', runCommand: 'archiveRun' },
-];
 
 function openTicketExternalUrl(state: KronosState, ticketKey: string, kind: 'jira' | 'mr' | 'build'): void {
   const ticket = state.state?.tickets?.[ticketKey];

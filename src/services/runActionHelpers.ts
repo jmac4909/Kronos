@@ -24,6 +24,33 @@ export interface RunActionRecord {
   events?: unknown;
 }
 
+export interface RunActionQuickPickItem {
+  label: string;
+  runCommand: string;
+}
+
+export interface RunQuickPickItem<T extends RunActionRecord = RunActionRecord> {
+  label: string;
+  description: string;
+  detail: string;
+  run: T;
+}
+
+export const RUN_ACTION_QUICK_PICK_ITEMS: RunActionQuickPickItem[] = [
+  { label: 'Open Log', runCommand: 'openRunLog' },
+  { label: 'Open Prompt', runCommand: 'openRunPrompt' },
+  { label: 'Open Run Record', runCommand: 'openRunRecord' },
+  { label: 'Open Workspace Terminal', runCommand: 'openRunWorkspace' },
+  { label: 'Open Workspace Diff', runCommand: 'openRunDiff' },
+  { label: 'Mark Needs Human', runCommand: 'markNeedsHuman' },
+  { label: 'Pause Run', runCommand: 'pauseRun' },
+  { label: 'Continue Run', runCommand: 'continueRun' },
+  { label: 'Cancel Run', runCommand: 'cancelRun' },
+  { label: 'Resume Run', runCommand: 'resumeRun' },
+  { label: 'Retry Saved Prompt', runCommand: 'retryRun' },
+  { label: 'Archive Run', runCommand: 'archiveRun' },
+];
+
 export type RunArtifactPathResult =
   | { ok: true; filePath: string }
   | { ok: false; reason: 'missing' | 'outside-runs-dir' };
@@ -98,6 +125,15 @@ export function runQuickPickDescription(run: RunActionRecord): string {
   }
   const detail = runAttentionLine(run);
   return detail ? `${status} - ${detail}` : status;
+}
+
+export function buildRunQuickPickItems<T extends RunActionRecord>(runs: T[]): RunQuickPickItem<T>[] {
+  return runs.map(run => ({
+    label: `${run.project} - ${run.skill}${run.ticket ? ` ${run.ticket}` : ''}`,
+    description: runQuickPickDescription(run),
+    detail: runQuickPickDetail(run),
+    run,
+  }));
 }
 
 export function runProcessPid(run: RunActionRecord): number | undefined {

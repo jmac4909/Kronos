@@ -423,6 +423,9 @@ const serviceOwnedSafetyMarkers = new Set([
   'const AGING_REPORT_MESSAGE_COMMANDS = new Set',
   "import { isAttentionRunStatus, runAttentionDetail, runAttentionLine } from './runAttention'",
   'function runQuickPickDescription(run: RunActionRecord)',
+  'export const RUN_ACTION_QUICK_PICK_ITEMS',
+  'export function buildRunQuickPickItems<T extends RunActionRecord>',
+  'description: runQuickPickDescription(run)',
   'function isRetryableRun(run: RunActionRecord): boolean',
   'function isResumableRun(run: RunActionRecord): boolean',
   'return !isFreshActiveRun(run) && resolveRunArtifactFile(run.promptPath).ok',
@@ -433,6 +436,10 @@ const serviceOwnedSafetyMarkers = new Set([
   'unknownErrorMessage(e, `Could not inspect run workspace ${candidate}.`)',
   'isCodeAction(target.action)',
   "'(default; Sonar branches unavailable)'",
+  'Open Workspace Diff',
+  'Mark Needs Human',
+  'Retry Saved Prompt',
+  'Archive Run',
 ]);
 
 for (const marker of [
@@ -573,6 +580,8 @@ for (const marker of [
   'await refreshAfterDispatch(state, projectName)(code, run)',
   "import { isAttentionRunStatus, runAttentionDetail, runAttentionLine } from './runAttention'",
   'function runQuickPickDescription(run: RunActionRecord)',
+  'export const RUN_ACTION_QUICK_PICK_ITEMS',
+  'export function buildRunQuickPickItems<T extends RunActionRecord>',
   'description: runQuickPickDescription(run)',
   'const refreshWarning = await reloadStateAfterDispatch(state, projectName);',
   'run.warnings = [...(run.warnings || []), refreshWarning];',
