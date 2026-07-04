@@ -6,7 +6,7 @@ import * as os from 'os';
 import { createHash } from 'crypto';
 import { RUNS_DIR, appendRunLog as appendRunLogFile, markRunCancelled, readRunRecord, repairActiveRunRecords, writeRunPrompt, writeRunRecord } from '../services/runStore';
 import { readStateFile } from '../services/stateStore';
-import { RunFailureKind, classifyRunFailure, type PostRunReadiness } from '../services/postRunReadiness';
+import { RunFailureKind, classifyRunFailure, evaluatePostRunReadiness, resolvePostRunTicket, type PostRunReadiness } from '../services/postRunReadiness';
 import { stopProcessTree, supportsProcessTreeSuspend } from '../services/processTree';
 import { createWebviewReadyMonitor } from '../services/webviewDiagnostics';
 import { WEBVIEW_ACTION_PANEL_SCRIPT, WEBVIEW_READY_COMMAND, createWebviewNonce, webviewActionScriptTag, webviewScriptCspOptions, withWebviewCsp } from '../services/webviewSecurity';
@@ -24,6 +24,7 @@ import { runProgressSummary } from '../services/runProgress';
 import { isAttentionRunStatus, runAttentionDetail } from '../services/runAttention';
 import { sortedRunCenterRuns } from '../services/runCenterSort';
 import { readJsonFile } from '../services/jsonFiles';
+import type { KronosState as KronosStateFile } from '../state/types';
 export { getAggregateStats, listSavedSessions, listSessionStoreIssues } from '../services/sessionStore';
 
 const CLAUDE_PATH = process.env['CLAUDE_PATH'] || 'claude';
@@ -391,7 +392,71 @@ function updateRunBestEffort(run: KronosRun, patch: Partial<KronosRun>, fallback
 }
 
 export function listRuns(): KronosRun[] {
-  return repairActiveRunRecords(100).runs as KronosRun[];
+  return backfillRunReadiness(repairActiveRunRecords(100).runs as KronosRun[]);
+}
+
+const READINESS_BACKFILL_STATUSES = new Set(['completed', 'waiting_for_review', 'failed', 'cancelled', 'needs_human']);
+
+function backfillRunReadiness(runs: KronosRun[]): KronosRun[] {
+  if (runs.length === 0) { return runs; }
+  const state = readStateForRunReadinessBackfill();
+  return runs.map(run => backfillSingleRunReadiness(run, state?.tickets));
+}
+
+function readStateForRunReadinessBackfill(): ReturnType<typeof readStateFile> {
+  try {
+    return readStateFile();
+  } catch (e: unknown) {
+    console.warn(unknownErrorMessage(e, 'Could not read Kronos state for run readiness backfill.'));
+    return null;
+  }
+}
+
+function backfillSingleRunReadiness(run: KronosRun, tickets?: KronosStateFile['tickets']): KronosRun {
+  if (!shouldBackfillRunReadiness(run, Boolean(tickets))) { return run; }
+  const resolutionInput: { tickets?: KronosStateFile['tickets']; ticketKey?: string; projectName?: string; run?: unknown } = {
+    ticketKey: run.ticket,
+    projectName: run.project,
+    run,
+  };
+  if (tickets) { resolutionInput.tickets = tickets; }
+  const resolution = resolvePostRunTicket(resolutionInput);
+  const readinessInput: { run: unknown; ticketKey?: string; ticket?: KronosStateFile['tickets'][string] } = {
+    run,
+    ticketKey: resolution.ticketKey || stringOrDefault(run.ticket, ''),
+  };
+  if (resolution.ticket) { readinessInput.ticket = resolution.ticket; }
+  const readiness = evaluatePostRunReadiness(readinessInput);
+  const nextRun: KronosRun = { ...run, readiness, failureKind: readiness.failureKind };
+  const nextStatus = backfilledRunStatus(run, readiness);
+  if (nextStatus) {
+    nextRun.status = nextStatus;
+  }
+  if (nextRun.status === 'needs_human' && !nextRun.failureReason) {
+    nextRun.failureReason = readiness.summary;
+  }
+  if (JSON.stringify(nextRun) !== JSON.stringify(run)) {
+    writeRunRecord(nextRun);
+  }
+  return nextRun;
+}
+
+function shouldBackfillRunReadiness(run: KronosRun, hasState: boolean): boolean {
+  if (!READINESS_BACKFILL_STATUSES.has(stringOrDefault(run.status, ''))) { return false; }
+  const readiness = isRecord(run.readiness) ? run.readiness : undefined;
+  const status = stringOrDefault(readiness?.['status'], '');
+  if (!readiness || !status || status === 'unknown') { return true; }
+  const summary = stringOrDefault(readiness['summary'], '');
+  return hasState
+    && status === 'needs_human'
+    && /could not resolve current ticket state|no ticket state was available/i.test(summary);
+}
+
+function backfilledRunStatus(run: KronosRun, readiness: PostRunReadiness): KronosRun['status'] | undefined {
+  if (run.status !== 'completed' && run.status !== 'waiting_for_review') { return undefined; }
+  if (readiness.status === 'ready') { return 'waiting_for_review'; }
+  if (readiness.status === 'needs_human' || readiness.status === 'blocked') { return 'needs_human'; }
+  return undefined;
 }
 
 export interface DispatchOptions {

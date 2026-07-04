@@ -161,9 +161,9 @@ export function evaluatePostRunReadiness(input: {
   if (!input.ticketKey || !input.ticket) {
     const readiness: PostRunReadiness = {
       evaluatedAt: now.toISOString(),
-      status: SUCCESS_RUN_STATUSES.has(runStatus) ? 'unknown' : 'blocked',
+      status: SUCCESS_RUN_STATUSES.has(runStatus) ? 'needs_human' : 'blocked',
       summary: SUCCESS_RUN_STATUSES.has(runStatus)
-        ? 'Run completed, but no ticket state was available for readiness evaluation.'
+        ? 'Run completed, but Kronos could not resolve current ticket state for readiness evaluation.'
         : `Run did not complete cleanly (${failureSummaryDetail(failureKind, failureReason)}).`,
       failureKind,
     };

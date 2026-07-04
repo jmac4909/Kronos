@@ -4180,6 +4180,57 @@ test('dispatcher listRuns persists stale active run repairs for UI callers', asy
   assert.match(persisted.failureReason, /terminal metadata/);
 });
 
+test('dispatcher listRuns backfills terminal run readiness from current ticket state', async () => {
+  fs.rmSync(runStore.RUNS_DIR, { recursive: true, force: true });
+  const readyTicket = ticket({
+    next_action: 'await_review',
+    projects: ['app'],
+    mr: { iid: 21, state: 'opened', review_status: 'approved', url: 'https://gitlab.example/mr/21' },
+    build: { number: 21, status: 'SUCCESS', url: 'https://jenkins.example/21' },
+    evidence: {
+      acceptance_criteria: [{ id: 'ac-1', text: 'Works', checked: true }],
+      notes: [{ at: 'now', kind: 'test', text: 'npm test passed' }],
+      checks: [{ id: 'check-1', at: 'now', name: 'smoke', result: 'pass' }],
+    },
+  });
+  fs.writeFileSync(stateStore.STATE_FILE, JSON.stringify(baseState({ 'K-BACKFILL': readyTicket }), null, 2));
+  const run = {
+    id: 'run-readiness-backfill',
+    project: 'app',
+    skill: 'implement',
+    ticket: 'K-BACKFILL',
+    status: 'completed',
+    startedAt: '2026-07-02T10:00:00.000Z',
+    endedAt: '2026-07-02T10:05:00.000Z',
+  };
+  runStore.writeRunRecord(run);
+
+  const vscodeStub = createVscodeTestModule();
+  await withPatchedModuleLoad(request => request === 'vscode' ? vscodeStub.vscode : undefined, async () => {
+    const dispatcherPath = require.resolve('../out/runners/sessionDispatcher.js');
+    delete require.cache[dispatcherPath];
+    const dispatcher = require(dispatcherPath);
+    const runs = dispatcher.listRuns();
+    const backfilled = runs.find(r => r.id === run.id);
+    assert.equal(backfilled.status, 'waiting_for_review');
+    assert.equal(backfilled.readiness.status, 'ready');
+    assert.equal(backfilled.readiness.ticketKey, 'K-BACKFILL');
+  });
+
+  const persisted = JSON.parse(fs.readFileSync(runStore.runRecordPath(run.id), 'utf8'));
+  assert.equal(persisted.status, 'waiting_for_review');
+  assert.equal(persisted.readiness.status, 'ready');
+  assert.equal(persisted.readiness.ticketKey, 'K-BACKFILL');
+
+  const unresolved = postRunReadiness.evaluatePostRunReadiness({
+    run: { status: 'completed' },
+    ticketKey: 'K-MISSING',
+    now: new Date('2026-07-01T00:00:00.000Z'),
+  });
+  assert.equal(unresolved.status, 'needs_human');
+  assert.match(unresolved.summary, /could not resolve current ticket state/);
+});
+
 test('run store limit selects newest records before repairing active runs', () => {
   const oldRun = {
     id: 'zz-run-limit-old',
@@ -4716,6 +4767,9 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "const nextStatus = run.status === 'completed' || run.status === 'waiting_for_review' ? 'needs_human' : run.status",
     'await runCompletionCallback(opts, code ?? 1, run',
     "repairActiveRunRecords(100).runs as KronosRun[]",
+    'function backfillRunReadiness(runs: KronosRun[]): KronosRun[]',
+    'evaluatePostRunReadiness',
+    'resolvePostRunTicket',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
