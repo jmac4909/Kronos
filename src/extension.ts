@@ -1657,8 +1657,14 @@ export function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand('kronos.deployMonitor', async (item: unknown) => {
-      const projectName = resolveProjectName(state, item);
       const ticketKey = resolveTicketKey(item);
+      const projectName = await pickTicketProjectNameForDispatch(
+        state,
+        item,
+        ticketKey,
+        ticketKey ? `Deploy monitor ${ticketKey} in which project?` : 'Deploy monitor which project?',
+      );
+      if (!projectName) { return; }
       const projectPath = getProjectPath(state, projectName);
       if (projectPath) {
         const promptMetadata: PromptRunMetadata = {
@@ -1674,20 +1680,26 @@ export function activate(context: vscode.ExtensionContext) {
         if (projectName) { dispatchOptions.projectNameOverride = projectName; }
         await startClaudeDispatch(projectPath, 'deploy-monitor', ticketKey, dispatchOptions);
       } else {
-        vscode.window.showWarningMessage('No project linked. Link the ticket to a project first.');
+        vscode.window.showWarningMessage(projectName ? `${projectName} is not registered as a Kronos project.` : 'No project linked. Link the ticket to a project first.');
       }
     }),
 
     vscode.commands.registerCommand('kronos.verifyFix', async (item: unknown) => {
-      const projectName = resolveProjectName(state, item);
       const ticketKey = resolveTicketKey(item);
+      const projectName = await pickTicketProjectNameForDispatch(
+        state,
+        item,
+        ticketKey,
+        ticketKey ? `Verify fix for ${ticketKey} in which project?` : 'Verify fix in which project?',
+      );
+      if (!projectName) { return; }
       const projectPath = getProjectPath(state, projectName);
       if (projectPath) {
         await startClaudeDispatch(projectPath, 'verify-fix', ticketKey, {
           onComplete: refreshAfterDispatch(state, projectName, ticketKey),
         });
       } else {
-        vscode.window.showWarningMessage('No project linked. Link the ticket to a project first.');
+        vscode.window.showWarningMessage(projectName ? `${projectName} is not registered as a Kronos project.` : 'No project linked. Link the ticket to a project first.');
       }
     }),
 
@@ -5377,6 +5389,61 @@ function resolveProjectName(state: KronosState, item: unknown): string | undefin
     if (t?.projects?.length) { return t.projects[0]; }
   }
   return undefined;
+}
+
+async function pickTicketProjectNameForDispatch(
+  state: KronosState,
+  item: unknown,
+  ticketKey: string | undefined,
+  placeHolder: string,
+): Promise<string | undefined> {
+  const explicitProject = explicitProjectName(item);
+  if (explicitProject) { return explicitProject; }
+  const projects = ticketProjectNamesForCommand(state, item, ticketKey);
+  if (projects.length === 0) {
+    const target = ticketKey ? `${ticketKey} is` : 'Selected ticket is';
+    vscode.window.showWarningMessage(`${target} not linked to any project.`);
+    return undefined;
+  }
+  if (projects.length === 1) { return projects[0]; }
+  const picked = await vscode.window.showQuickPick(
+    projects.map(projectName => ({
+      label: projectName,
+      description: state.state?.projects[projectName]?.path || 'Project is not registered',
+    })),
+    { placeHolder },
+  );
+  return picked?.label;
+}
+
+function explicitProjectName(item: unknown): string | undefined {
+  const record = recordFromUnknown(item);
+  const projectName = stringFromUnknown(record['projectName']);
+  if (projectName) { return projectName; }
+  const nestedItem = recordFromUnknown(record['item']);
+  return stringFromUnknown(nestedItem['projectName']);
+}
+
+function ticketProjectNamesForCommand(state: KronosState, item: unknown, ticketKey: string | undefined): string[] {
+  const record = recordFromUnknown(item);
+  const nestedItem = recordFromUnknown(record['item']);
+  const projectSources = [
+    recordFromUnknown(record['ticket'])['projects'],
+    recordFromUnknown(nestedItem['ticket'])['projects'],
+    ticketKey && state.state ? state.state.tickets[ticketKey]?.projects : undefined,
+  ];
+  for (const source of projectSources) {
+    const projects = uniqueProjectNames(source);
+    if (projects.length > 0) { return projects; }
+  }
+  return [];
+}
+
+function uniqueProjectNames(value: unknown): string[] {
+  if (!Array.isArray(value)) { return []; }
+  return [...new Set(value
+    .filter((project): project is string => typeof project === 'string' && project.trim().length > 0)
+    .map(project => project.trim()))];
 }
 
 function resolveRunId(item: unknown): string | undefined {
