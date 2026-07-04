@@ -1038,6 +1038,24 @@ function kronosActionPanelScriptUri(panel: vscode.WebviewPanel, extensionUri?: v
   return scriptUri;
 }
 
+interface KronosActionWebviewPanel {
+  panel: vscode.WebviewPanel;
+  nonce: string;
+  actionScriptUri: string;
+}
+
+function createKronosActionWebviewPanel(viewType: string, title: string, extensionUri?: vscode.Uri): KronosActionWebviewPanel {
+  const panel = vscode.window.createWebviewPanel(
+    viewType,
+    title,
+    vscode.ViewColumn.One,
+    kronosScriptableWebviewOptions(extensionUri)
+  );
+  const nonce = createWebviewNonce();
+  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  return { panel, nonce, actionScriptUri };
+}
+
 function kronosJiraBoardScriptUri(panel: vscode.WebviewPanel, extensionUri?: vscode.Uri): string {
   const scriptUri = kronosMediaScriptUri(panel, extensionUri, WEBVIEW_JIRA_BOARD_SCRIPT);
   if (!scriptUri) {
@@ -3939,14 +3957,7 @@ function openPromptManager(state: KronosState, extensionUri?: vscode.Uri): void 
   }
   const smokeResults = runPromptSmokeTests(buildPromptSmokeTests(state, globalTemplates, projectOverrides));
 
-  const panel = vscode.window.createWebviewPanel(
-    'kronosPromptManager',
-    'Kronos Prompt Manager',
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosPromptManager', 'Kronos Prompt Manager', extensionUri);
   panel.webview.html = withWebviewCsp(buildPromptManagerHtml(globalTemplates, projectOverrides, smokeResults, REQUIRED_PROMPTS, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos Prompt Manager', PROMPT_MANAGER_OPERATOR_COMMANDS);
 }
@@ -3960,14 +3971,7 @@ function openPromptSmokeTestsPanel(state: KronosState, extensionUri?: vscode.Uri
     }
   }
   const results = runPromptSmokeTests(buildPromptSmokeTests(state, globalTemplates, projectOverrides));
-  const panel = vscode.window.createWebviewPanel(
-    'kronosPromptSmokeTests',
-    'Kronos Prompt Smoke Tests',
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosPromptSmokeTests', 'Kronos Prompt Smoke Tests', extensionUri);
   panel.webview.html = withWebviewCsp(buildPromptSmokeTestsHtml(results, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos Prompt Smoke Tests', PROMPT_SMOKE_OPERATOR_COMMANDS);
 }
@@ -3987,14 +3991,7 @@ function openPromptHistoryPanel(extensionUri?: vscode.Uri): void {
   const latest = snapshots[0];
   const previous = latest ? snapshots.find(snapshot => snapshot.scope === latest.scope && snapshot.id !== latest.id) : undefined;
   const diff = latest ? diffPromptHistorySnapshots(latest, previous) : undefined;
-  const panel = vscode.window.createWebviewPanel(
-    'kronosPromptHistory',
-    'Kronos Prompt History',
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosPromptHistory', 'Kronos Prompt History', extensionUri);
   panel.webview.html = withWebviewCsp(buildPromptHistoryHtml(snapshots, diff, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos Prompt History', PROMPT_HISTORY_OPERATOR_COMMANDS);
 }
@@ -4032,14 +4029,7 @@ async function repairPromptPack(state: KronosState, extensionUri?: vscode.Uri): 
 }
 
 function openPromptHistoryDiffPanel(diff: PromptHistoryDiff, extensionUri?: vscode.Uri): void {
-  const panel = vscode.window.createWebviewPanel(
-    'kronosPromptHistory',
-    'Kronos Prompt History',
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosPromptHistory', 'Kronos Prompt History', extensionUri);
   panel.webview.html = withWebviewCsp(buildPromptHistoryHtml(listPromptHistorySnapshots(25), diff, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos Prompt History', PROMPT_HISTORY_OPERATOR_COMMANDS);
 }
@@ -4152,14 +4142,7 @@ function openRecoveryPanel(state: KronosState, initialInventory: RecoveryInvento
 
 function openStateAuditLogPanel(extensionUri?: vscode.Uri): void {
   const events = listStateAuditEvents(200);
-  const panel = vscode.window.createWebviewPanel(
-    'kronosStateAuditLog',
-    'Kronos State Audit Log',
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosStateAuditLog', 'Kronos State Audit Log', extensionUri);
   panel.webview.html = withWebviewCsp(buildStateAuditLogHtml(events, STATE_AUDIT_FILE, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos State Audit Log', STATE_AUDIT_OPERATOR_COMMANDS);
 }
@@ -4438,27 +4421,13 @@ function evidenceGatePanelGatesForState(state: KronosState): EvidenceGateResult[
 }
 
 function openEvidenceHandoffPanel(plan: EvidenceHandoffPlan, extensionUri?: vscode.Uri): void {
-  const panel = vscode.window.createWebviewPanel(
-    'kronosEvidenceHandoff',
-    `Evidence Handoff: ${plan.ticketKey}`,
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosEvidenceHandoff', `Evidence Handoff: ${plan.ticketKey}`, extensionUri);
   panel.webview.html = withWebviewCsp(buildEvidenceHandoffHtml(plan, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos Evidence Handoff', EVIDENCE_HANDOFF_OPERATOR_COMMANDS);
 }
 
 function openEvidencePublishPanel(results: Array<EvidencePublishResult | EvidencePublishDestination>, ticketKey: string, extensionUri?: vscode.Uri): void {
-  const panel = vscode.window.createWebviewPanel(
-    'kronosEvidencePublish',
-    `Evidence Publish: ${ticketKey}`,
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosEvidencePublish', `Evidence Publish: ${ticketKey}`, extensionUri);
   panel.webview.html = withWebviewCsp(buildEvidencePublishHtml(results, ticketKey, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos Evidence Publish', EVIDENCE_PUBLISH_OPERATOR_COMMANDS);
 }
@@ -4534,14 +4503,7 @@ interface PlanActionPanelOptions {
 }
 
 function openPlanActionPanel(state: KronosState, extensionUri: vscode.Uri | undefined, options: PlanActionPanelOptions): void {
-  const panel = vscode.window.createWebviewPanel(
-    options.viewType,
-    options.title,
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel(options.viewType, options.title, extensionUri);
   let currentPlans: PlannedAction[] = [];
   const logReady = createWebviewReadyMonitor(panel, options.readyName || options.title);
   const render = () => {
@@ -4840,14 +4802,7 @@ function openOvernightCandidatesPanel(state: KronosState, extensionUri?: vscode.
 
 function openAgentQualityScorePanel(state: KronosState, extensionUri?: vscode.Uri): void {
   const score = computeAgentQualityScore({ runs: listRuns(), tickets: state.state?.tickets || {} });
-  const panel = vscode.window.createWebviewPanel(
-    'kronosAgentQualityScore',
-    'Kronos Agent Quality Score',
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosAgentQualityScore', 'Kronos Agent Quality Score', extensionUri);
   panel.webview.html = withWebviewCsp(buildAgentQualityScoreHtml(score, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos Agent Quality Score', AGENT_QUALITY_OPERATOR_COMMANDS);
 }
@@ -4858,14 +4813,7 @@ function openTrendMetricsPanel(state: KronosState, extensionUri?: vscode.Uri): v
     tickets: state.state?.tickets || {},
     windowDays: trendWindowDaysFromConfig(),
   });
-  const panel = vscode.window.createWebviewPanel(
-    'kronosTrendMetrics',
-    'Kronos Trend Metrics',
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosTrendMetrics', 'Kronos Trend Metrics', extensionUri);
   panel.webview.html = withWebviewCsp(buildTrendMetricsHtml(report, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos Trend Metrics', TREND_METRICS_OPERATOR_COMMANDS);
 }
@@ -4923,14 +4871,7 @@ function openAgingReportPanel(state: KronosState, extensionUri?: vscode.Uri): vo
 function openIntegrationManifestPanel(extensionUri?: vscode.Uri): void {
   const status = readIntegrationManifest();
   const audit = auditIntegrationManifest(status);
-  const panel = vscode.window.createWebviewPanel(
-    'kronosIntegrationManifest',
-    'Kronos Integration Manifest',
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosIntegrationManifest', 'Kronos Integration Manifest', extensionUri);
   panel.webview.html = withWebviewCsp(buildIntegrationManifestHtml(status, audit, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos Integration Manifest', INTEGRATION_MANIFEST_OPERATOR_COMMANDS);
 }
@@ -4970,28 +4911,14 @@ async function snapshotIntegrationManifest(): Promise<void> {
 
 function openProfilesPanel(extensionUri?: vscode.Uri): void {
   const active = getActiveProfile();
-  const panel = vscode.window.createWebviewPanel(
-    'kronosProfiles',
-    'Kronos Profiles',
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosProfiles', 'Kronos Profiles', extensionUri);
   panel.webview.html = withWebviewCsp(buildProfilesHtml(active, nonce, actionScriptUri), webviewScriptCspOptions(panel.webview.cspSource, nonce));
   attachOperatorCommandHandler(panel, 'Kronos Profiles', PROFILES_OPERATOR_COMMANDS);
 }
 
 function openDoctorPanel(state: KronosState, extensionUri?: vscode.Uri): void {
   const checks = runDoctorChecks(state);
-  const panel = vscode.window.createWebviewPanel(
-    'kronosDoctor',
-    'Kronos Doctor',
-    vscode.ViewColumn.One,
-    kronosScriptableWebviewOptions(extensionUri)
-  );
-  const nonce = createWebviewNonce();
-  const actionScriptUri = kronosActionPanelScriptUri(panel, extensionUri);
+  const { panel, nonce, actionScriptUri } = createKronosActionWebviewPanel('kronosDoctor', 'Kronos Doctor', extensionUri);
   const logReady = attachOperatorCommandHandler(panel, 'Kronos Doctor', DOCTOR_OPERATOR_COMMANDS);
   const pendingCheck: DoctorCheck = {
     name: 'Provider network reachability',

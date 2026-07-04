@@ -265,7 +265,6 @@
     var current = target.parentElement && typeof target.parentElement === 'object' ? target.parentElement : null;
     while (current) {
       if (typeof current.matches === 'function' && current.matches(selector)) { return current; }
-      if (typeof current.closest === 'function') { return current.closest(selector); }
       current = current.parentElement && typeof current.parentElement === 'object' ? current.parentElement : null;
     }
     return null;

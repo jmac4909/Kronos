@@ -113,9 +113,6 @@
     var current = target.parentElement && typeof target.parentElement === 'object' ? target.parentElement : null;
     while (current) {
       if (typeof current.getAttribute === 'function' && current.getAttribute('data-action')) { return current; }
-      if (typeof current.closest === 'function') {
-        return current.closest('[data-action]');
-      }
       current = current.parentElement && typeof current.parentElement === 'object' ? current.parentElement : null;
     }
     return null;
