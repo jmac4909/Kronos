@@ -5,7 +5,7 @@ import { KRONOS_DIR } from './stateStore';
 import { unknownErrorCode, unknownErrorMessage } from './errorUtils';
 import { effectiveRunStatus, isActiveRunStatus, isStaleActiveRun } from './runStatus';
 import { readJsonFile } from './jsonFiles';
-import { isRecord } from './records';
+import { isRecord, recordString } from './records';
 import { isPathInside } from './pathUtils';
 import { toValidDate } from './dateValues';
 
@@ -354,7 +354,7 @@ function terminalRunOutcomeFromActiveLog(run: RunRecord): string | undefined {
     try {
       const parsed = JSON.parse(trimmed);
       if (isRecord(parsed) && parsed['type'] === 'result') {
-        const subtype = stringField(parsed['subtype']).toLowerCase();
+        const subtype = recordString(parsed, 'subtype').toLowerCase();
         return parsed['is_error'] === true || subtype.includes('error') || subtype.includes('fail')
           ? 'failed'
           : 'completed';
@@ -416,10 +416,6 @@ function processIsGone(pid: number): boolean {
   } catch (e: unknown) {
     return unknownErrorCode(e) === 'ESRCH';
   }
-}
-
-function stringField(value: unknown): string {
-  return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 }
 
 function normalizeRunView(run: RunRecord, filePath?: string): RunRecord {

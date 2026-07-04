@@ -3439,7 +3439,7 @@ test('record guard helper centralizes unknown object narrowing', () => {
     ['integrationAdapters.ts', "import { isRecord } from './records'"],
     ['queuePlanner.ts', "import { isRecord } from './records'"],
     ['runStatus.ts', "import { isRecord } from './records'"],
-    ['runStore.ts', "import { isRecord } from './records'"],
+    ['runStore.ts', "import { isRecord, recordString } from './records'"],
     ['sessionStore.ts', "import { isRecord } from './records'"],
     ['sonarReportView.ts', "import { isRecord } from './records'"],
     ['trendMetrics.ts', "import { isRecord, recordString } from './records'"],
@@ -3476,6 +3476,9 @@ test('record guard helper centralizes unknown object narrowing', () => {
   }
   const operatorPanelSource = readSourceFixture('src', 'services', 'operatorPanel.ts');
   assert.equal(operatorPanelSource.includes('function recordFromUnknown(value: unknown): Record<string, unknown>'), false, 'operatorPanel should not carry a local recordFromUnknown helper');
+  const runStoreSource = readSourceFixture('src', 'services', 'runStore.ts');
+  assert.ok(runStoreSource.includes("import { isRecord, recordString } from './records'"));
+  assert.equal(runStoreSource.includes('function stringField(value: unknown): string'), false, 'runStore should not carry a local stringField helper');
 
   for (const file of [
     'activeRunDisplay.ts',

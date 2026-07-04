@@ -2323,7 +2323,7 @@ for (const [name, source, marker] of [
   ['src/services/integrationAdapters.ts', integrationAdapters, "import { isRecord } from './records'"],
   ['src/services/queuePlanner.ts', queuePlanner, "import { isRecord } from './records'"],
   ['src/services/runStatus.ts', runStatus, "import { isRecord } from './records'"],
-  ['src/services/runStore.ts', runStore, "import { isRecord } from './records'"],
+  ['src/services/runStore.ts', runStore, "import { isRecord, recordString } from './records'"],
   ['src/services/sessionStore.ts', sessionStore, "import { isRecord } from './records'"],
   ['src/services/sonarReportView.ts', sonarReportView, "import { isRecord } from './records'"],
   ['src/services/trendMetrics.ts', trendMetrics, "import { isRecord, recordString } from './records'"],
@@ -2368,6 +2368,9 @@ for (const [name, source, marker] of [
 }
 if (operatorPanel.includes('function recordFromUnknown(value: unknown): Record<string, unknown>')) {
   fail('Operator panel must use the shared unknown-record helper.');
+}
+if (runStore.includes('function stringField(value: unknown): string')) {
+  fail('Run store must use the shared record string helper instead of a local stringField helper.');
 }
 
 for (const [name, source, marker] of [
