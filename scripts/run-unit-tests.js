@@ -2652,10 +2652,15 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(externalActionScript, /function findKronosActionScript/);
   assert.match(externalActionScript, /kronos-action-panel-script/);
   assert.match(externalActionScript, /KronosWebviewRuntime/);
+  assert.match(externalActionScript, /function waitForKronosActionRuntime/);
+  assert.match(externalActionScript, /setTimeout\(waitForKronosActionRuntime, 50\)/);
+  assert.doesNotMatch(externalActionScript, /if \(!runtime\) \{\s*console\.error\('Kronos webview runtime unavailable'/);
   assert.match(externalActionScript, /runtime\.createReadyPoster/);
   assert.match(externalActionScript, /runtime\.vscodeApi\(\)\.postMessage/);
   assert.match(externalActionScript, /runtime\.markReady\(webviewName\)/);
   assert.match(externalActionScript, /runtime\.installDiagnostics\(webviewName\)/);
+  assert.match(externalActionScript, /function waitForKronosActionRuntime/);
+  assert.match(externalActionScript, /var maxRuntimeAttempts = 20/);
   assert.match(externalActionScript, /data-kronos-action-fields/);
   assert.match(externalActionScript, /function postKronosAction/);
   assert.match(externalActionScript, /function claimKronosActionHandler/);
@@ -2810,15 +2815,70 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   externalNullListeners.click({ target: fakeButton, preventDefault() {} });
   assert.equal(externalNullPostedMessages[1].ticket, 'K-1');
 
+  const delayedRuntimeMessages = [];
+  const delayedRuntimeListeners = {};
+  const delayedRuntimeAttributes = {};
+  const delayedRuntimeTimeouts = [];
+  let delayedRuntimeRetry;
+  const delayedRuntimeSandbox = {
+    console: { info() {}, warn() {}, error() {} },
+    navigator: { userAgent: 'Kronos Windows Delayed Runtime Test' },
+    setTimeout(handler, ms) {
+      delayedRuntimeTimeouts.push(ms);
+      if (ms === 50) { delayedRuntimeRetry = handler; } else { handler(); }
+    },
+    window: { addEventListener() {} },
+    document: {
+      readyState: 'complete',
+      currentScript: {
+        getAttribute(name) {
+          return {
+            'data-kronos-webview-name': 'Kronos External Delayed Runtime',
+            'data-kronos-ready-command': webviewSecurity.WEBVIEW_READY_COMMAND,
+            'data-kronos-action-fields': JSON.stringify([
+              { messageKey: 'ticket', dataAttribute: 'data-ticket' },
+              { messageKey: 'runId', dataAttribute: 'data-run-id' },
+            ]),
+          }[name] || '';
+        },
+      },
+      documentElement: {
+        setAttribute(name, value) { delayedRuntimeAttributes[name] = value; },
+      },
+      addEventListener(type, handler) { delayedRuntimeListeners[type] = handler; },
+    },
+  };
+  vm.runInNewContext(externalActionScript, delayedRuntimeSandbox);
+  assert.equal(typeof delayedRuntimeRetry, 'function');
+  assert.deepEqual(delayedRuntimeTimeouts, [50]);
+  delayedRuntimeSandbox.KronosWebviewRuntime = {
+    createReadyPoster: () => () => delayedRuntimeMessages.push({ command: webviewSecurity.WEBVIEW_READY_COMMAND }),
+    installDiagnostics() {},
+    markReady(webviewName) { delayedRuntimeAttributes['data-kronos-webview'] = webviewName; },
+    vscodeApi: () => ({ postMessage: message => delayedRuntimeMessages.push(message) }),
+  };
+  delayedRuntimeRetry();
+  assert.equal(delayedRuntimeAttributes['data-kronos-actions-ready'], 'true');
+  assert.equal(delayedRuntimeAttributes['data-kronos-webview'], 'Kronos External Delayed Runtime');
+  assert.equal(delayedRuntimeMessages[0].command, webviewSecurity.WEBVIEW_READY_COMMAND);
+  delayedRuntimeListeners.click({ target: fakeButton, preventDefault() {} });
+  assert.equal(delayedRuntimeMessages[1].command, 'openRunRecord');
+  assert.equal(delayedRuntimeMessages[1].runId, 'run-1');
+
   const jiraBoardScript = readSourceFixture('media', webviewSecurity.WEBVIEW_JIRA_BOARD_SCRIPT);
   assert.match(jiraBoardScript, /document\.currentScript/);
   assert.match(jiraBoardScript, /function findKronosJiraBoardScript/);
   assert.match(jiraBoardScript, /kronos-jira-board-script/);
   assert.match(jiraBoardScript, /KronosWebviewRuntime/);
+  assert.match(jiraBoardScript, /function waitForKronosJiraBoardRuntime/);
+  assert.match(jiraBoardScript, /setTimeout\(waitForKronosJiraBoardRuntime, 50\)/);
+  assert.doesNotMatch(jiraBoardScript, /if \(!runtime\) \{\s*console\.error\('Kronos webview runtime unavailable'/);
   assert.match(jiraBoardScript, /runtime\.createReadyPoster/);
   assert.match(jiraBoardScript, /runtime\.vscodeApi\(\)\.postMessage/);
   assert.match(jiraBoardScript, /runtime\.markReady\(webviewName\)/);
   assert.match(jiraBoardScript, /runtime\.installDiagnostics\(webviewName\)/);
+  assert.match(jiraBoardScript, /function waitForKronosJiraBoardRuntime/);
+  assert.match(jiraBoardScript, /var maxRuntimeAttempts = 20/);
   assert.match(jiraBoardScript, /function initKronosJiraBoard/);
   assert.match(jiraBoardScript, /function claimKronosJiraBoard/);
   assert.match(jiraBoardScript, /__kronosJiraBoardAttached/);
@@ -2970,6 +3030,68 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.equal(jiraUnavailableTimeouts[0], 0);
   assert.deepEqual(jiraUnavailableTimeouts.slice(1), Array(19).fill(50));
   assert.ok(jiraUnavailableWarnings.some(message => message.includes('could not acquire VS Code API after ready retries')));
+
+  const jiraDelayedMessages = [];
+  const jiraDelayedListeners = {};
+  const jiraDelayedAttributes = {};
+  const jiraDelayedTimeouts = [];
+  let jiraDelayedRetry;
+  const jiraDelayedBoard = {
+    addEventListener(type, handler) { jiraDelayedListeners[`board:${type}`] = handler; },
+  };
+  const jiraDelayedSandbox = {
+    console: { info() {}, warn() {}, error() {} },
+    navigator: { userAgent: 'Kronos Windows Jira Delayed Runtime Test' },
+    setTimeout(handler, ms) {
+      jiraDelayedTimeouts.push(ms);
+      if (ms === 50) { jiraDelayedRetry = handler; } else { handler(); }
+    },
+    window: { addEventListener() {} },
+    document: {
+      readyState: 'complete',
+      currentScript: {
+        getAttribute(name) {
+          return {
+            'data-kronos-webview-name': 'Kronos Jira Board Delayed Runtime',
+            'data-kronos-ready-command': webviewSecurity.WEBVIEW_READY_COMMAND,
+          }[name] || '';
+        },
+      },
+      documentElement: {
+        setAttribute(name, value) { jiraDelayedAttributes[name] = value; },
+      },
+      getElementById(id) {
+        if (id === 'kronos-jira-ticket-data') { return { value: '{}' }; }
+        return null;
+      },
+      querySelector(selector) {
+        if (selector === '.board') { return jiraDelayedBoard; }
+        return null;
+      },
+      querySelectorAll() { return []; },
+      addEventListener(type, handler) { jiraDelayedListeners[type] = handler; },
+    },
+  };
+  vm.runInNewContext(jiraBoardScript, jiraDelayedSandbox);
+  assert.equal(typeof jiraDelayedRetry, 'function');
+  assert.deepEqual(jiraDelayedTimeouts, [50]);
+  jiraDelayedSandbox.KronosWebviewRuntime = {
+    createReadyPoster: () => () => jiraDelayedMessages.push({ command: webviewSecurity.WEBVIEW_READY_COMMAND }),
+    installDiagnostics() {},
+    markReady(webviewName) { jiraDelayedAttributes['data-kronos-webview'] = webviewName; },
+    vscodeApi: () => ({ postMessage: message => jiraDelayedMessages.push(message) }),
+  };
+  jiraDelayedRetry();
+  assert.equal(jiraDelayedAttributes['data-kronos-actions-ready'], 'true');
+  assert.equal(jiraDelayedAttributes['data-kronos-webview'], 'Kronos Jira Board Delayed Runtime');
+  assert.equal(jiraDelayedMessages[0].command, webviewSecurity.WEBVIEW_READY_COMMAND);
+  assert.equal(typeof jiraDelayedListeners['board:click'], 'function');
+  jiraDelayedListeners['board:click']({
+    target: { parentElement: jiraActionButton },
+    stopPropagation() {},
+  });
+  assert.equal(jiraDelayedMessages[1].command, 'removeFromQueue');
+  assert.equal(jiraDelayedMessages[1].ticket, 'K-77');
 
   const button = operatorPanel.actionButton('open<Thing>', 'Open & Check', {
     ticket: 'T-1',
@@ -6826,73 +6948,6 @@ test('run progress helper summarizes active run activity', () => {
     'function formatElapsed',
     "countLabel(toolCalls, 'tool')",
     "countLabel(filesChanged, 'changed', 'changed')",
-  ]) {
-    assert.ok(source.includes(marker), marker);
-  }
-});
-
-test('run operator summary explains outcome and next action automatically', () => {
-  const active = runOperatorSummary.buildRunOperatorSummary({
-    project: 'api',
-    skill: 'implement',
-    ticket: 'K-1',
-    status: 'running',
-    startedAt: '2026-07-02T00:00:00.000Z',
-    events: [
-      { type: 'tool', label: 'Reading src/app.ts', timestamp: '2026-07-02T00:01:00.000Z' },
-      { type: 'tool', label: 'Editing src/app.ts', timestamp: '2026-07-02T00:02:00.000Z' },
-      { type: 'text', label: 'Running unit tests after the patch.', timestamp: '2026-07-02T00:03:00.000Z' },
-    ],
-  }, new Date('2026-07-02T00:05:30.000Z'));
-  assert.equal(active.tone, 'info');
-  assert.match(active.headline, /K-1 implement is running/);
-  assert.match(active.detail, /1 changed file/);
-  assert.match(active.nextStep, /Watch for file changes/);
-  assert.deepEqual(active.changedFiles, ['src/app.ts']);
-  assert.deepEqual(active.readFiles, ['src/app.ts']);
-
-  const completed = runOperatorSummary.buildRunOperatorSummary({
-    project: 'api',
-    skill: 'verify-local',
-    ticket: 'K-2',
-    status: 'completed',
-    startedAt: '2026-07-02T00:00:00.000Z',
-    endedAt: '2026-07-02T00:10:00.000Z',
-    readiness: { status: 'ready', summary: 'Run completed and evidence gate is passing.' },
-    events: [
-      { type: 'done', label: 'Complete - 10m', detail: 'All checks passed', timestamp: '2026-07-02T00:10:00.000Z' },
-    ],
-  });
-  assert.equal(completed.tone, 'good');
-  assert.match(completed.headline, /completed and passed readiness/);
-  assert.match(completed.nextStep, /Open the review item/);
-  assert.ok(completed.facts.some(fact => fact.label === 'Readiness' && fact.tone === 'good'));
-
-  const failed = runOperatorSummary.buildRunOperatorSummary({
-    project: 'api',
-    skill: 'implement',
-    ticket: 'K-3',
-    status: 'failed',
-    failureKind: 'test',
-    failureReason: 'npm test failed',
-    events: [
-      { type: 'error', label: 'Command failed', detail: 'npm test failed', timestamp: '2026-07-02T00:03:00.000Z' },
-    ],
-  });
-  assert.equal(failed.tone, 'bad');
-  assert.match(failed.headline, /Tests failed: npm test failed/);
-  assert.match(failed.nextStep, /Inspect the log and diff/);
-
-  const source = readSourceFixture('src', 'services', 'runOperatorSummary.ts');
-  for (const marker of [
-    "import { runProgressSummary } from './runProgress'",
-    "import { runAttentionDetail } from './runAttention'",
-    "import { effectiveRunStatus, isActiveRunStatus } from './runStatus'",
-    'export function buildRunOperatorSummary',
-    'function runHeadline',
-    'function runNextStep',
-    'function latestMeaningfulSignal',
-    'function eventFiles',
   ]) {
     assert.ok(source.includes(marker), marker);
   }

@@ -16,14 +16,11 @@
   var webviewName = script && script.getAttribute('data-kronos-webview-name') || 'Kronos action panel';
   var readyCommand = script && script.getAttribute('data-kronos-ready-command') || '';
   var root = typeof globalThis === 'object' ? globalThis : window;
-  var runtime = root.KronosWebviewRuntime;
+  var runtime = null;
+  var runtimeAttempts = 0;
+  var maxRuntimeAttempts = 20;
+  var postReady = function() {};
   var fields = [];
-
-  if (!runtime) {
-    console.error('Kronos webview runtime unavailable', webviewName);
-    return;
-  }
-  var postReady = runtime.createReadyPoster({ readyCommand: readyCommand, webviewName: webviewName });
 
   function parseFields() {
     var raw = script && script.getAttribute('data-kronos-action-fields') || '[]';
@@ -89,15 +86,36 @@
   }
 
   parseFields();
-  runtime.markReady(webviewName);
-  if (!claimKronosActionHandler()) {
-    setTimeout(postReady, 0);
-    return;
+
+  function startKronosActionPanel(runtimeApi) {
+    runtime = runtimeApi;
+    postReady = runtime.createReadyPoster({ readyCommand: readyCommand, webviewName: webviewName });
+    runtime.markReady(webviewName);
+    if (!claimKronosActionHandler()) {
+      setTimeout(postReady, 0);
+      return;
+    }
+    runtime.installDiagnostics(webviewName);
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', attachKronosActionHandler, { once: true });
+    } else {
+      attachKronosActionHandler();
+    }
   }
-  runtime.installDiagnostics(webviewName);
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', attachKronosActionHandler, { once: true });
-  } else {
-    attachKronosActionHandler();
+
+  function waitForKronosActionRuntime() {
+    var runtimeApi = root.KronosWebviewRuntime;
+    if (runtimeApi) {
+      startKronosActionPanel(runtimeApi);
+      return;
+    }
+    runtimeAttempts += 1;
+    if (runtimeAttempts < maxRuntimeAttempts) {
+      setTimeout(waitForKronosActionRuntime, 50);
+      return;
+    }
+    console.error('Kronos webview runtime unavailable', webviewName);
   }
+
+  waitForKronosActionRuntime();
 }());

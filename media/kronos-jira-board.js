@@ -16,16 +16,13 @@
   var webviewName = script && script.getAttribute('data-kronos-webview-name') || 'Kronos Jira Board';
   var readyCommand = script && script.getAttribute('data-kronos-ready-command') || '';
   var root = typeof globalThis === 'object' ? globalThis : window;
-  var runtime = root.KronosWebviewRuntime;
+  var runtime = null;
+  var runtimeAttempts = 0;
+  var maxRuntimeAttempts = 20;
+  var postReady = function() {};
   var currentModalKey = '';
   var lastFocusedEl = null;
   var ticketData = {};
-
-  if (!runtime) {
-    console.error('Kronos webview runtime unavailable', webviewName);
-    return;
-  }
-  var postReady = runtime.createReadyPoster({ readyCommand: readyCommand, webviewName: webviewName });
 
   function byId(id) { return document.getElementById(id); }
 
@@ -338,11 +335,31 @@
     setTimeout(postReady, 0);
   }
 
-  runtime.markReady(webviewName);
-  runtime.installDiagnostics(webviewName);
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initKronosJiraBoard, { once: true });
-  } else {
-    initKronosJiraBoard();
+  function startKronosJiraBoard(runtimeApi) {
+    runtime = runtimeApi;
+    postReady = runtime.createReadyPoster({ readyCommand: readyCommand, webviewName: webviewName });
+    runtime.markReady(webviewName);
+    runtime.installDiagnostics(webviewName);
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initKronosJiraBoard, { once: true });
+    } else {
+      initKronosJiraBoard();
+    }
   }
+
+  function waitForKronosJiraBoardRuntime() {
+    var runtimeApi = root.KronosWebviewRuntime;
+    if (runtimeApi) {
+      startKronosJiraBoard(runtimeApi);
+      return;
+    }
+    runtimeAttempts += 1;
+    if (runtimeAttempts < maxRuntimeAttempts) {
+      setTimeout(waitForKronosJiraBoardRuntime, 50);
+      return;
+    }
+    console.error('Kronos webview runtime unavailable', webviewName);
+  }
+
+  waitForKronosJiraBoardRuntime();
 }());
