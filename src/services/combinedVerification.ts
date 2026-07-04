@@ -1,11 +1,11 @@
 import { MergeRequest } from '../state/types';
 
-export interface CombinedVerificationTicket {
+interface CombinedVerificationTicket {
   key: string;
   mr: MergeRequest;
 }
 
-export interface CombinedVerificationPlan {
+interface CombinedVerificationPlan {
   ticketKey: string;
   mrIid?: number;
   branch: string;
@@ -13,13 +13,13 @@ export interface CombinedVerificationPlan {
   branchTableRow: string;
 }
 
-export interface CombinedVerificationPromptVars {
+interface CombinedVerificationPromptVars {
   ticketKeys: string;
   mergeCommands: string;
   branchTable: string;
 }
 
-export function sanitizeGitBranchRef(value: string | undefined): string | null {
+function sanitizeGitBranchRef(value: string | undefined): string | null {
   const normalized = String(value || '')
     .trim()
     .replace(/^refs\/heads\//, '')
@@ -41,7 +41,7 @@ function branchCandidates(ticket: CombinedVerificationTicket): Array<string | un
   ];
 }
 
-export function resolveReviewBranch(ticket: CombinedVerificationTicket): string {
+function resolveReviewBranch(ticket: CombinedVerificationTicket): string {
   for (const candidate of branchCandidates(ticket)) {
     const branch = sanitizeGitBranchRef(candidate);
     if (branch) { return branch; }
@@ -49,7 +49,7 @@ export function resolveReviewBranch(ticket: CombinedVerificationTicket): string 
   return ticket.key.replace(/[^A-Za-z0-9._/-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown-branch';
 }
 
-export function mergeRefsForBranch(branch: string): string[] {
+function mergeRefsForBranch(branch: string): string[] {
   const refs = [`origin/${branch}`];
   if (!branch.startsWith('defect/')) {
     refs.push(`origin/defect/${branch}`);

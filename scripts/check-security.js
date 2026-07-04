@@ -2621,9 +2621,9 @@ if (cliProbes.includes("args: ['/d', '/s', '/c', shellLine]")) {
 }
 
 for (const marker of [
-  'export function sanitizeGitBranchRef',
-  'export function resolveReviewBranch',
-  'export function mergeRefsForBranch',
+  'function sanitizeGitBranchRef',
+  'function resolveReviewBranch',
+  'function mergeRefsForBranch',
   'export function buildCombinedVerificationPlan',
   'export function buildCombinedVerificationPromptVars',
   'mr.source_branch',
