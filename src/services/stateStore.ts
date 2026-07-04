@@ -110,7 +110,7 @@ export function readQueueFile(): QueueState | null {
   return migrated;
 }
 
-export function migrateStateFileShape(raw: unknown): KronosState {
+function migrateStateFileShape(raw: unknown): KronosState {
   if (!isPlainObject(raw)) {
     throw new Error('state.json must be an object');
   }
@@ -194,7 +194,7 @@ function migrateTicketEvidence(evidence: unknown): TicketEvidence | undefined {
   return migrated;
 }
 
-export function migrateQueueFileShape(raw: unknown): QueueState {
+function migrateQueueFileShape(raw: unknown): QueueState {
   if (!isPlainObject(raw)) {
     throw new Error('queue.json must be an object');
   }

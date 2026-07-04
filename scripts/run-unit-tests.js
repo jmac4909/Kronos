@@ -701,18 +701,15 @@ test('state store migrates legacy state shape before validation and reads', () =
     },
   };
 
-  const migrated = stateStore.migrateStateFileShape(legacy);
-  assert.equal(migrated.version, 1);
-  assert.deepEqual(migrated.settings.scan_dirs, []);
-  assert.equal(migrated.projects.app.health, 'gray');
-  assert.equal(migrated.projects.app.open_mr_count, 0);
-  assert.deepEqual(migrated.tickets['K-1'].projects, []);
-  assert.equal(migrated.tickets['K-1'].type, 'Story');
-  assert.equal(migrated.tickets['K-1'].next_action, 'implement');
-  assert.doesNotThrow(() => stateStore.validateStateFileShape(migrated));
-
   fs.writeFileSync(stateStore.STATE_FILE, JSON.stringify(legacy, null, 2));
   const read = stateStore.readStateFile();
+  assert.equal(read.version, 1);
+  assert.deepEqual(read.settings.scan_dirs, []);
+  assert.equal(read.projects.app.health, 'gray');
+  assert.equal(read.projects.app.open_mr_count, 0);
+  assert.deepEqual(read.tickets['K-1'].projects, []);
+  assert.equal(read.tickets['K-1'].type, 'Story');
+  assert.equal(read.tickets['K-1'].next_action, 'implement');
   assert.equal(read.tickets['K-1'].priority, 'Medium');
 });
 
@@ -784,9 +781,9 @@ test('state store load issues normalize unknown errors', () => {
 test('state store migrations keep raw JSON payloads unknown until normalized', () => {
   const source = readSourceFixture('src', 'services', 'stateStore.ts');
   for (const marker of [
-    'export function migrateStateFileShape(raw: unknown): KronosState',
+    'function migrateStateFileShape(raw: unknown): KronosState',
     'function migrateTicketEvidence(evidence: unknown): TicketEvidence | undefined',
-    'export function migrateQueueFileShape(raw: unknown): QueueState',
+    'function migrateQueueFileShape(raw: unknown): QueueState',
     'function migrateQueueItemShape(item: unknown, idx: number): QueueItem',
   ]) {
     assert.ok(source.includes(marker), marker);
@@ -868,6 +865,8 @@ test('KronosState load issues normalize unknown errors', () => {
     'catch (e: any)',
     'e?.message',
     '} catch {}',
+    'export function migrateStateFileShape',
+    'export function migrateQueueFileShape',
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }
@@ -881,17 +880,14 @@ test('state store migrates legacy queue shape before validation and reads', () =
     ],
   };
 
-  const migrated = stateStore.migrateQueueFileShape(legacyQueue);
-  assert.equal(migrated.last_computed, null);
-  assert.equal(migrated.items[0].id, 'queued-K-1-0');
-  assert.deepEqual(migrated.items[0].projects, ['app']);
-  assert.equal(migrated.items[0].priority_score, 0);
-  assert.equal(migrated.items[1].project_path, '/repo/api');
-  assert.deepEqual(migrated.items[1].projects, ['api']);
-  assert.doesNotThrow(() => stateStore.validateQueueState(migrated));
-
   fs.writeFileSync(stateStore.QUEUE_FILE, JSON.stringify(legacyQueue, null, 2));
   const read = stateStore.readQueueFile();
+  assert.equal(read.last_computed, null);
+  assert.equal(read.items[0].id, 'queued-K-1-0');
+  assert.deepEqual(read.items[0].projects, ['app']);
+  assert.equal(read.items[0].priority_score, 0);
+  assert.equal(read.items[1].project_path, '/repo/api');
+  assert.deepEqual(read.items[1].projects, ['api']);
   assert.equal(read.items[0].action, 'verify');
   assert.equal(read.items[1].reason, 'Migrated queue item for K-2');
 });
