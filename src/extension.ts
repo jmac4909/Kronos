@@ -77,6 +77,7 @@ import { buildDiscoveryQuickPickEntries, discoveryCandidateNeedsJiraKey, type Di
 import { buildPromptWorkspaceModel, promptHistoryTemplatesForProjects } from './services/promptWorkspaceModel';
 import { buildSonarReport } from './services/sonarReportView';
 import { buildSonarBranchPickItems, buildSonarFixBranchStrategy, buildSonarFixInstructionBlock } from './services/sonarCommandPlan';
+import { buildRegisteredProjectItems, buildTicketGroupProjectItems, buildTicketProjectItems, groupTicketsByProject } from './services/projectSelection';
 import { buildAgingReportHtml } from './services/agingReportView';
 import { buildTicketHtml } from './services/ticketPanelView';
 import { buildDashboardHtml } from './services/dashboardPanelView';
@@ -4614,28 +4615,23 @@ async function pickTicketProjectNameForDispatch(
   }
   if (projects.length === 1) { return projects[0]; }
   const picked = await vscode.window.showQuickPick(
-    projects.map(projectName => ({
-      label: projectName,
-      description: state.state?.projects[projectName]?.path || 'Project is not registered',
-    })),
+    buildTicketProjectItems(projects, state.state?.projects),
     { placeHolder },
   );
   return picked?.label;
 }
 
 async function pickProjectName(state: KronosState, placeHolder: string): Promise<string | undefined> {
-  const projects = Object.entries(state.state?.projects || {});
+  const projects = buildRegisteredProjectItems(state.state?.projects);
   if (projects.length === 0) {
     vscode.window.showWarningMessage('No projects registered.');
     return undefined;
   }
   if (projects.length === 1) {
-    return projects[0]?.[0];
+    return projects[0]?.label;
   }
   const picked = await vscode.window.showQuickPick(
-    projects
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([label, project]) => ({ label, description: project.path || '' })),
+    projects,
     { placeHolder }
   );
   return picked?.label;
@@ -4898,14 +4894,7 @@ async function pickProjectFromTickets<T extends { key: string; projects: string[
   placeHolder: string,
   countLabel = 'tickets',
 ): Promise<{ projectName: string; projectPath: string; tickets: T[] } | null> {
-  const byProject: Record<string, T[]> = {};
-  for (const t of tickets) {
-    for (const p of t.projects) {
-      const bucket = byProject[p] || [];
-      if (!bucket.some(x => x.key === t.key)) { bucket.push(t); }
-      byProject[p] = bucket;
-    }
-  }
+  const byProject = groupTicketsByProject(tickets);
 
   let projectName: string;
   const projectNames = Object.keys(byProject);
@@ -4917,7 +4906,7 @@ async function pickProjectFromTickets<T extends { key: string; projects: string[
   }
   else {
     const pick = await vscode.window.showQuickPick(
-      projectNames.map(p => ({ label: p, description: `${(byProject[p] || []).length} ${countLabel}` })),
+      buildTicketGroupProjectItems(byProject, countLabel),
       { placeHolder }
     );
     if (!pick) { return null; }

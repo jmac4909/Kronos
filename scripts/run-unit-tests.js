@@ -195,6 +195,7 @@ const agentQualityScore = require('../out/services/agentQualityScore.js');
 const dashboardWorklist = require('../out/services/dashboardWorklist.js');
 const integrationManifest = require('../out/services/integrationManifest.js');
 const profileManager = require('../out/services/profileManager.js');
+const projectSelection = require('../out/services/projectSelection.js');
 const agingAnalyzer = require('../out/services/agingAnalyzer.js');
 const safetyGate = require('../out/services/safetyGate.js');
 const trendMetrics = require('../out/services/trendMetrics.js');
@@ -3906,6 +3907,32 @@ test('command payload helpers normalize tree, webview, queue, and run payloads',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+});
+
+test('project selection helpers build project and ticket group picks', () => {
+  assert.deepEqual(projectSelection.buildRegisteredProjectItems({
+    web: { path: '/repo/web' },
+    api: { path: '/repo/api' },
+  }), [
+    { label: 'api', description: '/repo/api' },
+    { label: 'web', description: '/repo/web' },
+  ]);
+  assert.deepEqual(projectSelection.buildTicketProjectItems(['api', 'missing'], { api: { path: '/repo/api' } }), [
+    { label: 'api', description: '/repo/api' },
+    { label: 'missing', description: 'Project is not registered' },
+  ]);
+
+  const grouped = projectSelection.groupTicketsByProject([
+    { key: 'K-1', projects: ['api', 'web', 'api'] },
+    { key: 'K-2', projects: ['api'] },
+  ]);
+  assert.deepEqual(Object.keys(grouped), ['api', 'web']);
+  assert.deepEqual(grouped.api.map(item => item.key), ['K-1', 'K-2']);
+  assert.deepEqual(grouped.web.map(item => item.key), ['K-1']);
+  assert.deepEqual(projectSelection.buildTicketGroupProjectItems(grouped, 'tickets'), [
+    { label: 'api', description: '2 tickets' },
+    { label: 'web', description: '1 tickets' },
+  ]);
 });
 
 test('date value helper centralizes valid date coercion', () => {
@@ -10356,6 +10383,10 @@ test('extension dispatch command handlers normalize tree payloads before use', (
     'async function pickTicketProjectNameForDispatch(',
     'if (!ticketKey) {\n      return pickProjectName(state, placeHolder);\n    }',
     'ticketProjectNamesForCommand,',
+    'buildTicketProjectItems(projects, state.state?.projects)',
+    'const projects = buildRegisteredProjectItems(state.state?.projects)',
+    'const byProject = groupTicketsByProject(tickets)',
+    'buildTicketGroupProjectItems(byProject, countLabel)',
     'const ticketKey = resolveTicketKey(item);',
     'const taskId = resolveTaskId(item);',
     "await startClaudeDispatch(projectPath, 'verify-fix', ticketKey,",

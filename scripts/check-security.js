@@ -99,6 +99,7 @@ const queuePlanner = readSource('src/services/queuePlanner.ts');
 const queueDispatchPlan = readSource('src/services/queueDispatchPlan.ts');
 const actionCatalog = readSource('src/services/actionCatalog.ts');
 const actionSemantics = readSource('src/services/actionSemantics.ts');
+const projectSelection = readSource('src/services/projectSelection.ts');
 const severityRank = readSource('src/services/severityRank.ts');
 const records = readSource('src/services/records.ts');
 const commandPayloads = readSource('src/services/commandPayloads.ts');
@@ -1401,6 +1402,10 @@ for (const marker of [
   'async function pickTicketProjectNameForDispatch(',
   'if (!ticketKey) {\n      return pickProjectName(state, placeHolder);\n    }',
   'ticketProjectNamesForCommand,',
+  'buildTicketProjectItems(projects, state.state?.projects)',
+  'const projects = buildRegisteredProjectItems(state.state?.projects)',
+  'const byProject = groupTicketsByProject(tickets)',
+  'buildTicketGroupProjectItems(byProject, countLabel)',
   "vscode.commands.registerCommand('kronos.implement', async (item: unknown)",
   "vscode.commands.registerCommand('kronos.deployMonitor', async (item: unknown)",
   'const projectName = await pickTicketProjectNameForDispatch(',
@@ -1504,6 +1509,16 @@ for (const marker of [
 ]) {
   if (!commandPayloads.includes(marker)) {
     fail(`Missing command payload helper marker: ${marker}`);
+  }
+}
+for (const marker of [
+  'export function buildRegisteredProjectItems',
+  'export function buildTicketProjectItems',
+  'export function groupTicketsByProject',
+  'export function buildTicketGroupProjectItems',
+]) {
+  if (!projectSelection.includes(marker)) {
+    fail(`Missing project selection helper marker: ${marker}`);
   }
 }
 for (const marker of [
