@@ -47,6 +47,18 @@ interface RunStoreRepairResult {
   runs: RunRecord[];
 }
 
+interface RunRecoveryMutation {
+  status: string;
+  defaultReason: string;
+  action: string;
+  label: string;
+  setFailureReason?: boolean;
+  failureKind?: string;
+  fallbackFailureKind?: string;
+  endedAt?: boolean;
+  timestampField?: 'pausedAt' | 'resumedAt';
+}
+
 export function runRecordPath(runId: string): string {
   return path.join(RUNS_DIR, `${safeRunId(runId)}.json`);
 }
@@ -99,61 +111,72 @@ export function writeRunRecord(run: RunRecord): void {
 }
 
 export function markRunNeedsHuman(runId: string, reason: string, now = new Date()): RunRecord {
-  const run = readRequiredRunRecord(runId);
-  const at = now.toISOString();
-  const detail = reason.trim() || 'Marked needs-human by operator.';
-  run.status = 'needs_human';
-  run.failureReason = detail;
-  run.failureKind = run.failureKind || 'unknown';
-  run.endedAt = run.endedAt || at;
-  run.recoveryActions = Array.isArray(run.recoveryActions) ? run.recoveryActions : [];
-  run.recoveryActions.push({ at, action: 'mark-needs-human', reason: detail });
-  run.events = Array.isArray(run.events) ? run.events : [];
-  run.events.push({ type: 'recovery', label: 'Marked needs human', detail, timestamp: at });
-  writeRunRecord(run);
-  return run;
+  return markRunRecovery(runId, reason, now, {
+    status: 'needs_human',
+    defaultReason: 'Marked needs-human by operator.',
+    action: 'mark-needs-human',
+    label: 'Marked needs human',
+    setFailureReason: true,
+    fallbackFailureKind: 'unknown',
+    endedAt: true,
+  });
 }
 
 export function markRunCancelled(runId: string, reason: string, now = new Date()): RunRecord {
-  const run = readRequiredRunRecord(runId);
-  const at = now.toISOString();
-  const detail = reason.trim() || 'Cancelled by operator.';
-  run.status = 'cancelled';
-  run.failureReason = detail;
-  run.failureKind = 'cancelled';
-  run.endedAt = run.endedAt || at;
-  run.recoveryActions = Array.isArray(run.recoveryActions) ? run.recoveryActions : [];
-  run.recoveryActions.push({ at, action: 'cancel-run', reason: detail });
-  run.events = Array.isArray(run.events) ? run.events : [];
-  run.events.push({ type: 'recovery', label: 'Run cancelled', detail, timestamp: at });
-  writeRunRecord(run);
-  return run;
+  return markRunRecovery(runId, reason, now, {
+    status: 'cancelled',
+    defaultReason: 'Cancelled by operator.',
+    action: 'cancel-run',
+    label: 'Run cancelled',
+    setFailureReason: true,
+    failureKind: 'cancelled',
+    endedAt: true,
+  });
 }
 
 export function markRunPaused(runId: string, reason: string, now = new Date()): RunRecord {
-  const run = readRequiredRunRecord(runId);
-  const at = now.toISOString();
-  const detail = reason.trim() || 'Paused by operator.';
-  run.status = 'paused';
-  run.pausedAt = at;
-  run.recoveryActions = Array.isArray(run.recoveryActions) ? run.recoveryActions : [];
-  run.recoveryActions.push({ at, action: 'pause-run', reason: detail });
-  run.events = Array.isArray(run.events) ? run.events : [];
-  run.events.push({ type: 'recovery', label: 'Run paused', detail, timestamp: at });
-  writeRunRecord(run);
-  return run;
+  return markRunRecovery(runId, reason, now, {
+    status: 'paused',
+    defaultReason: 'Paused by operator.',
+    action: 'pause-run',
+    label: 'Run paused',
+    timestampField: 'pausedAt',
+  });
 }
 
 export function markRunContinued(runId: string, reason: string, now = new Date()): RunRecord {
+  return markRunRecovery(runId, reason, now, {
+    status: 'running',
+    defaultReason: 'Continued by operator.',
+    action: 'continue-run',
+    label: 'Run continued',
+    timestampField: 'resumedAt',
+  });
+}
+
+function markRunRecovery(runId: string, reason: string, now: Date, mutation: RunRecoveryMutation): RunRecord {
   const run = readRequiredRunRecord(runId);
   const at = now.toISOString();
-  const detail = reason.trim() || 'Continued by operator.';
-  run.status = 'running';
-  run.resumedAt = at;
+  const detail = reason.trim() || mutation.defaultReason;
+  run.status = mutation.status;
+  if (mutation.setFailureReason) {
+    run.failureReason = detail;
+  }
+  if (mutation.failureKind) {
+    run.failureKind = mutation.failureKind;
+  } else if (mutation.fallbackFailureKind) {
+    run.failureKind = run.failureKind || mutation.fallbackFailureKind;
+  }
+  if (mutation.endedAt) {
+    run.endedAt = run.endedAt || at;
+  }
+  if (mutation.timestampField) {
+    run[mutation.timestampField] = at;
+  }
   run.recoveryActions = Array.isArray(run.recoveryActions) ? run.recoveryActions : [];
-  run.recoveryActions.push({ at, action: 'continue-run', reason: detail });
+  run.recoveryActions.push({ at, action: mutation.action, reason: detail });
   run.events = Array.isArray(run.events) ? run.events : [];
-  run.events.push({ type: 'recovery', label: 'Run continued', detail, timestamp: at });
+  run.events.push({ type: 'recovery', label: mutation.label, detail, timestamp: at });
   writeRunRecord(run);
   return run;
 }
