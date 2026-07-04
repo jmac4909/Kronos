@@ -139,7 +139,7 @@ export const sonarAdapter = {
   },
 };
 
-export function normalizeSonarBranches(value: unknown): SonarBranch[] {
+function normalizeSonarBranches(value: unknown): SonarBranch[] {
   if (!Array.isArray(value)) { return []; }
   const normalized: SonarBranch[] = [];
   for (const item of value) {
@@ -151,7 +151,7 @@ export function normalizeSonarBranches(value: unknown): SonarBranch[] {
   return normalized;
 }
 
-export function normalizeJiraComments(value: unknown): JiraComment[] {
+function normalizeJiraComments(value: unknown): JiraComment[] {
   const rawComments = Array.isArray(value)
     ? value
     : isRecord(value) && Array.isArray(value['comments'])
@@ -295,7 +295,7 @@ function isUnsupportedMergeRequestStatusText(value: string): boolean {
     && /(unrecognized|unknown|unsupported|not implemented|no such option|invalid choice)/.test(message);
 }
 
-export function normalizeMergeRequestComments(value: unknown): MergeRequestComment[] {
+function normalizeMergeRequestComments(value: unknown): MergeRequestComment[] {
   if (!Array.isArray(value)) { return []; }
   const flattened = value.flatMap(item => isRecord(item) && Array.isArray(item['notes']) ? item['notes'] : [item]);
   return flattened.slice(0, 100).map(normalizeMergeRequestComment);

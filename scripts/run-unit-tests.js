@@ -6396,22 +6396,26 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
     }, 'K-500'),
     /upstream timeout/
   );
-  assert.deepEqual(integrationAdapters.normalizeJiraComments({
-    comments: [
-      'plain text',
-      null,
-      { body: ' hello ', author: { displayName: ' Ada ' }, created: ' 2026-07-01 ' },
-      { renderedBody: 'rendered', author: { name: 'jira-user' }, authorName: ' A. User ' },
-      { body: 42 },
-    ],
-  }), [
+  assert.deepEqual(await integrationAdapters.jiraAdapter.ticketComments({
+    runScript: async () => JSON.stringify({
+      comments: [
+        'plain text',
+        null,
+        { body: ' hello ', author: { displayName: ' Ada ' }, created: ' 2026-07-01 ' },
+        { renderedBody: 'rendered', author: { name: 'jira-user' }, authorName: ' A. User ' },
+        { body: 42 },
+      ],
+    }),
+  }, 'K-8'), [
     { body: 'plain text' },
     { body: '' },
     { author: 'Ada', created: '2026-07-01', body: 'hello' },
     { author: 'jira-user', authorName: 'A. User', body: 'rendered' },
     { body: '' },
   ]);
-  assert.deepEqual(integrationAdapters.normalizeJiraComments({ comments: 'bad' }), []);
+  assert.deepEqual(await integrationAdapters.jiraAdapter.ticketComments({
+    runScript: async () => JSON.stringify({ comments: 'bad' }),
+  }, 'K-8'), []);
   assert.deepEqual(integrationAdapters.normalizeMergeRequestStatus({
     mr: { state: 'open', approved: true, author: { name: 'Ada' }, branch: ' feature/K-8 ' },
     discussions: [
@@ -6502,7 +6506,9 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
     state: 'opened',
     review_status: 'pending_review',
   });
-  assert.deepEqual(integrationAdapters.normalizeMergeRequestComments(['plain', { body: 42 }]), [{ body: 'plain' }, { body: '' }]);
+  assert.deepEqual(integrationAdapters.normalizeMergeRequestStatus({
+    comments: ['plain', { body: 42 }],
+  }).comments, [{ body: 'plain' }, { body: '' }]);
   await assert.rejects(
     () => integrationAdapters.jiraAdapter.ticketComments({ runScript: async () => 'not json' }, 'K-8'),
     /Invalid JSON from Jira comments/
@@ -6525,19 +6531,30 @@ test('integration adapters wrap selected Jira, GitLab, and Sonar script contract
   assert.deepEqual(nullDiff.files, []);
   assert.equal(await integrationAdapters.gitlabAdapter.mergeRequestBranch({ runScript: async () => JSON.stringify({ branch: ' feature/K-8 ' }) }, 'K-8'), 'feature/K-8');
   assert.equal(await integrationAdapters.gitlabAdapter.mergeRequestBranch({ runScript: async () => 'null' }, 'K-8'), 'K-8');
-  assert.deepEqual(integrationAdapters.normalizeSonarBranches([
-    null,
-    '',
-    ' develop ',
-    { name: ' feature/K-7 ', isMain: true, status: { qualityGateStatus: ' OK ' } },
-    { name: 42, status: { qualityGateStatus: 'ERROR' } },
-    { name: 'broken-status', status: { qualityGateStatus: 12 } },
-  ]), [
-    { name: 'develop', isMain: false },
-    { name: 'feature/K-7', isMain: true, status: { qualityGateStatus: 'OK' } },
-    { name: 'broken-status', isMain: false },
-  ]);
-  assert.deepEqual(integrationAdapters.normalizeSonarBranches({ branches: [] }), []);
+  const originalRunPipelineJson = scriptClient.runPipelineJson;
+  try {
+    scriptClient.runPipelineJson = async () => ({
+      branches: [
+        null,
+        '',
+        ' develop ',
+        { name: ' feature/K-7 ', isMain: true, status: { qualityGateStatus: ' OK ' } },
+        { name: 42, status: { qualityGateStatus: 'ERROR' } },
+        { name: 'broken-status', status: { qualityGateStatus: 12 } },
+      ],
+    });
+    assert.deepEqual(await integrationAdapters.sonarAdapter.branches('app'), {
+      branches: [
+        { name: 'develop', isMain: false },
+        { name: 'feature/K-7', isMain: true, status: { qualityGateStatus: 'OK' } },
+        { name: 'broken-status', isMain: false },
+      ],
+    });
+    scriptClient.runPipelineJson = async () => ({ branches: { branches: [] } });
+    assert.deepEqual(await integrationAdapters.sonarAdapter.branches('app'), { branches: [] });
+  } finally {
+    scriptClient.runPipelineJson = originalRunPipelineJson;
+  }
 
   await assert.rejects(
     () => integrationAdapters.gitlabAdapter.mergeRequestDiff({ runScript: async () => '{"error":"not found"}' }, 'K-8'),
