@@ -3118,9 +3118,18 @@ test('sonar report view renders escaped report data and command buttons', () => 
     measures: null,
     issues: null,
   }));
-  assert.equal(sonarReportView.sonarGateStatus(null), 'UNKNOWN');
-  assert.deepEqual(sonarReportView.sonarConditionList({ projectStatus: { conditions: 'bad' } }), []);
-  assert.deepEqual(sonarReportView.sonarMeasureList({ measures: 'bad' }), []);
+  const unknownReport = sonarReportView.buildSonarReport({
+    projectName: 'app',
+    branch: 'main',
+    sonarKey: 'app',
+    nonce: 'n',
+    gate: null,
+    measures: { measures: 'bad' },
+    issues: {},
+  });
+  assert.match(unknownReport.html, /Quality Gate: UNKNOWN/);
+  assert.doesNotMatch(unknownReport.html, /Gate Conditions/);
+  assert.match(unknownReport.html, /No metrics available/);
 
   const nonHttpDashboard = sonarReportView.buildSonarReport({
     projectName: 'app',

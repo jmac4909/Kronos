@@ -1,7 +1,7 @@
 import { escapeAttr, escapeClass, escapeHtml, kronosWebviewBaseCss } from './webviewHtml';
 import { webviewVsCodeApiScript } from './webviewSecurity';
 
-export interface SonarReportRenderInput {
+interface SonarReportRenderInput {
   projectName: string;
   branch: string;
   sonarKey: string;
@@ -12,13 +12,13 @@ export interface SonarReportRenderInput {
   nonce: string;
 }
 
-export interface SonarReportRenderResult {
+interface SonarReportRenderResult {
   html: string;
   dashboardUrl?: string;
   issueList: SonarIssue[];
 }
 
-export interface SonarCondition {
+interface SonarCondition {
   status?: string;
   metricKey?: string;
   comparator?: string;
@@ -26,7 +26,7 @@ export interface SonarCondition {
   actualValue?: unknown;
 }
 
-export interface SonarMeasure {
+interface SonarMeasure {
   metric?: string;
   value?: unknown;
   period?: {
@@ -42,7 +42,7 @@ export interface SonarIssue {
   message?: string;
 }
 
-export function buildSonarDashboardUrl(host: string | undefined, sonarKey: string, branch: string): string | undefined {
+function buildSonarDashboardUrl(host: string | undefined, sonarKey: string, branch: string): string | undefined {
   if (!host) { return undefined; }
   try {
     const base = new URL(host);
@@ -61,7 +61,7 @@ export function buildSonarDashboardUrl(host: string | undefined, sonarKey: strin
   }
 }
 
-export function formatSonarMetricName(key: string): string {
+function formatSonarMetricName(key: string): string {
   return key.replace(/_/g, ' ').replace(/\bnew\b/g, 'New').replace(/\b\w/g, c => c.toUpperCase());
 }
 
@@ -76,7 +76,7 @@ function projectStatusRecord(gate: unknown): Record<string, unknown> {
   return {};
 }
 
-export function sonarGateStatus(gate: unknown): string {
+function sonarGateStatus(gate: unknown): string {
   const projectStatus = projectStatusRecord(gate);
   if (typeof projectStatus['status'] === 'string' && projectStatus['status'].trim()) {
     return projectStatus['status'];
@@ -87,7 +87,7 @@ export function sonarGateStatus(gate: unknown): string {
   return 'UNKNOWN';
 }
 
-export function sonarConditionList(gate: unknown): SonarCondition[] {
+function sonarConditionList(gate: unknown): SonarCondition[] {
   const projectStatus = projectStatusRecord(gate);
   if (!Array.isArray(projectStatus['conditions'])) { return []; }
   return projectStatus['conditions'].filter(isRecord).map(condition => {
@@ -102,7 +102,7 @@ export function sonarConditionList(gate: unknown): SonarCondition[] {
   });
 }
 
-export function sonarMeasureList(measures: unknown): SonarMeasure[] {
+function sonarMeasureList(measures: unknown): SonarMeasure[] {
   if (!isRecord(measures)) { return []; }
   const component = isRecord(measures['component']) ? measures['component'] : undefined;
   const componentMeasures = component && Array.isArray(component['measures'])
@@ -117,7 +117,7 @@ export function sonarMeasureList(measures: unknown): SonarMeasure[] {
   });
 }
 
-export function sonarIssueList(issues: unknown): SonarIssue[] {
+function sonarIssueList(issues: unknown): SonarIssue[] {
   if (!isRecord(issues) || !Array.isArray(issues['issues'])) { return []; }
   return issues['issues'].filter(isRecord).map(issue => {
     const normalized: SonarIssue = { line: issue['line'] };
