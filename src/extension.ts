@@ -1436,7 +1436,45 @@ export function activate(context: vscode.ExtensionContext) {
       startStatusBarRunRefresh(state, sessionPollMs),
     ];
   };
-  startRuntimePolling();
+  const notifyStateLoadIssues = () => {
+    if (state.loadIssues.length === 0) { return; }
+    const loaded = state.state ? 'loaded with warnings' : 'could not load state.json';
+    runNotificationCommandAction(
+      vscode.window.showWarningMessage(`Kronos ${loaded}. Run Doctor for details.`, 'Run Doctor'),
+      'Run Doctor',
+      'kronos.doctor',
+      'Failed to open Kronos Doctor.'
+    );
+  };
+  const runStartupSideEffects = () => {
+    startRuntimePolling();
+    notifyStateLoadIssues();
+    if (!state.state || Object.keys(state.state.projects).length === 0) {
+      runNotificationCommandAction(
+        vscode.window.showInformationMessage(
+          'Welcome to Kronos! Run setup to configure auth and scan for projects.',
+          'Run Setup', 'Later'
+        ),
+        'Run Setup',
+        'kronos.setup',
+        'Failed to start Kronos setup.'
+      );
+    }
+
+    // Report stale worktrees from previous sessions without deleting anything automatically.
+    const cleanupPreview = cleanupStaleWorktrees({ remove: false });
+    if (cleanupPreview.removable > 0 || cleanupPreview.blocked > 0) {
+      runNotificationCommandAction(
+        vscode.window.showWarningMessage(
+          `Kronos found ${cleanupPreview.results.length} tracked worktree(s): ${cleanupPreview.removable} clean, ${cleanupPreview.blocked} need review.`,
+          'Review Cleanup'
+        ),
+        'Review Cleanup',
+        'kronos.cleanupWorktrees',
+        'Failed to open Kronos worktree cleanup.'
+      );
+    }
+  };
   context.subscriptions.push(
     { dispose: stopRuntimePolling },
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -1451,15 +1489,6 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
   );
-  if (state.loadIssues.length > 0) {
-    const loaded = state.state ? 'loaded with warnings' : 'could not load state.json';
-    runNotificationCommandAction(
-      vscode.window.showWarningMessage(`Kronos ${loaded}. Run Doctor for details.`, 'Run Doctor'),
-      'Run Doctor',
-      'kronos.doctor',
-      'Failed to open Kronos Doctor.'
-    );
-  }
 
   // --- Commands ---
 
@@ -3743,32 +3772,8 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // First-run detection
-  if (!state.state || Object.keys(state.state.projects).length === 0) {
-    runNotificationCommandAction(
-      vscode.window.showInformationMessage(
-        'Welcome to Kronos! Run setup to configure auth and scan for projects.',
-        'Run Setup', 'Later'
-      ),
-      'Run Setup',
-      'kronos.setup',
-      'Failed to start Kronos setup.'
-    );
-  }
-
-  // Report stale worktrees from previous sessions without deleting anything automatically.
-  const cleanupPreview = cleanupStaleWorktrees({ remove: false });
-  if (cleanupPreview.removable > 0 || cleanupPreview.blocked > 0) {
-    runNotificationCommandAction(
-      vscode.window.showWarningMessage(
-        `Kronos found ${cleanupPreview.results.length} tracked worktree(s): ${cleanupPreview.removable} clean, ${cleanupPreview.blocked} need review.`,
-        'Review Cleanup'
-      ),
-      'Review Cleanup',
-      'kronos.cleanupWorktrees',
-      'Failed to open Kronos worktree cleanup.'
-    );
-  }
+  const startupSideEffectsTimer = setTimeout(runStartupSideEffects, 0);
+  context.subscriptions.push({ dispose: () => clearTimeout(startupSideEffectsTimer) });
 
   context.subscriptions.push({
     dispose: () => {
@@ -6387,7 +6392,7 @@ function buildJiraBoardHtml(state: KronosState, nonce: string, scriptUri: string
     .modal .modal-actions .jira-action { margin-left: 0; }
   }
 </style>
-<script nonce="${escapeAttr(nonce)}" defer src="${escapeAttr(scriptUri)}" data-kronos-webview-name="Kronos Jira Board" data-kronos-ready-command="${escapeAttr(WEBVIEW_READY_COMMAND)}"></script>
+<script nonce="${escapeAttr(nonce)}" id="kronos-jira-board-script" defer src="${escapeAttr(scriptUri)}" data-kronos-script-kind="jira-board" data-kronos-webview-name="Kronos Jira Board" data-kronos-ready-command="${escapeAttr(WEBVIEW_READY_COMMAND)}"></script>
 </head><body><div class="kronos-shell board-shell">
   <textarea id="kronos-jira-ticket-data" class="kronos-data-payload" hidden aria-hidden="true">${ticketJsonRaw}</textarea>
   <div class="kronos-header">

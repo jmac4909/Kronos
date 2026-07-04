@@ -1,34 +1,45 @@
 (function() {
   'use strict';
 
-  var script = document.currentScript;
+  function findKronosJiraBoardScript() {
+    var current = document.currentScript;
+    if (current && typeof current.getAttribute === 'function') { return current; }
+    if (typeof document.getElementById === 'function') {
+      var byId = document.getElementById('kronos-jira-board-script');
+      if (byId && typeof byId.getAttribute === 'function') { return byId; }
+    }
+    if (typeof document.querySelector === 'function') {
+      return document.querySelector('script[data-kronos-script-kind="jira-board"],script[data-kronos-webview-name="Kronos Jira Board"]');
+    }
+    return null;
+  }
+
+  var script = findKronosJiraBoardScript();
   var webviewName = script && script.getAttribute('data-kronos-webview-name') || 'Kronos Jira Board';
   var readyCommand = script && script.getAttribute('data-kronos-ready-command') || '';
   var readyPosted = false;
   var currentModalKey = '';
-  let lastFocusedEl = null;
+  var lastFocusedEl = null;
   var ticketData = {};
 
   function kronosFallbackVsCodeApi() {
-    return { postMessage: function(message) { console.warn('VS Code API unavailable for Kronos webview action', message); } };
+    return { __kronosFallbackVsCodeApi: true, postMessage: function(message) { console.warn('VS Code API unavailable for Kronos webview action', message); } };
   }
 
   function kronosVsCodeApi() {
     var cacheKey = Symbol.for('kronos.vscodeApi');
     var root = typeof globalThis === 'object' ? globalThis : window;
     var cached = root[cacheKey];
-    if (cached && typeof cached.postMessage === 'function') { return cached; }
+    if (cached && typeof cached.postMessage === 'function' && !cached.__kronosFallbackVsCodeApi) { return cached; }
     if (typeof acquireVsCodeApi !== 'function') {
-      root[cacheKey] = kronosFallbackVsCodeApi();
-      return root[cacheKey];
+      return kronosFallbackVsCodeApi();
     }
     try {
       root[cacheKey] = acquireVsCodeApi();
       return root[cacheKey];
     } catch (error) {
       console.error('Failed to acquire VS Code API for Kronos webview action', error);
-      root[cacheKey] = kronosFallbackVsCodeApi();
-      return root[cacheKey];
+      return kronosFallbackVsCodeApi();
     }
   }
 

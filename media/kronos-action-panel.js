@@ -1,31 +1,42 @@
 (function() {
   'use strict';
 
-  var script = document.currentScript;
+  function findKronosActionScript() {
+    var current = document.currentScript;
+    if (current && typeof current.getAttribute === 'function') { return current; }
+    if (typeof document.getElementById === 'function') {
+      var byId = document.getElementById('kronos-action-panel-script');
+      if (byId && typeof byId.getAttribute === 'function') { return byId; }
+    }
+    if (typeof document.querySelector === 'function') {
+      return document.querySelector('script[data-kronos-script-kind="action-panel"],script[data-kronos-action-fields]');
+    }
+    return null;
+  }
+
+  var script = findKronosActionScript();
   var webviewName = script && script.getAttribute('data-kronos-webview-name') || 'Kronos action panel';
   var readyCommand = script && script.getAttribute('data-kronos-ready-command') || '';
   var fields = [];
 
   function kronosFallbackVsCodeApi() {
-    return { postMessage: function(message) { console.warn('VS Code API unavailable for Kronos webview action', message); } };
+    return { __kronosFallbackVsCodeApi: true, postMessage: function(message) { console.warn('VS Code API unavailable for Kronos webview action', message); } };
   }
 
   function kronosVsCodeApi() {
     var cacheKey = Symbol.for('kronos.vscodeApi');
     var root = typeof globalThis === 'object' ? globalThis : window;
     var cached = root[cacheKey];
-    if (cached && typeof cached.postMessage === 'function') { return cached; }
+    if (cached && typeof cached.postMessage === 'function' && !cached.__kronosFallbackVsCodeApi) { return cached; }
     if (typeof acquireVsCodeApi !== 'function') {
-      root[cacheKey] = kronosFallbackVsCodeApi();
-      return root[cacheKey];
+      return kronosFallbackVsCodeApi();
     }
     try {
       root[cacheKey] = acquireVsCodeApi();
       return root[cacheKey];
     } catch (error) {
       console.error('Failed to acquire VS Code API for Kronos webview action', error);
-      root[cacheKey] = kronosFallbackVsCodeApi();
-      return root[cacheKey];
+      return kronosFallbackVsCodeApi();
     }
   }
 

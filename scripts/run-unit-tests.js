@@ -2237,8 +2237,10 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(apiScript, /function kronosVsCodeApi\(\) \{/);
   assert.match(apiScript, /Symbol\.for\('kronos\.vscodeApi'\)/);
   assert.match(apiScript, /typeof acquireVsCodeApi !== 'function'/);
+  assert.match(apiScript, /__kronosFallbackVsCodeApi/);
   assert.match(apiScript, /Failed to acquire VS Code API for Kronos webview action/);
   assert.match(apiScript, /VS Code API unavailable for Kronos webview action/);
+  assert.doesNotMatch(apiScript, /root\[cacheKey\] = kronosFallbackVsCodeApi\(\)/);
   assert.match(apiScript, /data-kronos-script-ready/);
   assert.match(apiScript, /Kronos webview script ready/);
   assert.match(apiScript, /Kronos webview script error/);
@@ -2359,6 +2361,25 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.equal(duplicateListeners.length, 1);
   duplicateListeners.forEach(handler => handler({ target: fakeButton, preventDefault() {} }));
   assert.equal(duplicateAcquireCalls, 1);
+  const retryPostedMessages = [];
+  const retryDocumentListeners = {};
+  const retrySandbox = vm.createContext({
+    console: { info() {}, warn() {}, error() {} },
+    navigator: { userAgent: 'Kronos Windows Webview Retry Test' },
+    window: { addEventListener() {} },
+    document: {
+      readyState: 'complete',
+      documentElement: { setAttribute() {} },
+      addEventListener(type, handler) { retryDocumentListeners[type] = handler; },
+    },
+  });
+  vm.runInContext(actionScript, retrySandbox);
+  retryDocumentListeners.click({ target: fakeButton, preventDefault() {} });
+  assert.equal(retryPostedMessages.length, 0);
+  retrySandbox.acquireVsCodeApi = () => ({ postMessage: message => retryPostedMessages.push(message) });
+  retryDocumentListeners.click({ target: fakeButton, preventDefault() {} });
+  assert.equal(retryPostedMessages.length, 1);
+  assert.equal(retryPostedMessages[0].command, 'openRunRecord');
   const rerenderListeners = [];
   const rerenderDocuments = [];
   const makeRerenderDocument = () => {
@@ -2399,7 +2420,8 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   const externalScriptTag = webviewSecurity.webviewActionScriptTag('nonce<1>', 'Kronos External', [
     { messageKey: 'runId', dataAttribute: 'data-run-id' },
   ], { readyCommand: webviewSecurity.WEBVIEW_READY_COMMAND, scriptUri: 'vscode-resource://kronos/action.js?x=1&y=<2>' });
-  assert.match(externalScriptTag, /<script nonce="nonce&lt;1&gt;"\s+src="vscode-resource:\/\/kronos\/action\.js\?x=1&amp;y=&lt;2&gt;"/);
+  assert.match(externalScriptTag, /<script nonce="nonce&lt;1&gt;"\s+id="kronos-action-panel-script"\s+src="vscode-resource:\/\/kronos\/action\.js\?x=1&amp;y=&lt;2&gt;"/);
+  assert.match(externalScriptTag, /data-kronos-script-kind="action-panel"/);
   assert.match(externalScriptTag, /data-kronos-webview-name="Kronos External"/);
   assert.match(externalScriptTag, /data-kronos-action-fields="\[\{&quot;messageKey&quot;:&quot;runId&quot;,&quot;dataAttribute&quot;:&quot;data-run-id&quot;\}\]"/);
   assert.match(externalScriptTag, /data-kronos-ready-command="__kronosWebviewReady"/);
@@ -2408,6 +2430,9 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
 
   const externalActionScript = readSourceFixture('media', webviewSecurity.WEBVIEW_ACTION_PANEL_SCRIPT);
   assert.match(externalActionScript, /document\.currentScript/);
+  assert.match(externalActionScript, /function findKronosActionScript/);
+  assert.match(externalActionScript, /kronos-action-panel-script/);
+  assert.match(externalActionScript, /__kronosFallbackVsCodeApi/);
   assert.match(externalActionScript, /data-kronos-action-fields/);
   assert.match(externalActionScript, /function postKronosAction/);
   assert.match(externalActionScript, /function claimKronosActionHandler/);
@@ -2460,9 +2485,43 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.equal(externalPostedMessages[1].ticket, 'K-1');
   assert.equal(externalPostedMessages[1].runId, 'run-1');
   assert.equal(externalAcquireCalls, 1);
+  const externalNullPostedMessages = [];
+  const externalNullListeners = {};
+  const externalNullScript = {
+    getAttribute(name) {
+      return {
+        'data-kronos-webview-name': 'Kronos External Null CurrentScript',
+        'data-kronos-ready-command': webviewSecurity.WEBVIEW_READY_COMMAND,
+        'data-kronos-action-fields': JSON.stringify([
+          { messageKey: 'ticket', dataAttribute: 'data-ticket' },
+          { messageKey: 'runId', dataAttribute: 'data-run-id' },
+        ]),
+      }[name] || '';
+    },
+  };
+  vm.runInNewContext(externalActionScript, {
+    acquireVsCodeApi: () => ({ postMessage: message => externalNullPostedMessages.push(message) }),
+    console: { info() {}, warn() {}, error() {} },
+    navigator: { userAgent: 'Kronos Windows Webview Null CurrentScript Test' },
+    setTimeout(handler) { handler(); },
+    window: { addEventListener() {} },
+    document: {
+      readyState: 'complete',
+      currentScript: null,
+      getElementById(id) { return id === 'kronos-action-panel-script' ? externalNullScript : null; },
+      documentElement: { setAttribute() {} },
+      addEventListener(type, handler) { externalNullListeners[type] = handler; },
+    },
+  });
+  assert.equal(externalNullPostedMessages[0].webviewName, 'Kronos External Null CurrentScript');
+  externalNullListeners.click({ target: fakeButton, preventDefault() {} });
+  assert.equal(externalNullPostedMessages[1].ticket, 'K-1');
 
   const jiraBoardScript = readSourceFixture('media', webviewSecurity.WEBVIEW_JIRA_BOARD_SCRIPT);
   assert.match(jiraBoardScript, /document\.currentScript/);
+  assert.match(jiraBoardScript, /function findKronosJiraBoardScript/);
+  assert.match(jiraBoardScript, /kronos-jira-board-script/);
+  assert.match(jiraBoardScript, /__kronosFallbackVsCodeApi/);
   assert.match(jiraBoardScript, /function initKronosJiraBoard/);
   assert.match(jiraBoardScript, /function claimKronosJiraBoard/);
   assert.match(jiraBoardScript, /__kronosJiraBoardAttached/);
@@ -2473,6 +2532,7 @@ test('webview security injects CSP and preserves existing nonce policies', () =>
   assert.match(jiraBoardScript, /Kronos webview script ready/);
   assert.match(jiraBoardScript, /function closestBoardTarget/);
   assert.doesNotMatch(jiraBoardScript, /const vscode =/);
+  assert.doesNotMatch(jiraBoardScript, /\blet\s+lastFocusedEl/);
   const jiraPostedMessages = [];
   const jiraDocumentListeners = {};
   const jiraDocumentElementAttributes = {};
@@ -7526,7 +7586,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "document.addEventListener('DOMContentLoaded', initKronosJiraBoard)",
     "document.documentElement.setAttribute('data-kronos-actions-ready', 'true')",
     'function applyBoardFilter',
-    'let lastFocusedEl = null',
+    'var lastFocusedEl = null',
     'data-search="${attr(searchText)}"',
     'function formatWebviewDateTime',
     'escapeClass',

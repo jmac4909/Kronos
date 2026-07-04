@@ -409,6 +409,8 @@ for (const marker of [
   'WEBVIEW_JIRA_BOARD_SCRIPT',
   'function kronosJiraBoardScriptUri',
   "vscode.Uri.joinPath(extensionUri, 'media', scriptFile)",
+  'id="kronos-jira-board-script"',
+  'data-kronos-script-kind="jira-board"',
   'defer src="${escapeAttr(scriptUri)}"',
   'id="kronos-jira-ticket-data"',
   'class="kronos-data-payload"',
@@ -603,7 +605,8 @@ for (const marker of [
   'attentionBadgeTarget.badge = summary.count > 0',
   'reviewTree.onDidChangeNewReviewCount(updateAttentionBadge)',
   'const startRuntimePolling = () =>',
-  'startRuntimePolling()',
+  'const runStartupSideEffects = () =>',
+  'const startupSideEffectsTimer = setTimeout(runStartupSideEffects, 0)',
   'vscode.workspace.onDidChangeConfiguration(e =>',
   "e.affectsConfiguration('kronos.pollIntervalSec')",
   "e.affectsConfiguration('kronos.sessionPollIntervalMs')",
@@ -869,6 +872,9 @@ for (const marker of [
   if (!extension.includes(marker)) {
     fail(`Missing safety marker: ${marker}`);
   }
+}
+if (extension.indexOf('const startupSideEffectsTimer = setTimeout(runStartupSideEffects, 0)') < extension.indexOf("vscode.commands.registerCommand('kronos.cleanupWorktrees'")) {
+  fail('Kronos startup side effects must be deferred until after command registration.');
 }
 for (const marker of [
   'function kronosMediaScriptInlineFallback',
@@ -1476,7 +1482,7 @@ for (const marker of [
   'id="board-filter"',
   'id="board-filter-summary"',
   'function applyBoardFilter',
-  'let lastFocusedEl = null',
+  'var lastFocusedEl = null',
   'function formatWebviewDateTime',
   'escapeClass',
   'data-search="${attr(searchText)}"',
@@ -2400,6 +2406,15 @@ for (const staleMarker of [
 if (extension.includes('function logWebviewReadyMessage') || extension.includes('function createWebviewReadyMonitor')) {
   fail('Extension should use shared webview diagnostics instead of local ready monitor helpers.');
 }
+for (const [file, source] of Object.entries({
+  'src/services/webviewSecurity.ts': webviewSecurity,
+  'media/kronos-action-panel.js': webviewActionPanelScript,
+  'media/kronos-jira-board.js': jiraBoardScript,
+})) {
+  if (source.includes('root[cacheKey] = kronosFallbackVsCodeApi()')) {
+    fail(`${file} must not cache the fallback VS Code API; retry acquisition on later actions.`);
+  }
+}
 
 for (const marker of [
   'export function createWebviewNonce',
@@ -2414,6 +2429,8 @@ for (const marker of [
   'function kronosVsCodeApi() {',
   "Symbol.for('kronos.vscodeApi')",
   "typeof acquireVsCodeApi !== 'function'",
+  '__kronosFallbackVsCodeApi',
+  "!cached.__kronosFallbackVsCodeApi",
   "console.error('Failed to acquire VS Code API for Kronos webview action', error)",
   "document.documentElement.setAttribute('data-kronos-script-ready', 'true')",
   "console.info('Kronos webview script ready', webviewName, navigator.userAgent)",
@@ -2441,6 +2458,8 @@ for (const marker of [
   'message[field.messageKey]',
   'options.readyCommand ? webviewReadyPostScript(webviewName, options.readyCommand) :',
   'export function webviewActionScriptTag',
+  'id="kronos-action-panel-script"',
+  'data-kronos-script-kind="action-panel"',
   'data-kronos-webview-name',
   'data-kronos-action-fields',
   'data-kronos-ready-command',
@@ -2473,12 +2492,16 @@ for (const marker of [
 
 for (const marker of [
   'document.currentScript',
+  'function findKronosActionScript()',
+  'kronos-action-panel-script',
   'data-kronos-webview-name',
   'data-kronos-ready-command',
   'data-kronos-action-fields',
   'function kronosVsCodeApi()',
   "Symbol.for('kronos.vscodeApi')",
   "typeof acquireVsCodeApi !== 'function'",
+  '__kronosFallbackVsCodeApi',
+  '!cached.__kronosFallbackVsCodeApi',
   "document.documentElement.setAttribute('data-kronos-script-ready', 'true')",
   "document.documentElement.setAttribute('data-kronos-actions-ready', 'true')",
   '__kronosActionHandlerAttached',
@@ -2498,6 +2521,10 @@ for (const marker of [
 }
 
 for (const marker of [
+  'function findKronosJiraBoardScript()',
+  'kronos-jira-board-script',
+  '__kronosFallbackVsCodeApi',
+  '!cached.__kronosFallbackVsCodeApi',
   'function claimKronosJiraBoard()',
   'function closestBoardTarget',
   '__kronosJiraBoardAttached',
