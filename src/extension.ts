@@ -65,6 +65,7 @@ import { activeRunStatusBarSummary } from './services/activeRunDisplay';
 import { isFreshActiveRun } from './services/runStatus';
 import { isAttentionRunStatus, runAttentionDetail, runAttentionLine } from './services/runAttention';
 import { buildRunCompletionNotification } from './services/runCompletionNotification';
+import { recordFromUnknown } from './services/records';
 import { openReviewTicketEntries, reviewBranchTickets as buildReviewBranchTickets } from './services/reviewWork';
 import { decideReviewMonitorAction, reviewDeployMonitorActionHandled, reviewTerminalMergeRequestActionKey, type ReviewDeployMonitorResult, type ReviewMonitorDecision, type ReviewTerminalMergeRequestAction } from './services/reviewMonitor';
 import { decideQueueRemoval } from './services/queueRemovalPolicy';
@@ -101,10 +102,6 @@ const REVIEW_SEEN_KEYS_STORAGE_KEY = 'kronos.review.seenKeys.v1';
 const reviewPollFailureNotifications = new Map<string, number>();
 const reviewTerminalMergeRequestActions = new Set<string>();
 const OPTIONAL_SCRIPT_PANEL_WARNING = 'Kronos integration scripts are not installed. Run Kronos: Doctor for setup details.';
-
-function recordFromUnknown(value: unknown): Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value)) ? value as Record<string, unknown> : {};
-}
 
 function stringFromUnknown(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;

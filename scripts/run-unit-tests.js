@@ -9567,7 +9567,7 @@ test('extension Sonar commands normalize webview and issue payloads', () => {
   const sonarCommandSource = source.slice(sonarCommandStart, sonarCommandEnd);
   for (const marker of [
     "import { buildSonarReport, type SonarIssue }",
-    'function recordFromUnknown(value: unknown): Record<string, unknown>',
+    "import { recordFromUnknown } from './services/records'",
     'function stringFromUnknown(value: unknown): string | undefined',
     "vscode.commands.registerCommand('kronos.sonarScan', async (item: unknown)",
     "vscode.commands.registerCommand('kronos.sonarReport', async (item: unknown)",

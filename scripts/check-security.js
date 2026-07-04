@@ -906,7 +906,7 @@ for (const marker of [
   'unknownErrorMessage(e, `Could not resolve MR branch for ${ticket.key}.`)',
   'unknownErrorMessage(e, `Could not find fallback remote branch for ${ticket.key}.`)',
   "import { buildSonarReport, type SonarIssue }",
-  'function recordFromUnknown(value: unknown): Record<string, unknown>',
+  "import { recordFromUnknown } from './services/records'",
   'function resolveProjectName(state: KronosState, item: unknown): string | undefined',
   "const ticket = recordFromUnknown(record['ticket'])",
   'function resolveTicketKey(item: unknown): string | undefined',
