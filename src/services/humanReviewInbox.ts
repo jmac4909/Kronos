@@ -4,6 +4,7 @@ import { RecoveryCheck, RecoveryWorktreeReport } from './recoveryCenter';
 import { evaluateEvidenceGate } from './evidenceGate';
 import { runAttentionDetail } from './runAttention';
 import { severityRank } from './severityRank';
+import { recordString } from './records';
 
 type HumanReviewSeverity = 'critical' | 'warning' | 'info';
 type HumanReviewKind = 'run' | 'ticket' | 'evidence' | 'integration' | 'worktree' | 'queue';
@@ -50,14 +51,14 @@ export function buildHumanReviewInbox(input: HumanReviewInboxInput): HumanReview
   const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunRecord);
 
   for (const run of runs) {
-    const status = runString(run, 'status');
+    const status = recordString(run, 'status');
     if (status === 'needs_human' || status === 'failed' || status === 'cancelled') {
-      const ticketKey = runString(run, 'ticket');
+      const ticketKey = recordString(run, 'ticket');
       items.push(humanReviewItem({
         id: `run:${runId(run)}`,
         kind: 'run',
         severity: status === 'needs_human' ? 'critical' : 'warning',
-        title: `${runString(run, 'project') || 'Project'} ${runString(run, 'skill') || 'run'} needs review`,
+        title: `${recordString(run, 'project') || 'Project'} ${recordString(run, 'skill') || 'run'} needs review`,
         detail: runAttentionDetail(run),
       }, { ticketKey, runId: runId(run) }));
     }
@@ -170,12 +171,7 @@ function compareItems(a: HumanReviewItem, b: HumanReviewItem): number {
 }
 
 function runId(run: HumanReviewRunRecord): string {
-  return runString(run, 'id') || 'run';
-}
-
-function runString(run: HumanReviewRunRecord, key: string): string {
-  const value = run[key];
-  return typeof value === 'string' ? value.trim() : '';
+  return recordString(run, 'id') || 'run';
 }
 
 function isRunRecord(value: unknown): value is HumanReviewRunRecord {

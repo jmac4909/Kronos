@@ -4,6 +4,7 @@ import { HumanReviewInbox } from './humanReviewInbox';
 import { RunRecord } from './runStore';
 import { formatRunProgress } from './runProgress';
 import { isFreshActiveRun } from './runStatus';
+import { recordString } from './records';
 
 type DashboardWorklistKind = 'needs_human' | 'active_runs' | 'failing_gates' | 'recent_completed' | 'stale_items';
 type DashboardWorklistSeverity = 'critical' | 'warning' | 'info' | 'ok';
@@ -56,14 +57,14 @@ export function buildDashboardWorklist(input: DashboardWorklistInput, limit = 5)
       items: sortRuns(runs.filter(isDashboardActiveRun), 'startedAt')
         .slice(0, limit)
         .map(run => {
-          const status = runString(run, 'status') || 'unknown';
-          const ticketKey = runString(run, 'ticket');
+          const status = recordString(run, 'status') || 'unknown';
+          const ticketKey = recordString(run, 'ticket');
           return dashboardWorklistItem({
             id: `run:${runId(run)}`,
-            title: `${runString(run, 'project') || 'Project'} ${runString(run, 'skill') || 'run'}`,
+            title: `${recordString(run, 'project') || 'Project'} ${recordString(run, 'skill') || 'run'}`,
             detail: activeRunDetail(run, status, ticketKey),
             severity: status === 'paused' ? 'warning' : 'info',
-          }, { ticketKey, runId: runId(run), timestamp: runString(run, 'startedAt') });
+          }, { ticketKey, runId: runId(run), timestamp: recordString(run, 'startedAt') });
         }),
     },
     {
@@ -86,17 +87,17 @@ export function buildDashboardWorklist(input: DashboardWorklistInput, limit = 5)
       kind: 'recent_completed',
       title: 'Recently Completed',
       emptyText: 'No completed runs recorded.',
-      items: sortRuns(runs.filter(run => COMPLETED_RUN_STATUSES.has(runString(run, 'status'))), 'endedAt')
+      items: sortRuns(runs.filter(run => COMPLETED_RUN_STATUSES.has(recordString(run, 'status'))), 'endedAt')
         .slice(0, limit)
         .map(run => {
-          const status = runString(run, 'status') || 'completed';
-          const ticketKey = runString(run, 'ticket');
+          const status = recordString(run, 'status') || 'completed';
+          const ticketKey = recordString(run, 'ticket');
           return dashboardWorklistItem({
             id: `completed:${runId(run)}`,
-            title: `${runString(run, 'project') || 'Project'} ${runString(run, 'skill') || 'run'}`,
+            title: `${recordString(run, 'project') || 'Project'} ${recordString(run, 'skill') || 'run'}`,
             detail: `${status}${ticketKey ? ` for ${ticketKey}` : ''}${evidenceStatusForRun(input.evidenceGates, ticketKey)}`,
             severity: status === 'waiting_for_review' ? 'info' : 'ok',
-          }, { ticketKey, runId: runId(run), timestamp: runString(run, 'endedAt') });
+          }, { ticketKey, runId: runId(run), timestamp: recordString(run, 'endedAt') });
         }),
     },
     {
@@ -126,7 +127,7 @@ function dashboardWorklistItem(
 }
 
 function sortRuns(runs: DashboardRunRecord[], timestampField: 'startedAt' | 'endedAt'): DashboardRunRecord[] {
-  return [...runs].sort((a, b) => timestampValue(runString(b, timestampField)) - timestampValue(runString(a, timestampField)) || runId(a).localeCompare(runId(b)));
+  return [...runs].sort((a, b) => timestampValue(recordString(b, timestampField)) - timestampValue(recordString(a, timestampField)) || runId(a).localeCompare(runId(b)));
 }
 
 function isDashboardActiveRun(run: DashboardRunRecord): boolean {
@@ -151,12 +152,7 @@ function evidenceStatusForRun(gates: EvidenceGateResult[], ticketKey: unknown): 
 }
 
 function runId(run: DashboardRunRecord): string {
-  return runString(run, 'id') || 'run';
-}
-
-function runString(run: DashboardRunRecord, key: string): string {
-  const value = run[key];
-  return typeof value === 'string' ? value.trim() : '';
+  return recordString(run, 'id') || 'run';
 }
 
 function isRunRecord(value: unknown): value is DashboardRunRecord {

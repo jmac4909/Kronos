@@ -3,6 +3,7 @@ import { isReviewReadyAction } from './actionSemantics';
 import { RunRecord } from './runStore';
 import { evaluateEvidenceGates } from './evidenceGate';
 import { isActiveRun } from './runStatus';
+import { recordString } from './records';
 
 interface QualityComponent {
   label: string;
@@ -34,9 +35,9 @@ export function computeAgentQualityScore(input: {
   const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunRecord);
   const tickets = input.tickets || {};
   const totalRuns = runs.length;
-  const completedRuns = runs.filter(run => SUCCESS_RUN_STATUSES.has(runString(run, 'status'))).length;
-  const failedRuns = runs.filter(run => runString(run, 'status') === 'failed' || runString(run, 'status') === 'cancelled').length;
-  const needsHumanRuns = runs.filter(run => runString(run, 'status') === 'needs_human').length;
+  const completedRuns = runs.filter(run => SUCCESS_RUN_STATUSES.has(recordString(run, 'status'))).length;
+  const failedRuns = runs.filter(run => recordString(run, 'status') === 'failed' || recordString(run, 'status') === 'cancelled').length;
+  const needsHumanRuns = runs.filter(run => recordString(run, 'status') === 'needs_human').length;
   const retryRuns = runs.filter(hasRetryMetadata).length;
   const activeRuns = runs.filter(isActiveRun).length;
 
@@ -118,12 +119,7 @@ export function computeAgentQualityScore(input: {
 }
 
 function hasRetryMetadata(run: RunQualityRecord): boolean {
-  return isRunRecord(run['promptMetadata']) && runString(run['promptMetadata'], 'retryOfRunId').length > 0;
-}
-
-function runString(run: RunQualityRecord, key: string): string {
-  const value = run[key];
-  return typeof value === 'string' ? value.trim() : '';
+  return isRunRecord(run['promptMetadata']) && recordString(run['promptMetadata'], 'retryOfRunId').length > 0;
 }
 
 function isRunRecord(value: unknown): value is RunQualityRecord {

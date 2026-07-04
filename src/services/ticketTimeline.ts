@@ -1,6 +1,7 @@
 import { QueueState, Ticket } from '../state/types';
 import { evidenceChecks, evidenceEnvironmentResults, evidenceNotes, evidenceString } from './evidenceData';
 import { isAttentionRunStatus, runAttentionDetail } from './runAttention';
+import { recordString } from './records';
 
 type TimelineSource = 'jira' | 'queue' | 'run' | 'evidence' | 'mr' | 'build' | 'ticket';
 type TimelineSeverity = 'info' | 'success' | 'warning' | 'failure';
@@ -146,17 +147,17 @@ export function buildTicketTimeline(input: TicketTimelineInput): TimelineEvent[]
     }, { at: ticket.updated || ticket.last_action_at || undefined, url: ticket.build.url }));
   }
 
-  for (const run of runs.filter(r => runString(r, 'ticket') === ticketKey)) {
-    const status = runString(run, 'status') || 'unknown';
+  for (const run of runs.filter(r => recordString(r, 'ticket') === ticketKey)) {
+    const status = recordString(run, 'status') || 'unknown';
     events.push(timelineEvent({
       id: `${ticketKey}:run:${runId(run)}`,
       source: 'run',
       severity: severityForRun(status),
-      title: `Run ${status}: ${runString(run, 'skill') || 'session'}`,
+      title: `Run ${status}: ${recordString(run, 'skill') || 'session'}`,
       detail: runDetail(run),
     }, {
-      at: runString(run, 'endedAt') || runString(run, 'startedAt') || undefined,
-      artifactPath: runString(run, 'logPath') || undefined,
+      at: recordString(run, 'endedAt') || recordString(run, 'startedAt') || undefined,
+      artifactPath: recordString(run, 'logPath') || undefined,
     }));
   }
 
@@ -209,26 +210,21 @@ function severityForRun(status: string | undefined): TimelineSeverity {
 }
 
 function runDetail(run: TimelineRunRecord): string {
-  const promptHash = runString(run, 'promptHash');
-  const status = runString(run, 'status');
+  const promptHash = recordString(run, 'promptHash');
+  const status = recordString(run, 'status');
   const attentionDetail = isAttentionRunStatus(status) ? runAttentionDetail(run) : '';
   const parts = [
-    attentionDetail || runString(run, 'failureReason'),
-    runString(run, 'project') ? `project ${runString(run, 'project')}` : '',
-    runString(run, 'model') ? `model ${runString(run, 'model')}` : '',
+    attentionDetail || recordString(run, 'failureReason'),
+    recordString(run, 'project') ? `project ${recordString(run, 'project')}` : '',
+    recordString(run, 'model') ? `model ${recordString(run, 'model')}` : '',
     promptHash ? `prompt ${promptHash.substring(0, 12)}` : '',
-    runString(run, 'worktreePath') ? `worktree ${runString(run, 'worktreePath')}` : '',
+    recordString(run, 'worktreePath') ? `worktree ${recordString(run, 'worktreePath')}` : '',
   ].filter(Boolean);
   return parts.join(' | ');
 }
 
 function runId(run: TimelineRunRecord): string {
-  return runString(run, 'id') || 'run';
-}
-
-function runString(run: TimelineRunRecord, key: string): string {
-  const value = run[key];
-  return typeof value === 'string' ? value.trim() : '';
+  return recordString(run, 'id') || 'run';
 }
 
 function isRunRecord(value: unknown): value is TimelineRunRecord {

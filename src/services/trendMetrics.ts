@@ -1,6 +1,6 @@
 import { Ticket } from '../state/types';
 import { evidenceChecks, evidenceEnvironmentResults, evidenceString } from './evidenceData';
-import { isRecord } from './records';
+import { isRecord, recordString } from './records';
 
 interface TrendMetricsInput {
   runs: unknown[];
@@ -36,16 +36,16 @@ export function computeTrendMetrics(input: TrendMetricsInput): TrendMetricsRepor
   const rawRuns = Array.isArray(input.runs) ? input.runs : [];
   const runs = rawRuns
     .filter(isRecord)
-    .filter(run => isInWindow(runString(run, 'endedAt') || runString(run, 'startedAt'), windowStart, now));
+    .filter(run => isInWindow(recordString(run, 'endedAt') || recordString(run, 'startedAt'), windowStart, now));
   const tickets = Object.entries(input.tickets || {})
     .filter(([_, ticket]) => ticketInWindow(ticket, windowStart, now));
 
-  const finishedRuns = runs.filter(run => FINISHED_RUN_STATUSES.has(runString(run, 'status')));
-  const completedRuns = finishedRuns.filter(run => SUCCESS_RUN_STATUSES.has(runString(run, 'status'))).length;
-  const failedRuns = finishedRuns.filter(run => isFailedRunStatus(runString(run, 'status'))).length;
+  const finishedRuns = runs.filter(run => FINISHED_RUN_STATUSES.has(recordString(run, 'status')));
+  const completedRuns = finishedRuns.filter(run => SUCCESS_RUN_STATUSES.has(recordString(run, 'status'))).length;
+  const failedRuns = finishedRuns.filter(run => isFailedRunStatus(recordString(run, 'status'))).length;
   const retryRuns = runs.filter(hasRetryMetadata).length;
-  const verificationRuns = finishedRuns.filter(run => runString(run, 'skill').includes('verify'));
-  const passedVerificationRuns = verificationRuns.filter(run => SUCCESS_RUN_STATUSES.has(runString(run, 'status'))).length;
+  const verificationRuns = finishedRuns.filter(run => recordString(run, 'skill').includes('verify'));
+  const passedVerificationRuns = verificationRuns.filter(run => SUCCESS_RUN_STATUSES.has(recordString(run, 'status'))).length;
 
   const builds = tickets.map(([_, ticket]) => ticket.build).filter(Boolean) as NonNullable<Ticket['build']>[];
   const passedBuilds = builds.filter(build => isPassingBuild(build.status)).length;
@@ -140,7 +140,7 @@ function isInWindow(value: string | null | undefined, start: Date, end: Date): b
 function cycleTimesHours(tickets: Record<string, Ticket>, runs: RunMetricRecord[]): number[] {
   const groupedRuns = new Map<string, RunMetricRecord[]>();
   for (const run of runs) {
-    const ticketKey = runString(run, 'ticket');
+    const ticketKey = recordString(run, 'ticket');
     if (!ticketKey) { continue; }
     const list = groupedRuns.get(ticketKey) || [];
     list.push(run);
@@ -151,7 +151,7 @@ function cycleTimesHours(tickets: Record<string, Ticket>, runs: RunMetricRecord[
   for (const [ticketKey, ticket] of Object.entries(tickets)) {
     const ticketRuns = groupedRuns.get(ticketKey) || [];
     const runDates = ticketRuns
-      .flatMap(run => [parseDate(runString(run, 'startedAt')), parseDate(runString(run, 'endedAt'))])
+      .flatMap(run => [parseDate(recordString(run, 'startedAt')), parseDate(recordString(run, 'endedAt'))])
       .filter((date): date is Date => Boolean(date));
     const candidateStart = earliestDate([
       parseDate(ticket.updated),
@@ -174,12 +174,7 @@ function isFailedRunStatus(status: string): boolean {
 }
 
 function hasRetryMetadata(run: RunMetricRecord): boolean {
-  return isRecord(run['promptMetadata']) && runString(run['promptMetadata'], 'retryOfRunId').length > 0;
-}
-
-function runString(run: RunMetricRecord, key: string): string {
-  const value = run[key];
-  return typeof value === 'string' ? value.trim() : '';
+  return isRecord(run['promptMetadata']) && recordString(run['promptMetadata'], 'retryOfRunId').length > 0;
 }
 
 function parseDate(value: string | null | undefined): Date | null {

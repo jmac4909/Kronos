@@ -3407,6 +3407,8 @@ test('record guard helper centralizes unknown object narrowing', () => {
   assert.equal(records.isRecord([]), false);
   assert.equal(records.isRecord(null), false);
   assert.equal(records.isRecord('value'), false);
+  assert.equal(records.recordString({ ticket: ' K-1 ' }, 'ticket'), 'K-1');
+  assert.equal(records.recordString({ ticket: 42 }, 'ticket'), '');
 
   for (const [file, marker] of [
     ['changedFiles.ts', "import { isRecord } from './records'"],
@@ -3415,7 +3417,7 @@ test('record guard helper centralizes unknown object narrowing', () => {
     ['runStore.ts', "import { isRecord } from './records'"],
     ['sessionStore.ts', "import { isRecord } from './records'"],
     ['sonarReportView.ts', "import { isRecord } from './records'"],
-    ['trendMetrics.ts', "import { isRecord } from './records'"],
+    ['trendMetrics.ts', "import { isRecord, recordString } from './records'"],
     ['stateStore.ts', "import { isRecord as isPlainObject } from './records'"],
     ['stateScriptAdapter.ts', "import { isRecord as isPlainObject } from './records'"],
   ]) {
@@ -3428,6 +3430,18 @@ test('record guard helper centralizes unknown object narrowing', () => {
   const dispatcherSource = readSourceFixture('src', 'runners', 'sessionDispatcher.ts');
   assert.ok(dispatcherSource.includes("import { isRecord } from '../services/records'"));
   assert.equal(dispatcherSource.includes('function isRecord'), false);
+
+  for (const file of [
+    'activeRunDisplay.ts',
+    'agentQualityScore.ts',
+    'dashboardWorklist.ts',
+    'humanReviewInbox.ts',
+    'ticketTimeline.ts',
+  ]) {
+    const source = readSourceFixture('src', 'services', file);
+    assert.ok(source.includes("import { recordString } from './records'"), `${file} should import shared record string helper`);
+    assert.equal(source.includes('function runString'), false, `${file} should not carry a local runString helper`);
+  }
 });
 
 test('date value helper centralizes valid date coercion', () => {
@@ -9967,7 +9981,7 @@ test('trend metrics report rework, build pass, verification pass, and cycle time
   for (const marker of [
     'runs: unknown[]',
     'type RunMetricRecord = Record<string, unknown>',
-    "import { isRecord } from './records'",
+    "import { isRecord, recordString } from './records'",
     'const rawRuns = Array.isArray(input.runs) ? input.runs : []',
     '.filter(isRecord)',
   ]) {

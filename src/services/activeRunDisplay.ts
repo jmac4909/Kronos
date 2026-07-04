@@ -1,5 +1,6 @@
 import { formatRunProgress } from './runProgress';
 import { activeRunSummary, isFreshActiveRun, runStatus } from './runStatus';
+import { recordString } from './records';
 
 interface ActiveRunDisplaySummary {
   count: number;
@@ -28,8 +29,8 @@ export function activeRunStatusBarSummary(runs: unknown[], now = new Date()): Ac
 
 function activeRunTooltipLine(run: unknown, now: Date): string {
   const record = runRecord(run);
-  const project = runString(record, 'project') || runString(record, 'projectPath') || runString(record, 'cwd') || 'Project';
-  const target = [runString(record, 'ticket'), runString(record, 'skill') || 'run'].filter(Boolean).join(' ');
+  const project = recordString(record, 'project') || recordString(record, 'projectPath') || recordString(record, 'cwd') || 'Project';
+  const target = [recordString(record, 'ticket'), recordString(record, 'skill') || 'run'].filter(Boolean).join(' ');
   const status = runStatus(run) || 'active';
   const progress = formatRunProgress(run, now);
   return `${project}${target ? ` ${target}` : ''}: ${status} - ${progress}`;
@@ -37,9 +38,4 @@ function activeRunTooltipLine(run: unknown, now: Date): string {
 
 function runRecord(value: unknown): Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value)) ? value as Record<string, unknown> : {};
-}
-
-function runString(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
-  return typeof value === 'string' ? value.trim() : '';
 }

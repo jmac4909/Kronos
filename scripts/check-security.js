@@ -2157,8 +2157,10 @@ for (const [name, source] of [
 
 for (const marker of [
   'export function isRecord(value: unknown): value is Record<string, unknown>',
+  'export function recordString(record: Record<string, unknown>, key: string): string',
   "typeof value === 'object'",
   '!Array.isArray(value)',
+  "typeof value === 'string' ? value.trim() : ''",
 ]) {
   if (!records.includes(marker)) {
     fail(`Missing record helper marker: ${marker}`);
@@ -2264,7 +2266,7 @@ for (const [name, source, marker] of [
   ['src/services/runStore.ts', runStore, "import { isRecord } from './records'"],
   ['src/services/sessionStore.ts', sessionStore, "import { isRecord } from './records'"],
   ['src/services/sonarReportView.ts', sonarReportView, "import { isRecord } from './records'"],
-  ['src/services/trendMetrics.ts', trendMetrics, "import { isRecord } from './records'"],
+  ['src/services/trendMetrics.ts', trendMetrics, "import { isRecord, recordString } from './records'"],
   ['src/services/stateStore.ts', stateStore, "import { isRecord as isPlainObject } from './records'"],
   ['src/services/stateScriptAdapter.ts', stateScriptAdapter, "import { isRecord as isPlainObject } from './records'"],
   ['src/runners/sessionDispatcher.ts', dispatcher, "import { isRecord } from '../services/records'"],
@@ -2277,6 +2279,22 @@ for (const [name, source, marker] of [
   }
   if (source.includes('function isPlainObject')) {
     fail(`${name} must not carry a local isPlainObject helper.`);
+  }
+}
+
+for (const [name, source, marker] of [
+  ['src/services/activeRunDisplay.ts', activeRunDisplay, "import { recordString } from './records'"],
+  ['src/services/agentQualityScore.ts', agentQualityScore, "import { recordString } from './records'"],
+  ['src/services/dashboardWorklist.ts', dashboardWorklist, "import { recordString } from './records'"],
+  ['src/services/humanReviewInbox.ts', humanReviewInbox, "import { recordString } from './records'"],
+  ['src/services/ticketTimeline.ts', ticketTimeline, "import { recordString } from './records'"],
+  ['src/services/trendMetrics.ts', trendMetrics, "import { isRecord, recordString } from './records'"],
+]) {
+  if (!source.includes(marker)) {
+    fail(`${name} must import the shared record string helper.`);
+  }
+  if (source.includes('function runString(record: Record<string, unknown>, key: string): string')) {
+    fail(`${name} must not carry a local runString record helper.`);
   }
 }
 
@@ -3243,7 +3261,7 @@ for (const marker of [
   "status === 'cancelled'",
   'type HumanReviewRunRecord = HumanReviewRun & Record<string, unknown>',
   'const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunRecord)',
-  'function runString',
+  "import { recordString } from './records'",
   'function isRunRecord',
 ]) {
   if (!humanReviewInbox.includes(marker)) {
@@ -3565,7 +3583,7 @@ for (const marker of [
   'type RunQualityRecord = RunRecord & Record<string, unknown>',
   'const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunRecord)',
   'function hasRetryMetadata',
-  'function runString',
+  "import { recordString } from './records'",
   'function isRunRecord',
 ]) {
   if (!agentQualityScore.includes(marker)) {
@@ -3727,14 +3745,14 @@ for (const marker of [
   'Verification pass rate',
   'Average cycle time',
   'Review health',
-  "import { isRecord } from './records'",
+  "import { isRecord, recordString } from './records'",
   'const rawRuns = Array.isArray(input.runs) ? input.runs : []',
   '.filter(isRecord)',
   'evidenceChecks(ticket)',
   'evidenceEnvironmentResults(ticket)',
   "evidenceString(check, 'result')",
   'function hasRetryMetadata',
-  'function runString',
+  "recordString(run, 'status')",
 ]) {
   if (!trendMetrics.includes(marker)) {
     fail(`Missing trend metrics marker: ${marker}`);
@@ -3765,7 +3783,7 @@ for (const marker of [
   'formatRunProgress(run)',
   'type DashboardRunRecord = RunRecord & Record<string, unknown>',
   'const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunRecord)',
-  "runString(run, 'status')",
+  "recordString(run, 'status')",
   'function runId',
   'function isRunRecord',
 ]) {
@@ -3785,7 +3803,7 @@ for (const marker of [
   'const notes = evidenceNotes(ticket)',
   'const checks = evidenceChecks(ticket)',
   'const environmentResults = evidenceEnvironmentResults(ticket)',
-  "runString(run, 'promptHash')",
+  "recordString(run, 'promptHash')",
   'const attentionDetail = isAttentionRunStatus(status) ? runAttentionDetail(run) :',
   'function runDetail',
   'function isRunRecord',
