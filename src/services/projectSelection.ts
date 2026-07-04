@@ -1,3 +1,5 @@
+import { projectPathKey } from './pathUtils';
+
 export interface ProjectRegistryEntry {
   path?: string | undefined;
 }
@@ -48,4 +50,24 @@ export function buildTicketGroupProjectItems<T extends ProjectTicket>(
     label: projectName,
     description: `${(byProject[projectName] || []).length} ${countLabel}`,
   }));
+}
+
+export function getProjectPath(
+  projects: Record<string, ProjectRegistryEntry> | undefined,
+  projectName?: string,
+): string | undefined {
+  if (!projectName) { return undefined; }
+  return projects?.[projectName]?.path;
+}
+
+export function getProjectNameForPath(
+  projects: Record<string, ProjectRegistryEntry> | undefined,
+  projectPath?: string,
+): string | undefined {
+  const targetPath = projectPathKey(projectPath);
+  if (!targetPath) { return undefined; }
+  for (const [projectName, project] of Object.entries(projects || {})) {
+    if (projectPathKey(project.path) === targetPath) { return projectName; }
+  }
+  return undefined;
 }

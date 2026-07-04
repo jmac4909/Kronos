@@ -79,7 +79,7 @@ import { buildDiscoveryQuickPickEntries, discoveryCandidateNeedsJiraKey, type Di
 import { buildPromptWorkspaceModel, promptHistoryTemplatesForProjects } from './services/promptWorkspaceModel';
 import { buildSonarReport } from './services/sonarReportView';
 import { buildSonarBranchPickItems, buildSonarFixBranchStrategy, buildSonarFixInstructionBlock } from './services/sonarCommandPlan';
-import { buildRegisteredProjectItems, buildTicketGroupProjectItems, buildTicketProjectItems, groupTicketsByProject } from './services/projectSelection';
+import { buildRegisteredProjectItems, buildTicketGroupProjectItems, buildTicketProjectItems, getProjectNameForPath, getProjectPath, groupTicketsByProject } from './services/projectSelection';
 import { buildAgingReportHtml } from './services/agingReportView';
 import { buildTicketHtml } from './services/ticketPanelView';
 import { buildDashboardHtml } from './services/dashboardPanelView';
@@ -89,7 +89,6 @@ import { computeAttentionBadge } from './services/attentionBadge';
 import { configIntervalMs, configIntervalSeconds, configIntervalSecondsMs, parsePositiveNumberInput, positiveConfigNumber } from './services/intervalConfig';
 import { buildNextActionContext, buildNextActionStartDecision, skillForAction } from './services/nextActionContext';
 import { createWorkspaceDiffArtifact, firstRemoteBranchMatching, originProjectPath } from './services/gitWorkspace';
-import { projectPathKey } from './services/pathUtils';
 import { signalProcessTree, stopProcessTree, supportsProcessTreeSuspend } from './services/processTree';
 import { createWebviewReadyMonitor } from './services/webviewDiagnostics';
 import { WEBVIEW_ACTION_PANEL_SCRIPT, WEBVIEW_JIRA_BOARD_SCRIPT, createWebviewNonce, webviewScriptCspOptions, withWebviewCsp } from './services/webviewSecurity';
@@ -1324,7 +1323,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (!canStart) { return; }
 
       for (const projName of targetProjects) {
-        const projectPath = getProjectPath(state, projName);
+        const projectPath = getProjectPath(state.state?.projects, projName);
         if (!projectPath) { continue; }
         const otherProjects = targetProjects.filter(p => p !== projName);
         const scopeHint = otherProjects.length > 0
@@ -1347,7 +1346,7 @@ export function activate(context: vscode.ExtensionContext) {
         ticketKey ? `Deploy monitor ${ticketKey} in which project?` : 'Deploy monitor which project?',
       );
       if (!projectName) { return; }
-      const projectPath = getProjectPath(state, projectName);
+      const projectPath = getProjectPath(state.state?.projects, projectName);
       if (projectPath) {
         const promptMetadata: PromptRunMetadata = {
           source: 'slash',
@@ -1375,7 +1374,7 @@ export function activate(context: vscode.ExtensionContext) {
         ticketKey ? `Verify fix for ${ticketKey} in which project?` : 'Verify fix in which project?',
       );
       if (!projectName) { return; }
-      const projectPath = getProjectPath(state, projectName);
+      const projectPath = getProjectPath(state.state?.projects, projectName);
       if (projectPath) {
         await startClaudeDispatch(projectPath, 'verify-fix', ticketKey, {
           onComplete: refreshAfterDispatch(state, projectName, ticketKey),
@@ -1402,7 +1401,7 @@ export function activate(context: vscode.ExtensionContext) {
         } else if (projs.length > 0) {
           const dispatchPlan = buildQueueDispatchPlan({
             projects: projs,
-            resolveProjectPath: projectName => getProjectPath(state, projectName),
+            resolveProjectPath: projectName => getProjectPath(state.state?.projects, projectName),
           });
           if (dispatchPlan.missingProjects.length > 0) {
             vscode.window.showWarningMessage(queueDispatchMissingProjectMessage({ target: item.ticket || item.id, missingProjects: dispatchPlan.missingProjects }));
@@ -1543,7 +1542,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('kronos.openProject', async (item: unknown) => {
       const projectName = resolveProjectName(state, item);
-      const projectPath = getProjectPath(state, projectName);
+      const projectPath = getProjectPath(state.state?.projects, projectName);
       if (projectName && projectPath) {
         const terminal = vscode.window.createTerminal(kronosTerminalOptions({
           name: projectName,
@@ -1555,7 +1554,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('kronos.openInClaude', async (item: unknown) => {
       const projectName = resolveProjectName(state, item);
-      const projectPath = getProjectPath(state, projectName);
+      const projectPath = getProjectPath(state.state?.projects, projectName);
       if (projectPath) {
         openInClaude(projectPath);
       }
@@ -2159,8 +2158,8 @@ export function activate(context: vscode.ExtensionContext) {
       const dispatchPlan = buildQueueDispatchPlan({
         projects: queueData.projects,
         projectPath: queueData.projectPath,
-        pathProject: getProjectNameForPath(state, queueData.projectPath),
-        resolveProjectPath: projectName => getProjectPath(state, projectName),
+        pathProject: getProjectNameForPath(state.state?.projects, queueData.projectPath),
+        resolveProjectPath: projectName => getProjectPath(state.state?.projects, projectName),
       });
       const projs = dispatchPlan.projects;
       const projLabel = dispatchPlan.projectLabel;
@@ -2342,7 +2341,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (!pick) { return; }
         projectName = pick.label;
       }
-      const projectPath = getProjectPath(state, projectName);
+      const projectPath = getProjectPath(state.state?.projects, projectName);
       if (!projectPath) { return; }
 
       const confirm = await vscode.window.showInformationMessage(
@@ -2369,7 +2368,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showWarningMessage('No project found for scan.');
         return;
       }
-      const projectPath = getProjectPath(state, projectName);
+      const projectPath = getProjectPath(state.state?.projects, projectName);
       if (!projectPath) { return; }
 
       const sonarKey = state.state.projects[projectName]?.config?.sonar_project_key || projectName;
@@ -2476,7 +2475,7 @@ export function activate(context: vscode.ExtensionContext) {
         projectName = await pickProjectName(state, 'Fix SonarQube issues in which project?');
       }
       if (!projectName) { return; }
-      const projectPath = getProjectPath(state, projectName);
+      const projectPath = getProjectPath(state.state?.projects, projectName);
       if (!projectPath) { return; }
       const sonarKey = state.state.projects[projectName]?.config?.sonar_project_key || projectName;
 
@@ -2597,7 +2596,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (!projectName && state.state) {
         projectName = await pickProjectName(state, 'Fix verification finding in which project?');
       }
-      const projectPath = stringFromUnknown(commandArg['projectPath']) || getProjectPath(state, projectName);
+      const projectPath = stringFromUnknown(commandArg['projectPath']) || getProjectPath(state.state?.projects, projectName);
       if (!projectPath || !projectName) {
         vscode.window.showWarningMessage('No project specified.');
         return;
@@ -2650,7 +2649,7 @@ export function activate(context: vscode.ExtensionContext) {
           projectName = pick.label;
         }
       }
-      const projectPath = getProjectPath(state, projectName);
+      const projectPath = getProjectPath(state.state?.projects, projectName);
       if (!projectPath) { return; }
 
       const reviewTickets = Object.entries(state.state?.tickets || {})
@@ -2845,7 +2844,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (!pick) { return; }
         projectName = pick.label;
       }
-      const projectPath = getProjectPath(state, projectName);
+      const projectPath = getProjectPath(state.state?.projects, projectName);
       if (!projectPath) { return; }
 
       const feedback = await vscode.window.showInputBox({
@@ -4357,7 +4356,7 @@ function planToQueueItem(state: KronosState, plan: PlannedAction): QueueItem {
   return buildQueueItemFromPlan({
     state: state.state,
     queue: state.queue,
-    resolveProjectPath: projectName => getProjectPath(state, projectName),
+    resolveProjectPath: projectName => getProjectPath(state.state?.projects, projectName),
   }, plan);
 }
 
@@ -4490,20 +4489,6 @@ function collisionSeverityLabel(severity: DispatchCollision['severity']): string
   if (severity === 'high') { return '[HIGH]'; }
   if (severity === 'medium') { return '[MED]'; }
   return '[LOW]';
-}
-
-function getProjectPath(state: KronosState, projectName?: string): string | undefined {
-  if (!projectName || !state.state) { return undefined; }
-  return state.state.projects[projectName]?.path;
-}
-
-function getProjectNameForPath(state: KronosState, projectPath?: string): string | undefined {
-  const targetPath = projectPathKey(projectPath);
-  if (!targetPath || !state.state) { return undefined; }
-  for (const [projectName, project] of Object.entries(state.state.projects)) {
-    if (projectPathKey(project.path) === targetPath) { return projectName; }
-  }
-  return undefined;
 }
 
 function getActiveProfile(): KronosProfile {
@@ -4840,7 +4825,7 @@ async function pickProjectFromTickets<T extends { key: string; projects: string[
     projectName = pick.label;
   }
 
-  const projectPath = getProjectPath(state, projectName);
+  const projectPath = getProjectPath(state.state?.projects, projectName);
   if (!projectPath) { return null; }
 
   return { projectName, projectPath, tickets: byProject[projectName] || [] };

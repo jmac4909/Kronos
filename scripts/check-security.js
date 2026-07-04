@@ -935,7 +935,8 @@ for (const marker of [
   "unknownErrorMessage(e, 'Failed to resume run.')",
   "unknownErrorMessage(e, 'Failed to archive run.')",
   'unknownErrorMessage(e, `Failed to archive ${run.id}.`)',
-  "import { projectPathKey } from './services/pathUtils'",
+  'getProjectNameForPath, getProjectPath',
+  "from './services/projectSelection'",
   "import { isExistingRealPathInside } from './pathUtils'",
   'isExistingRealPathInside(filePath, RUNS_DIR)',
   'function resolveRunArtifactFile(filePath: string | undefined): RunArtifactPathResult',
@@ -1468,7 +1469,7 @@ for (const marker of [
   "vscode.commands.registerCommand('kronos.linkTicket', async (ticketKeyOrItem: unknown)",
   "vscode.commands.registerCommand('kronos.unlinkTicket', async (item: unknown)",
   'const queueData = resolveQueueCommandItem(treeItemOrData);',
-  'pathProject: getProjectNameForPath(state, queueData.projectPath),',
+  'pathProject: getProjectNameForPath(state.state?.projects, queueData.projectPath),',
   'const projs = dispatchPlan.projects;',
   'const projLabel = dispatchPlan.projectLabel;',
   'if (projs.length === 0 && !dispatchPlan.directProjectPath)',
@@ -1489,7 +1490,7 @@ for (const marker of [
   "projectName = await pickProjectName(state, 'Fix SonarQube issues in which project?');",
   "projectName = await pickProjectName(state, 'Fix verification finding in which project?');",
   'let projectName = resolveProjectName(state, args);',
-  "const projectPath = stringFromUnknown(commandArg['projectPath']) || getProjectPath(state, projectName);",
+  "const projectPath = stringFromUnknown(commandArg['projectPath']) || getProjectPath(state.state?.projects, projectName);",
   'let projectName = resolveProjectName(state, item);',
   'let orphanKey = resolveTicketKey(treeItem);',
   'orphanKey = await pickOrphanMergeRequestTicket(state.state);',
@@ -1528,6 +1529,9 @@ for (const marker of [
   'export function buildTicketProjectItems',
   'export function groupTicketsByProject',
   'export function buildTicketGroupProjectItems',
+  'export function getProjectPath',
+  'export function getProjectNameForPath',
+  "import { projectPathKey } from './pathUtils'",
 ]) {
   if (!projectSelection.includes(marker)) {
     fail(`Missing project selection helper marker: ${marker}`);
@@ -2500,8 +2504,8 @@ for (const [name, source] of [
     fail(`${name} must not carry a local isPathInside helper.`);
   }
 }
-if (!extension.includes("import { projectPathKey } from './services/pathUtils'")) {
-  fail('src/extension.ts must import the shared project path helper.');
+if (!projectSelection.includes("import { projectPathKey } from './pathUtils'")) {
+  fail('src/services/projectSelection.ts must import the shared project path helper.');
 }
 if (!runActionHelpers.includes("import { isExistingRealPathInside } from './pathUtils'")) {
   fail('src/services/runActionHelpers.ts must import the shared path containment helper.');
@@ -2511,6 +2515,9 @@ if (extension.includes('function isPathInsideDirectory')) {
 }
 if (extension.includes('function projectPathKey(')) {
   fail('src/extension.ts must not carry a local project path identity helper.');
+}
+if (extension.includes('function getProjectPath(') || extension.includes('function getProjectNameForPath(')) {
+  fail('src/extension.ts must not carry local project registry lookup helpers.');
 }
 if (!runActionHelpers.includes('isExistingRealPathInside(filePath, RUNS_DIR)')) {
   fail('src/services/runActionHelpers.ts must use the shared realpath containment helper for run artifacts.');

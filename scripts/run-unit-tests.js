@@ -3934,6 +3934,12 @@ test('project selection helpers build project and ticket group picks', () => {
     { label: 'api', description: '2 tickets' },
     { label: 'web', description: '1 tickets' },
   ]);
+  assert.equal(projectSelection.getProjectPath({ api: { path: '/repo/api' } }, 'api'), '/repo/api');
+  assert.equal(projectSelection.getProjectPath({ api: { path: '/repo/api' } }, 'missing'), undefined);
+  assert.equal(projectSelection.getProjectPath(undefined, 'api'), undefined);
+  assert.equal(projectSelection.getProjectNameForPath({ api: { path: '/repo/api/' } }, '/repo/api'), 'api');
+  assert.equal(projectSelection.getProjectNameForPath({ api: { path: '\\\\repo\\\\api\\\\' } }, '/repo/api'), 'api');
+  assert.equal(projectSelection.getProjectNameForPath({ api: {} }, '/repo/api'), undefined);
 });
 
 test('date value helper centralizes valid date coercion', () => {
@@ -4013,10 +4019,13 @@ test('path util helper centralizes directory containment checks', () => {
     assert.equal(source.includes('function isPathInside'), false, `${file} should not carry a local isPathInside helper`);
   }
   const extensionSource = readSourceFixture('src', 'extension.ts');
+  const projectSelectionSource = readSourceFixture('src', 'services', 'projectSelection.ts');
   const runActionHelpersSource = readSourceFixture('src', 'services', 'runActionHelpers.ts');
-  assert.ok(extensionSource.includes("import { projectPathKey } from './services/pathUtils'"));
+  assert.ok(projectSelectionSource.includes("import { projectPathKey } from './pathUtils'"));
   assert.ok(runActionHelpersSource.includes("import { isExistingRealPathInside } from './pathUtils'"));
   assert.equal(extensionSource.includes('function isPathInsideDirectory'), false);
+  assert.equal(extensionSource.includes('function getProjectPath('), false);
+  assert.equal(extensionSource.includes('function getProjectNameForPath('), false);
   assert.ok(runActionHelpersSource.includes('isExistingRealPathInside(filePath, RUNS_DIR)'));
 });
 
@@ -10323,7 +10332,7 @@ test('extension run recovery helpers use typed run records', () => {
     'await retryRunFromPrompt(state, run)',
     'function resolveRunWorkspace(run: RunActionRecord)',
     'type RunArtifactPathResult',
-    "import { projectPathKey } from './services/pathUtils'",
+    'getProjectNameForPath, getProjectPath',
     "import { isExistingRealPathInside } from './pathUtils'",
     'isExistingRealPathInside(filePath, RUNS_DIR)',
     'function resolveRunArtifactFile(filePath: string | undefined): RunArtifactPathResult',
@@ -10585,7 +10594,7 @@ test('extension queue command handlers normalize payloads before use', () => {
     "vscode.commands.registerCommand('kronos.verifyLocal', async (treeItem: unknown)",
     'const ticketKey = resolveTicketKey(treeItem);',
     'const queueData = resolveQueueCommandItem(treeItemOrData);',
-    'pathProject: getProjectNameForPath(state, queueData.projectPath),',
+    'pathProject: getProjectNameForPath(state.state?.projects, queueData.projectPath),',
     'const projs = dispatchPlan.projects;',
     'const projLabel = dispatchPlan.projectLabel;',
     'if (projs.length === 0 && !dispatchPlan.directProjectPath)',
@@ -10600,9 +10609,8 @@ test('extension queue command handlers normalize payloads before use', () => {
     'const idx = resolveQueueIndex(treeItem);',
     'await startClaudeDispatch(target.projectPath, skill, queueData.ticket || undefined,',
     'resolveQueueCommandItem,',
-    'function getProjectNameForPath(state: KronosState, projectPath?: string): string | undefined',
-    "import { projectPathKey } from './services/pathUtils'",
-    'projectPathKey(project.path)',
+    'getProjectNameForPath, getProjectPath',
+    "from './services/projectSelection'",
     'resolveQueueIndex,',
   ]) {
     assert.ok(source.includes(marker), marker);
@@ -10776,7 +10784,7 @@ test('extension Sonar commands normalize webview and issue payloads', () => {
     "projectName = await pickProjectName(state, 'Fix SonarQube issues in which project?');",
     "projectName = await pickProjectName(state, 'Fix verification finding in which project?');",
     'let projectName = resolveProjectName(state, args);',
-    "const projectPath = stringFromUnknown(commandArg['projectPath']) || getProjectPath(state, projectName);",
+    "const projectPath = stringFromUnknown(commandArg['projectPath']) || getProjectPath(state.state?.projects, projectName);",
     'let projectName = resolveProjectName(state, item);',
     'panel.webview.onDidReceiveMessage(async (msg: unknown) =>',
     'const commandArg = recordFromUnknown(item)',
