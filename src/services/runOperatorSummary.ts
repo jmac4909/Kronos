@@ -4,6 +4,7 @@ import { runAttentionDetail } from './runAttention';
 import { runStatusDisplayLabel } from './runLabels';
 import { runProgressSummary } from './runProgress';
 import { effectiveRunStatus, isActiveRunStatus } from './runStatus';
+import { compactSingleLineText } from './textFormat';
 
 export type RunOperatorTone = 'good' | 'warn' | 'bad' | 'info' | 'neutral';
 
@@ -152,15 +153,10 @@ function latestMeaningfulSignal(events: Array<Record<string, unknown>>): string 
     const label = recordString(event, 'label');
     const value = detail || label;
     if (value && !/^Session complete/i.test(value) && !/^Complete - /i.test(value)) {
-      return compactText(value, 160);
+      return compactSingleLineText(value, 160);
     }
   }
   return '';
-}
-
-function compactText(value: string, maxLength: number): string {
-  const compact = value.replace(/\s+/g, ' ').trim();
-  return compact.length > maxLength ? `${compact.substring(0, maxLength - 3)}...` : compact;
 }
 
 function shortDateTime(value: unknown): string {

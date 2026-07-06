@@ -1,6 +1,7 @@
 import { classifyRunFailure, type RunFailureKind } from './postRunReadiness';
 import { recordFromUnknown } from './records';
 import { runStatusDisplayLabel } from './runLabels';
+import { compactSingleLineText } from './textFormat';
 
 type RunAttentionSource =
   | 'failureReason'
@@ -84,8 +85,7 @@ export function runAttentionDetail(run: unknown): string {
 }
 
 export function runAttentionLine(run: unknown, maxLength = 140): string {
-  const text = runAttentionDetail(run).replace(/\s+/g, ' ').trim();
-  return text.length > maxLength ? `${text.substring(0, maxLength - 3)}...` : text;
+  return compactSingleLineText(runAttentionDetail(run), maxLength);
 }
 
 function runFailureKindLabel(kind: RunFailureKind, status = ''): string {

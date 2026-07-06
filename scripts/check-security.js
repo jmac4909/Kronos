@@ -111,6 +111,7 @@ const severityRank = readSource('src/services/severityRank.ts');
 const records = readSource('src/services/records.ts');
 const commandPayloads = readSource('src/services/commandPayloads.ts');
 const countLabels = readSource('src/services/countLabels.ts');
+const textFormat = readSource('src/services/textFormat.ts');
 const dateValues = readSource('src/services/dateValues.ts');
 const dateLabels = sources['src/services/dateLabels.ts'];
 const ticketFields = sources['src/services/ticketFields.ts'];
@@ -2528,6 +2529,16 @@ for (const marker of [
 }
 
 for (const marker of [
+  'export function compactSingleLineText(value: unknown, maxLength: number): string',
+  "String(value ?? '').replace(/\\s+/g, ' ').trim()",
+  "`${compact.substring(0, maxLength - 3)}...`",
+]) {
+  if (!textFormat.includes(marker)) {
+    fail(`Missing compact text helper marker: ${marker}`);
+  }
+}
+
+for (const marker of [
   'export function mergeRequestCommentsFromRecord(record: object | null | undefined): MergeRequestComment[]',
   'Reflect.get(record, \'comments\')',
   "value.filter((item): item is MergeRequestComment => isRecord(item) && typeof item['body'] === 'string')",
@@ -4106,6 +4117,33 @@ for (const [name, source, marker] of [
   }
   if (/status\.replace\(/.test(source)) {
     fail(`${name} must not format run status labels locally.`);
+  }
+}
+for (const [name, source, marker] of [
+  ['src/services/runAttention.ts', runAttention, "import { compactSingleLineText } from './textFormat'"],
+  ['src/services/runOperatorSummary.ts', runOperatorSummary, "import { compactSingleLineText } from './textFormat'"],
+  ['src/views/ReviewTreeProvider.ts', reviewTreeProvider, "import { compactSingleLineText } from '../services/textFormat'"],
+]) {
+  if (!source.includes(marker)) {
+    fail(`${name} must import the shared compact text helper.`);
+  }
+}
+if (!runAttention.includes('return compactSingleLineText(runAttentionDetail(run), maxLength)')) {
+  fail('runAttentionLine should use shared compact text helper.');
+}
+if (!runOperatorSummary.includes('return compactSingleLineText(value, 160)')) {
+  fail('runOperatorSummary should use shared compact text helper.');
+}
+if (!reviewTreeProvider.includes('const summary = compactSingleLineText(latest.body, 180)')) {
+  fail('ReviewTreeProvider should use shared compact text helper for MR comment summaries.');
+}
+for (const [name, source] of [
+  ['src/services/runAttention.ts', runAttention],
+  ['src/services/runOperatorSummary.ts', runOperatorSummary],
+  ['src/views/ReviewTreeProvider.ts', reviewTreeProvider],
+]) {
+  if (/replace\(\/\\s\+\/g, ' '\)\.trim\(\)|function compactText/.test(source)) {
+    fail(`${name} must not carry local compact text formatting.`);
   }
 }
 

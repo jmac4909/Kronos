@@ -262,6 +262,7 @@ const ticketFields = require('../out/services/ticketFields.js');
 const webviewHtml = require('../out/services/webviewHtml.js');
 const webviewFormat = require('../out/services/webviewFormat.js');
 const countLabels = require('../out/services/countLabels.js');
+const textFormat = require('../out/services/textFormat.js');
 const fileNames = require('../out/services/fileNames.js');
 const sessionStore = require('../out/services/sessionStore.js');
 const worktreeRegistry = require('../out/services/worktreeRegistry.js');
@@ -6557,6 +6558,8 @@ test('run attention summarizes actionable failure reasons', () => {
   assert.equal(runLabels.runStatusDisplayLabel('needs_human'), 'needs human');
   assert.equal(runLabels.runStatusDisplayLabel(' waiting_for_review '), 'waiting for review');
   assert.equal(runLabels.runStatusDisplayLabel(undefined, 'not started'), 'not started');
+  assert.equal(textFormat.compactSingleLineText(' First line\n  Second\tline ', 80), 'First line Second line');
+  assert.equal(textFormat.compactSingleLineText('x'.repeat(20), 10), 'xxxxxxx...');
 
   const buildFailure = runAttention.runAttentionDetail({
     id: 'run-9',
@@ -6595,6 +6598,19 @@ test('run attention summarizes actionable failure reasons', () => {
     status: 'failed',
     failureReason: 'x'.repeat(200),
   }, 20), 'Run failed: xxxxx...');
+
+  const textFormatSource = readSourceFixture('src', 'services', 'textFormat.ts');
+  for (const marker of [
+    'export function compactSingleLineText(value: unknown, maxLength: number): string',
+    "String(value ?? '').replace(/\\s+/g, ' ').trim()",
+    "`${compact.substring(0, maxLength - 3)}...`",
+  ]) {
+    assert.ok(textFormatSource.includes(marker), marker);
+  }
+  const runAttentionSource = readSourceFixture('src', 'services', 'runAttention.ts');
+  assert.ok(runAttentionSource.includes("import { compactSingleLineText } from './textFormat'"));
+  assert.ok(runAttentionSource.includes('return compactSingleLineText(runAttentionDetail(run), maxLength)'));
+  assert.equal(runAttentionSource.includes("replace(/\\s+/g, ' ').trim()"), false, 'runAttention should use shared compact text helper');
 });
 
 test('run completion notifications route review-ready and attention outcomes', () => {
@@ -7164,13 +7180,16 @@ test('run operator summary highlights progress, files, readiness, and blockers',
     "import { runProgressSummary } from './runProgress'",
     "import { effectiveRunStatus, isActiveRunStatus } from './runStatus'",
     "import { runAttentionDetail } from './runAttention'",
+    "import { compactSingleLineText } from './textFormat'",
     'export function buildRunOperatorSummary',
     'function latestMeaningfulSignal',
     'function eventFiles',
     'function runNextStep',
+    'return compactSingleLineText(value, 160)',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+  assert.equal(source.includes('function compactText'), false, 'runOperatorSummary should use shared compact text helper');
 });
 
 test('active run display summarizes status bar text and tooltip progress', () => {
@@ -11604,6 +11623,9 @@ test('tree providers share action labels and icons', () => {
   assert.equal(extensionSource.includes('function evidenceCountForTicket'), false, 'extension should call shared evidenceRecordCount directly');
   assert.equal(extensionSource.includes('function isAttentionRunStatus'), false, 'extension should use shared run attention status helper');
   assert.equal(extensionSource.includes('function singleLineRunSummary'), false, 'extension should use shared run attention line formatter');
+  assert.ok(reviewTree.includes("import { compactSingleLineText } from '../services/textFormat'"), 'review tree should use shared compact text helper');
+  assert.ok(reviewTree.includes('const summary = compactSingleLineText(latest.body, 180)'), 'review tree should compact MR comments through shared helper');
+  assert.equal(reviewTree.includes("latest.body.replace(/\\s+/g, ' ').trim()"), false, 'review tree should not compact MR comment text locally');
 });
 
 test('queue tree polling clears active-run decorations after runs finish', async () => {

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { KronosState } from '../state/KronosState';
 import { Ticket } from '../state/types';
 import { mergeRequestReviewStatusLabel } from '../services/mergeRequestLabels';
+import { compactSingleLineText } from '../services/textFormat';
 import { TicketFilter, describeTicketFilter, hasTicketFilter, ticketMatchesFilter } from '../services/ticketFilters';
 import { openReviewTicketEntries } from '../services/reviewWork';
 
@@ -378,7 +379,6 @@ function latestMergeRequestCommentSummary(ticket: Ticket): string {
   const latest = comments.at(-1);
   if (!latest) { return ''; }
   const author = latest.author ? `${latest.author}: ` : '';
-  const body = latest.body.replace(/\s+/g, ' ').trim();
-  const summary = body.length > 180 ? `${body.slice(0, 177)}...` : body;
+  const summary = compactSingleLineText(latest.body, 180);
   return `${author}${summary}`;
 }
