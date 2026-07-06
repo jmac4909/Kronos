@@ -4279,7 +4279,7 @@ test('command payload helpers normalize tree, webview, queue, and run payloads',
 
   assert.equal(commandPayloads.stringFromUnknown(' K-1 '), 'K-1');
   assert.equal(commandPayloads.stringFromUnknown('   '), undefined);
-  assert.equal(commandPayloads.resolveProjectName(state, { projectName: ' api ' }), ' api ');
+  assert.equal(commandPayloads.resolveProjectName(state, { projectName: ' api ' }), 'api');
   assert.equal(commandPayloads.resolveProjectName(state, { ticket: { projects: ['web'] } }), 'web');
   assert.equal(commandPayloads.resolveProjectName(state, { ticketKey: 'K-2' }), 'svc');
   assert.equal(commandPayloads.explicitProjectName({ item: { projectName: 'nested' } }), 'nested');
@@ -4319,7 +4319,7 @@ test('command payload helpers normalize tree, webview, queue, and run payloads',
 
   const source = readSourceFixture('src', 'services', 'commandPayloads.ts');
   for (const marker of [
-    "import { recordFromUnknown } from './records'",
+    "import { optionalTrimmedStringFromUnknown, recordFromUnknown } from './records'",
     "import { ticketStringArray } from './ticketFields'",
     'export interface QueueCommandPayload',
     'export function resolveProjectName',
@@ -4327,9 +4327,11 @@ test('command payload helpers normalize tree, webview, queue, and run payloads',
     'export function resolveRecoveryFocusId',
     'export function resolveQueueCommandItem',
     'export function queueCommandPayloadFromRecord',
+    "const projectName = stringFromUnknown(record['projectName'])",
     "const firstTicketProject = ticketStringArray(ticket['projects'])[0]",
     'return [...new Set(ticketStringArray(value))]',
     "const projects = ticketStringArray(record['projects'])",
+    'return optionalTrimmedStringFromUnknown(value)',
     "stringFromUnknown(record['project_path']) || stringFromUnknown(record['projectPath'])",
     "typeof index === 'number' && Number.isInteger(index) && index >= 0",
   ]) {

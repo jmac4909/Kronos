@@ -1,5 +1,5 @@
 import type { KronosState as KronosStateSnapshot } from '../state/types';
-import { recordFromUnknown } from './records';
+import { optionalTrimmedStringFromUnknown, recordFromUnknown } from './records';
 import { ticketStringArray } from './ticketFields';
 
 interface CommandPayloadState {
@@ -15,13 +15,13 @@ export interface QueueCommandPayload {
 }
 
 export function stringFromUnknown(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  return optionalTrimmedStringFromUnknown(value);
 }
 
 export function resolveProjectName(state: CommandPayloadState, item: unknown): string | undefined {
   const record = recordFromUnknown(item);
-  const projectName = record['projectName'];
-  if (typeof projectName === 'string' && projectName.trim()) { return projectName; }
+  const projectName = stringFromUnknown(record['projectName']);
+  if (projectName) { return projectName; }
   const ticket = recordFromUnknown(record['ticket']);
   const firstTicketProject = ticketStringArray(ticket['projects'])[0];
   if (firstTicketProject) {

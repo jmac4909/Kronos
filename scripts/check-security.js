@@ -1537,11 +1537,12 @@ for (const marker of [
   }
 }
 for (const marker of [
-  "import { recordFromUnknown } from './records'",
+  "import { optionalTrimmedStringFromUnknown, recordFromUnknown } from './records'",
   "import { ticketStringArray } from './ticketFields'",
   'export interface QueueCommandPayload',
   'export function resolveProjectName',
   "const ticket = recordFromUnknown(record['ticket'])",
+  "const projectName = stringFromUnknown(record['projectName'])",
   "const firstTicketProject = ticketStringArray(ticket['projects'])[0]",
   'export function resolveTicketKey',
   "const nestedItem = recordFromUnknown(record['item'])",
@@ -1552,6 +1553,7 @@ for (const marker of [
   'export function resolveQueueIndex',
   "typeof index === 'number' && Number.isInteger(index) && index >= 0",
   'export function stringFromUnknown',
+  'return optionalTrimmedStringFromUnknown(value)',
   'export function resolveMergeRequestUrl',
   'export function resolveTaskId',
   'export function resolveRecoveryFocusId',
