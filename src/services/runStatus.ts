@@ -18,8 +18,8 @@ interface RunStatusLike {
 }
 
 export function runStatus(value: RunStatusLike | unknown): string {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) { return ''; }
-  const status = Reflect.get(value, 'status');
+  if (!isRecord(value)) { return ''; }
+  const status = value['status'];
   return typeof status === 'string' ? status : '';
 }
 

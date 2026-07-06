@@ -7561,6 +7561,8 @@ test('run status helper centralizes active persisted run semantics', () => {
     'const FINISHED_RUN_STATUSES = new Set([...SUCCESSFUL_RUN_STATUSES, ...FAILED_TERMINAL_RUN_STATUSES])',
     'const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
     'interface RunStatusLike',
+    'if (!isRecord(value)) { return \'\'; }',
+    "const status = value['status']",
     'export function isActiveRunStatus',
     'export function isSuccessfulRunStatus',
     'export function isFailedOrCancelledRunStatus',
@@ -7589,6 +7591,8 @@ test('run status helper centralizes active persisted run semantics', () => {
     assert.ok(source.includes(marker), marker);
   }
   assert.equal(source.includes('filter(isRecord)'), false);
+  assert.equal(source.includes("if (!value || typeof value !== 'object' || Array.isArray(value)) { return ''; }"), false);
+  assert.equal(source.includes("Reflect.get(value, 'status')"), false);
   for (const marker of [
     'export const ACTIVE_RUN_STATUSES',
     'export const STALEABLE_ACTIVE_RUN_STATUSES',

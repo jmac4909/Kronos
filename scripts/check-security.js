@@ -4483,6 +4483,8 @@ for (const marker of [
   'const FINISHED_RUN_STATUSES = new Set([...SUCCESSFUL_RUN_STATUSES, ...FAILED_TERMINAL_RUN_STATUSES])',
   'const DEFAULT_STALE_ACTIVE_RUN_MS = 12 * 60 * 60 * 1000',
   'interface RunStatusLike',
+  'if (!isRecord(value)) { return \'\'; }',
+  "const status = value['status']",
   'export function isActiveRunStatus',
   'export function isSuccessfulRunStatus',
   'export function isFailedOrCancelledRunStatus',
@@ -4520,6 +4522,8 @@ for (const staleMarker of [
   'export const DEFAULT_STALE_ACTIVE_RUN_MS',
   'export interface RunStatusLike',
   'export function hasTerminalRunSignal',
+  "if (!value || typeof value !== 'object' || Array.isArray(value)) { return ''; }",
+  "Reflect.get(value, 'status')",
 ]) {
   if (runStatus.includes(staleMarker)) {
     fail(`Run status internals should not be exported: ${staleMarker}`);
