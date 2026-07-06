@@ -6412,8 +6412,12 @@ test('dispatcher close handler preserves operator terminal run statuses', () => 
   for (const marker of [
     'function addRunEventBestEffort',
     'function updateRunBestEffort',
+    "import { appendRunRecoveryActions, appendRunWarnings, runEventRecords } from '../services/runMetadata'",
     'const preservedTerminalStatus = preservedTerminalRunStatus(persisted)',
     'if (preservedTerminalStatus && persisted)',
+    'run.events = persistedRunEvents(persisted.events)',
+    'function persistedRunEvents(value: unknown): KronosRun[\'events\']',
+    'return runEventRecords(value).flatMap(event => {',
     "preservedTerminalStatus === 'needs_human'",
     "'Session marked needs human'",
     "addRunEventBestEffort(run, finalEvent, 'Failed to persist terminal run event.')",
@@ -6429,6 +6433,7 @@ test('dispatcher close handler preserves operator terminal run statuses', () => 
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+  assert.equal(source.includes('run.events = Array.isArray(persisted.events) ? persisted.events : run.events'), false);
 });
 
 test('dispatcher completion callback refreshes progress panel after successful mutations', () => {
@@ -6661,7 +6666,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "import { runProgressSummary } from '../services/runProgress'",
     "import { buildRunOperatorSummary, type RunOperatorSummary, type RunOperatorTone } from '../services/runOperatorSummary'",
     "import { isAttentionRunStatus, runAttentionDetail } from '../services/runAttention'",
-    "import { appendRunRecoveryActions, appendRunWarnings } from '../services/runMetadata'",
+    "import { appendRunRecoveryActions, appendRunWarnings, runEventRecords } from '../services/runMetadata'",
     'createWebviewNonce',
     'webviewScriptCspOptions',
     'WEBVIEW_ACTION_PANEL_SCRIPT',

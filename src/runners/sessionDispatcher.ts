@@ -24,7 +24,7 @@ import { isFreshActiveRun } from '../services/runStatus';
 import { runProgressSummary } from '../services/runProgress';
 import { buildRunOperatorSummary, type RunOperatorSummary, type RunOperatorTone } from '../services/runOperatorSummary';
 import { isAttentionRunStatus, runAttentionDetail } from '../services/runAttention';
-import { appendRunRecoveryActions, appendRunWarnings } from '../services/runMetadata';
+import { appendRunRecoveryActions, appendRunWarnings, runEventRecords } from '../services/runMetadata';
 import { sortedRunCenterRuns } from '../services/runCenterSort';
 import { readJsonFile } from '../services/jsonFiles';
 import { arrayFromUnknown, isRecord, recordEntriesFromUnknown, recordFromUnknown, trimmedStringFromUnknown } from '../services/records';
@@ -367,6 +367,18 @@ function writeRun(run: KronosRun): void {
 
 function appendRunLog(run: KronosRun, chunk: string): void {
   appendRunLogFile(run.logPath, chunk);
+}
+
+function persistedRunEvents(value: unknown): KronosRun['events'] {
+  return runEventRecords(value).flatMap(event => {
+    if (!event.type || !event.timestamp) { return []; }
+    return [{
+      type: event.type,
+      label: event.label || '',
+      detail: event.detail || '',
+      timestamp: event.timestamp,
+    }];
+  });
 }
 
 function addRunEvent(run: KronosRun, event: ProgressEvent): void {
@@ -1090,7 +1102,7 @@ export async function dispatchClaudeSession(
       else { delete run.failureReason; }
       if (persisted.endedAt !== undefined) { run.endedAt = persisted.endedAt; }
       else { delete run.endedAt; }
-      run.events = Array.isArray(persisted.events) ? persisted.events : run.events;
+      run.events = persistedRunEvents(persisted.events);
       if (persisted.recoveryActions !== undefined) { run.recoveryActions = persisted.recoveryActions; }
       else { delete run.recoveryActions; }
       if (persisted.processPid !== undefined) { run.processPid = persisted.processPid; }
