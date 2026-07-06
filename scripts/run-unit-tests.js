@@ -3720,6 +3720,7 @@ test('changed file helpers normalize GitLab path variants', () => {
   assert.equal(changedFiles.primaryChangedFilePath({ filename: 'src/orders/create.ts' }), 'src/orders/create.ts');
   assert.deepEqual(changedFiles.changedFilePaths('src/app.ts'), ['src/app.ts']);
   assert.deepEqual(changedFiles.normalizeChangedFiles([42]), []);
+  assert.deepEqual(changedFiles.normalizeChangedFiles(42), []);
   assert.equal(changedFiles.normalizeChangedFilePath, undefined);
   assert.equal(changedFiles.normalizeChangedFile, undefined);
   assert.deepEqual(changedFiles.normalizeChangedFiles([
@@ -4173,7 +4174,7 @@ test('record guard helper centralizes unknown object narrowing', () => {
   assert.equal(runRecordsSource.includes('export function isRunLikeRecord'), false);
 
   for (const [file, marker] of [
-    ['changedFiles.ts', "import { isRecord } from './records'"],
+    ['changedFiles.ts', "import { arrayFromUnknown, isRecord } from './records'"],
     ['agingAnalyzer.ts', "import { recordEntriesFromUnknown } from './records'"],
     ['evidenceData.ts', "import { isRecord, recordsFromUnknown, recordValuesFromUnknown, trimmedStringFromUnknown } from './records'"],
     ['integrationAdapters.ts', "import { arrayFromUnknown, isRecord, optionalFiniteNumberFromUnknown, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records'"],
@@ -10255,6 +10256,7 @@ test('post-run readiness distinguishes process completion from handoff readiness
     'interface RunCompletionEvidenceCheck',
     'function mergeRequestChangedFileCount(ticket?: Ticket): number | undefined',
     'normalizeChangedFiles(files).length',
+    'if (files === undefined) { return undefined; }',
     'function ticketSonarStatus(ticket?: Ticket): string | undefined',
     "import { isPassingBuildStatus } from './buildStatus'",
     'function isPassingSonar',
@@ -10275,6 +10277,7 @@ test('post-run readiness distinguishes process completion from handoff readiness
     assert.ok(source.includes(marker), marker);
   }
   assert.equal(source.includes('return Array.isArray(files) ? files.length : undefined'), false, 'post-run readiness should count normalized MR changed files');
+  assert.equal(source.includes('return Array.isArray(files) ? normalizeChangedFiles(files).length : undefined'), false, 'post-run readiness should delegate MR file shape to normalizeChangedFiles');
   for (const marker of [
     'run: any',
     'event: any',

@@ -423,7 +423,8 @@ function ticketLinkedToProject(ticket: Ticket, projectName: string): boolean {
 
 function mergeRequestChangedFileCount(ticket?: Ticket): number | undefined {
   const files = ticket?.mr?.changed_files ?? ticket?.mr?.files;
-  return Array.isArray(files) ? normalizeChangedFiles(files).length : undefined;
+  if (files === undefined) { return undefined; }
+  return normalizeChangedFiles(files).length;
 }
 
 function ticketSonarStatus(ticket?: Ticket): string | undefined {

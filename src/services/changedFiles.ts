@@ -1,5 +1,5 @@
 import { MergeRequestChangedFile } from '../state/types';
-import { isRecord } from './records';
+import { arrayFromUnknown, isRecord } from './records';
 
 function normalizeChangedFilePath(value: unknown): string {
   if (typeof value !== 'string') { return ''; }
@@ -55,6 +55,5 @@ function normalizeChangedFile(file: unknown): MergeRequestChangedFile | null {
 }
 
 export function normalizeChangedFiles(files: unknown): MergeRequestChangedFile[] {
-  if (!Array.isArray(files)) { return []; }
-  return files.map(normalizeChangedFile).filter((file): file is MergeRequestChangedFile => Boolean(file));
+  return arrayFromUnknown(files).map(normalizeChangedFile).filter((file): file is MergeRequestChangedFile => Boolean(file));
 }

@@ -3096,7 +3096,7 @@ for (const [name, source, marker] of [
 
 for (const [name, source, marker] of [
   ['src/extension.ts', extension, "import { isRecord, optionalTrimmedStringFromUnknown, recordEntriesFromUnknown, recordFromUnknown, recordKeysFromUnknown, recordString } from './services/records'"],
-  ['src/services/changedFiles.ts', changedFiles, "import { isRecord } from './records'"],
+  ['src/services/changedFiles.ts', changedFiles, "import { arrayFromUnknown, isRecord } from './records'"],
   ['src/services/agingAnalyzer.ts', agingAnalyzer, "import { recordEntriesFromUnknown } from './records'"],
   ['src/services/evidenceData.ts', evidenceData, "import { isRecord, recordsFromUnknown, recordValuesFromUnknown, trimmedStringFromUnknown } from './records'"],
   ['src/services/integrationAdapters.ts', integrationAdapters, "import { arrayFromUnknown, isRecord, optionalFiniteNumberFromUnknown, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records'"],
@@ -3956,6 +3956,7 @@ for (const marker of [
   'file.oldPath',
   'file.filename',
   "typeof file['diff'] === 'string'",
+  'return arrayFromUnknown(files).map(normalizeChangedFile).filter',
 ]) {
   if (!changedFiles.includes(marker)) {
     fail(`Missing changed files marker: ${marker}`);
@@ -5350,6 +5351,7 @@ for (const marker of [
   "import { isPassingBuildStatus } from './buildStatus'",
   "import { normalizeChangedFiles } from './changedFiles'",
   'normalizeChangedFiles(files).length',
+  'if (files === undefined) { return undefined; }',
   'function isPassingSonar',
   'export function classifyRunFailure(run: unknown): RunFailureKind',
   "import { isHandoffAction } from './actionSemantics'",
@@ -5385,6 +5387,7 @@ for (const forbidden of [
   'const SUCCESS_RUN_STATUSES',
   'const READINESS_STATUS_TRANSITION_RUN_STATUSES',
   'return Array.isArray(files) ? files.length : undefined',
+  'return Array.isArray(files) ? normalizeChangedFiles(files).length : undefined',
 ]) {
   if (postRunReadiness.includes(forbidden)) {
     fail(`Post-run readiness must normalize raw run payloads instead of using ${forbidden}.`);
