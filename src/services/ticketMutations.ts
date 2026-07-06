@@ -15,6 +15,7 @@ import { setAcceptanceCriteriaChecked } from './acceptanceCriteria';
 import { decideEvidenceHandoff } from './evidenceGatePolicy';
 import { sortMergeRequestCommentsByCreated } from './mergeRequestComments';
 import { isRecord, optionalTrimmedStringFromUnknown } from './records';
+import { ticketStringArray } from './ticketFields';
 
 type EvidenceNoteKind = TicketEvidenceNote['kind'];
 type EvidenceResult = TicketEvidenceCheck['result'];
@@ -467,7 +468,7 @@ function attachMergeRequest(target: Ticket, orphan: Ticket, mr: MergeRequest): v
   if (target.next_action === 'implement' || target.next_action === 'in_progress') {
     target.next_action = 'await_review';
   }
-  for (const project of orphan.projects || []) {
+  for (const project of ticketStringArray(orphan.projects)) {
     if (!target.projects.includes(project)) {
       target.projects.push(project);
     }

@@ -1063,7 +1063,7 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
     }),
     'orphan-99': ticket({
       summary: 'Orphan MR',
-      projects: ['app', 'api'],
+      projects: ['app', ' ', ' api ', 'api'],
       mr: { iid: 99, state: 'opened', review_status: 'pending_review', url: 'https://gitlab.example/mr/99' },
     }),
   });
@@ -1152,6 +1152,7 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
   ]);
   assert.equal(target.mr.iid, 99);
   assert.ok(target.projects.includes('api'));
+  assert.deepEqual(target.projects, ['app', 'api']);
   assert.equal(persisted.tickets['orphan-99'], undefined);
   assert.equal(persisted.tickets['K-RUN'].evidence.notes[0].text, 'Kronos implement run run-atomic completed.');
   assert.equal(persisted.tickets['K-RUN'].evidence.checks[0].name, 'Kronos implement completion');
@@ -4198,6 +4199,9 @@ test('record guard helper centralizes unknown object narrowing', () => {
   const mergeRequestCommentsSource = readSourceFixture('src', 'services', 'mergeRequestComments.ts');
   const mergeRequestLabelsSource = readSourceFixture('src', 'services', 'mergeRequestLabels.ts');
   assert.equal(ticketMutationsSource.includes('function optionalTrim(value: string | undefined): string | undefined'), false, 'ticketMutations should use shared optional trimmed string helper');
+  assert.ok(ticketMutationsSource.includes("import { ticketStringArray } from './ticketFields'"));
+  assert.ok(ticketMutationsSource.includes('for (const project of ticketStringArray(orphan.projects))'));
+  assert.equal(ticketMutationsSource.includes('for (const project of orphan.projects || [])'), false);
   for (const marker of [
     "import { arrayFromUnknown, trimmedStringFromUnknown } from './records'",
     'export function ticketStringField(record: object | null | undefined, key: string, fallback = \'\'): string',
@@ -11683,6 +11687,7 @@ test('extension MR and ticket link handlers normalize payloads and unknown error
     'orphanKey = await pickOrphanMergeRequestTicket(state.state);',
     'const url = resolveMergeRequestUrl(treeItem);',
     'const ticketKey = resolveTicketKey(ticketKeyOrItem);',
+    'const current = ticketStringArray(state.state.tickets[ticketKey]?.projects)',
     "const projectName = stringFromUnknown(recordFromUnknown(item)['linkedProject']);",
     'const projs = ticketStringArray(ticket?.projects)',
     "unknownErrorMessage(e, 'Failed to preview merge request link.')",
@@ -11708,6 +11713,7 @@ test('extension MR and ticket link handlers normalize payloads and unknown error
     'ticketKeyOrItem?.ticketKey',
     'item?.linkedProject',
     'const projs = ticket?.projects || []',
+    'const current = state.state.tickets[ticketKey]?.projects || []',
   ]) {
     assert.equal(commandSource.includes(marker), false, marker);
   }

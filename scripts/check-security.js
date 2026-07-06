@@ -1429,6 +1429,7 @@ for (const forbidden of [
   'const projs = ticket?.projects || []',
   'if (!ticket.projects?.length)',
   'projects: ticket.projects',
+  'const current = state.state.tickets[ticketKey]?.projects || []',
   'function planToQueueItem(state: KronosState, plan: PlannedAction): any',
   'function resolveProjectName(state: KronosState, item: any)',
   'function resolveTicketKey(item: any)',
@@ -2430,8 +2431,10 @@ for (const marker of [
   'record-environment-result',
   'setAcceptanceCriteriaChecked',
   "import { isRecord, optionalTrimmedStringFromUnknown } from './records'",
+  "import { ticketStringArray } from './ticketFields'",
   'if (!isRecord(value)) { return null; }',
   "const body = optionalTrimmedStringFromUnknown(value['body'])",
+  'for (const project of ticketStringArray(orphan.projects))',
   'function mutateState',
   "writeJsonFileAtomic(STATE_FILE, state, action)",
   'validateStateFileShape(state)',
@@ -2442,6 +2445,9 @@ for (const marker of [
 }
 if (ticketMutations.includes('function optionalTrim(value: string | undefined): string | undefined')) {
   fail('Ticket mutations must use the shared optional trimmed string helper.');
+}
+if (ticketMutations.includes('for (const project of orphan.projects || [])')) {
+  fail('Ticket MR linking must normalize orphan project links through ticketStringArray.');
 }
 
 for (const marker of [

@@ -2989,7 +2989,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showWarningMessage('No projects registered.');
         return;
       }
-      const current = state.state.tickets[ticketKey]?.projects || [];
+      const current = ticketStringArray(state.state.tickets[ticketKey]?.projects);
       const picks = await vscode.window.showQuickPick(
         allProjects.map(p => ({ label: p, picked: current.includes(p), description: current.includes(p) ? 'linked' : '' })),
         { canPickMany: true, placeHolder: `Select projects for ${ticketKey} (toggle on/off)` }
