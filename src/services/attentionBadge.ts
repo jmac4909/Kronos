@@ -2,14 +2,14 @@ import { KronosState, QueueState, Ticket } from '../state/types';
 import { AgingThresholds, analyzeAging } from './agingAnalyzer';
 import { evaluateEvidenceGates } from './evidenceGate';
 import { buildHumanReviewInbox } from './humanReviewInbox';
-import { RunRecord } from './runStore';
+import { runLikeRecordsFromUnknown } from './runRecords';
 import { isActiveRun, runStatus } from './runStatus';
 import { nonZeroCountLabel } from './countLabels';
 
 interface AttentionBadgeInput {
   state?: KronosState | null;
   queue?: QueueState | null;
-  runs?: RunRecord[];
+  runs?: unknown;
   newReviewItems?: number;
   now?: Date;
   agingThresholds?: Partial<AgingThresholds>;
@@ -30,7 +30,7 @@ interface AttentionBadgeSummary {
 export function computeAttentionBadge(input: AttentionBadgeInput): AttentionBadgeSummary {
   const state = input.state || null;
   const tickets = state?.tickets || {};
-  const runs = Array.isArray(input.runs) ? input.runs : [];
+  const runs = runLikeRecordsFromUnknown(input.runs);
   const inboxInput = { state, runs };
   if (input.queue !== undefined) { Object.assign(inboxInput, { queue: input.queue }); }
   const humanReviewInbox = buildHumanReviewInbox(inboxInput);

@@ -7646,9 +7646,11 @@ test('attention badge aggregates review, aging, and paused-run signals', () => {
 
   const source = readSourceFixture('src', 'services', 'attentionBadge.ts');
   for (const marker of [
+    "import { runLikeRecordsFromUnknown } from './runRecords'",
     "import { nonZeroCountLabel } from './countLabels'",
     'export function computeAttentionBadge',
     'function attentionBadgeCount',
+    'const runs = runLikeRecordsFromUnknown(input.runs)',
     'buildHumanReviewInbox',
     'evaluateEvidenceGates',
     'analyzeAging',
@@ -7658,6 +7660,7 @@ test('attention badge aggregates review, aging, and paused-run signals', () => {
     assert.ok(source.includes(marker), marker);
   }
   assert.equal(source.includes('function countLabel'), false, 'attentionBadge should use shared count label helper');
+  assert.equal(source.includes('Array.isArray(input.runs)'), false, 'attentionBadge should use shared run record normalizer');
 });
 
 test('collision detector flags active runs, duplicate queue work, and open MRs', () => {

@@ -4414,9 +4414,11 @@ for (const [name, source] of [
 }
 
 for (const marker of [
+  "import { runLikeRecordsFromUnknown } from './runRecords'",
   "import { nonZeroCountLabel } from './countLabels'",
   'export function computeAttentionBadge',
   'function attentionBadgeCount',
+  'const runs = runLikeRecordsFromUnknown(input.runs)',
   'buildHumanReviewInbox',
   'evaluateEvidenceGates',
   'analyzeAging',
@@ -4429,6 +4431,9 @@ for (const marker of [
 }
 if (attentionBadge.includes('function countLabel')) {
   fail('attentionBadge must use the shared count label helper.');
+}
+if (attentionBadge.includes('Array.isArray(input.runs)')) {
+  fail('attentionBadge must use the shared run record normalizer.');
 }
 
 for (const marker of [
