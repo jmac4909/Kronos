@@ -28,30 +28,30 @@ interface SessionStatsReport {
 export function buildSessionStatsHtml(stats: SessionStatsReport, nonce?: string, actionScriptUri?: string): string {
   const sessions = stats.sessions;
   const totalSessions = sessions.length;
-  const successes = sessions.filter(s => s.verdict === 'success').length;
-  const avgDuration = totalSessions > 0 ? Math.round(sessions.reduce((a, s) => a + s.durationSec, 0) / totalSessions) : 0;
-  const avgTools = totalSessions > 0 ? Math.round(sessions.reduce((a, s) => a + s.toolCalls, 0) / totalSessions) : 0;
-  const totalErrors = sessions.reduce((a, s) => a + s.toolErrors, 0);
-  const totalFiles = sessions.reduce((a, s) => a + s.filesEdited, 0);
+  const successes = sessions.filter(session => session.verdict === 'success').length;
+  const avgDuration = totalSessions > 0 ? Math.round(sessions.reduce((total, session) => total + session.durationSec, 0) / totalSessions) : 0;
+  const avgTools = totalSessions > 0 ? Math.round(sessions.reduce((total, session) => total + session.toolCalls, 0) / totalSessions) : 0;
+  const totalErrors = sessions.reduce((total, session) => total + session.toolErrors, 0);
+  const totalFiles = sessions.reduce((total, session) => total + session.filesEdited, 0);
 
   const bySkill: Record<string, SessionStatsRow[]> = {};
-  for (const s of sessions) {
-    const bucket = bySkill[s.skill] || [];
-    bucket.push(s);
-    bySkill[s.skill] = bucket;
+  for (const session of sessions) {
+    const bucket = bySkill[session.skill] || [];
+    bucket.push(session);
+    bySkill[session.skill] = bucket;
   }
 
   const skillRows = Object.entries(bySkill).map(([skill, items]) => {
-    const avg = Math.round(items.reduce((a, s) => a + s.durationSec, 0) / items.length);
-    const succ = items.filter(s => s.verdict === 'success').length;
-    const tools = Math.round(items.reduce((a, s) => a + s.toolCalls, 0) / items.length);
+    const avg = Math.round(items.reduce((total, session) => total + session.durationSec, 0) / items.length);
+    const succ = items.filter(session => session.verdict === 'success').length;
+    const tools = Math.round(items.reduce((total, session) => total + session.toolCalls, 0) / items.length);
     return `<tr><td>${escapeHtml(skill)}</td><td>${items.length}</td><td>${succ}/${items.length}</td><td>${avg}s</td><td>${tools}</td></tr>`;
   }).join('');
 
-  const recentRows = sessions.slice(-15).reverse().map(s => {
-    const date = formatWebviewDateTime(s.startedAt);
-    const verdict = s.verdict === 'success' ? '<span class="pill pass">PASS</span>' : '<span class="pill fail">FAIL</span>';
-    return `<tr><td>${date}</td><td>${escapeHtml(s.project)}</td><td>${escapeHtml(s.skill)}</td><td>${escapeHtml(s.ticket || '-')}</td><td>${verdict}</td><td>${s.durationSec}s</td><td>${s.toolCalls}</td><td>${s.toolErrors}</td><td>${s.filesEdited}</td></tr>`;
+  const recentRows = sessions.slice(-15).reverse().map(session => {
+    const date = formatWebviewDateTime(session.startedAt);
+    const verdict = session.verdict === 'success' ? '<span class="pill pass">PASS</span>' : '<span class="pill fail">FAIL</span>';
+    return `<tr><td>${date}</td><td>${escapeHtml(session.project)}</td><td>${escapeHtml(session.skill)}</td><td>${escapeHtml(session.ticket || '-')}</td><td>${verdict}</td><td>${session.durationSec}s</td><td>${session.toolCalls}</td><td>${session.toolErrors}</td><td>${session.filesEdited}</td></tr>`;
   }).join('');
   const actions = operatorCommandRow([
     actionButton('runCenter', 'Run Center'),
