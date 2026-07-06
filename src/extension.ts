@@ -127,6 +127,7 @@ import { isFreshActiveRun } from './services/runStatus';
 import { buildRunCompletionNotification } from './services/runCompletionNotification';
 import { LIVE_MR_DIFF_TIMEOUT_MS, loadMrFileHints } from './services/mergeRequestFileHints';
 import { countLabel } from './services/countLabels';
+import { ticketStringArray } from './services/ticketFields';
 import {
   RUN_ACTION_QUICK_PICK_ITEMS,
   buildRunQuickPickItems,
@@ -1301,7 +1302,7 @@ export function activate(context: vscode.ExtensionContext) {
       const ticket = state.state.tickets[ticketKey];
       if (!ticket) { return; }
 
-      const projects = ticket.projects || [];
+      const projects = ticketStringArray(ticket.projects);
       let targetProjects: string[] = [];
 
       if (projects.length === 0) {
@@ -1392,7 +1393,7 @@ export function activate(context: vscode.ExtensionContext) {
           return;
         }
         const item = selection.item;
-        const projs: string[] = item.projects || [];
+        const projs = ticketStringArray(item.projects);
         const projLabel = projs.join(', ') || 'unlinked';
         if (item.action === 'refresh') {
           vscode.window.showInformationMessage(`Starting: [${item.action}] ${projLabel}/${item.ticket || 'refresh'}`);
@@ -2324,7 +2325,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       const ticket = state.state.tickets[ticketKey];
-      const projs = ticket?.projects || [];
+      const projs = ticketStringArray(ticket?.projects);
       let projectName: string;
       if (projs.length === 0) {
         vscode.window.showWarningMessage(`${ticketKey} is not linked to any project.`);
@@ -2828,7 +2829,7 @@ export function activate(context: vscode.ExtensionContext) {
       const ticketKey = resolveTicketKey(treeItem);
       if (!ticketKey || !state.state) { return; }
       const ticket = state.state.tickets[ticketKey];
-      const projs = ticket?.projects || [];
+      const projs = ticketStringArray(ticket?.projects);
       let projectName: string;
       if (projs.length === 0) { return; }
       else if (projs.length === 1) {
@@ -3689,7 +3690,8 @@ async function startTicketFromActionPanel(state: KronosState, ticketKey: string)
     vscode.window.showWarningMessage(`${ticketKey} is no longer in Kronos state.`);
     return;
   }
-  if (!ticket.projects?.length) {
+  const projects = ticketStringArray(ticket.projects);
+  if (projects.length === 0) {
     vscode.window.showWarningMessage(`${ticketKey} is not linked to a project.`);
     return;
   }
@@ -3702,7 +3704,7 @@ async function startTicketFromActionPanel(state: KronosState, ticketKey: string)
     planId: `human-review:${ticketKey}`,
     ticketKey,
     action: ticket.next_action === 'blocked' ? 'implement' : (ticket.next_action || 'implement'),
-    projects: ticket.projects,
+    projects,
     score: 0,
     scoreBreakdown: [],
     reason: 'Started from Human Review Inbox.',
