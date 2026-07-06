@@ -19,7 +19,8 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeElement>
   getTreeItem(element: TreeElement): vscode.TreeItem { return element; }
 
   getChildren(element?: TreeElement): TreeElement[] {
-    if (!this.kronosState.state) {
+    const state = this.kronosState.state;
+    if (!state) {
       return [
         new WelcomeItem('Welcome to Kronos', 'Click Discover to scan your repos', 'kronos.discover'),
       ];
@@ -27,8 +28,8 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeElement>
 
     if (!element) {
       const items: TreeElement[] = [];
-      const projects = this.kronosState.state.projects;
-      const tickets = this.kronosState.state.tickets || {};
+      const projects = state.projects;
+      const tickets = state.tickets;
 
       if (Object.keys(projects).length === 0) {
         items.push(new WelcomeItem('No projects registered', 'Use Discover or Register', 'kronos.discover'));
@@ -39,7 +40,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeElement>
         }
       }
 
-      const discovered = (this.kronosState.state.discovered_projects || [])
+      const discovered = state.discovered_projects
         .filter(d => !projects[d.repo_name]);
       if (discovered.length > 0) {
         const byFolder: Record<string, typeof discovered> = {};

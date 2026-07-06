@@ -12341,6 +12341,10 @@ test('tree providers share action labels and icons', () => {
     "import { countLabel } from '../services/countLabels'",
     "import { formatRelativeTime } from '../services/relativeTime'",
     "import { ticketStringArray } from '../services/ticketFields'",
+    'const state = this.kronosState.state',
+    'const projects = state.projects',
+    'const tickets = state.tickets',
+    'const discovered = state.discovered_projects',
     'ticketStringArray(t.projects).includes(name)',
     "countLabel(proj.open_mr_count, 'open MR')",
     'formatRelativeTime(proj.last_polled)',
@@ -12349,6 +12353,8 @@ test('tree providers share action labels and icons', () => {
   }
   assert.equal(projectTree.includes('open MR(s)'), false, 'project tree should use shared count label helper');
   assert.equal(projectTree.includes('t.projects?.includes(name)'), false, 'project tree should normalize linked ticket counts through ticketStringArray');
+  assert.equal(projectTree.includes('state.tickets || {}'), false, 'project tree should trust normalized state tickets after load');
+  assert.equal(projectTree.includes('state.discovered_projects || []'), false, 'project tree should trust normalized discovered projects after load');
   for (const [name, source] of [
     ['ProjectTreeProvider', projectTree],
     ['TicketTreeProvider', ticketTree],

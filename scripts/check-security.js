@@ -3911,6 +3911,10 @@ for (const marker of [
   "import { countLabel } from '../services/countLabels'",
   "import { formatRelativeTime } from '../services/relativeTime'",
   "import { ticketStringArray } from '../services/ticketFields'",
+  'const state = this.kronosState.state',
+  'const projects = state.projects',
+  'const tickets = state.tickets',
+  'const discovered = state.discovered_projects',
   'ticketStringArray(t.projects).includes(name)',
   "countLabel(proj.open_mr_count, 'open MR')",
   'formatRelativeTime(proj.last_polled)',
@@ -3924,6 +3928,12 @@ if (projectTreeProvider.includes('open MR(s)')) {
 }
 if (projectTreeProvider.includes('t.projects?.includes(name)')) {
   fail('Project tree provider must normalize linked ticket counts through ticketStringArray.');
+}
+if (projectTreeProvider.includes('state.tickets || {}')) {
+  fail('Project tree provider must trust normalized state tickets after load.');
+}
+if (projectTreeProvider.includes('state.discovered_projects || []')) {
+  fail('Project tree provider must trust normalized discovered projects after load.');
 }
 
 for (const marker of [
