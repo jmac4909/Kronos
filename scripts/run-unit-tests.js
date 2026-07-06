@@ -4770,8 +4770,9 @@ test('review notification helpers normalize seen keys and plan new-item toasts',
   assert.deepEqual(reviewNotifications.normalizeReviewSeenKeys('bad'), []);
   assert.deepEqual(reviewNotifications.normalizeReviewSeenKeys([' K-2 ', 'K-1', '', 42, 'K-2']), ['K-1', 'K-2']);
   const source = readSourceFixture('src', 'services', 'reviewNotifications.ts');
-  assert.ok(source.includes("import { arrayFromUnknown } from './records'"));
+  assert.ok(source.includes("import { arrayFromUnknown, optionalTrimmedStringFromUnknown } from './records'"));
   assert.ok(source.includes('for (const item of arrayFromUnknown(value))'));
+  assert.ok(source.includes('const key = optionalTrimmedStringFromUnknown(item)'));
 
   const items = [
     { ticketKey: 'K-1', activityKey: 'K-1|mr:11|opened|approved', mrIid: 11, activity: 'approved' },

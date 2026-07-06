@@ -1,4 +1,4 @@
-import { arrayFromUnknown } from './records';
+import { arrayFromUnknown, optionalTrimmedStringFromUnknown } from './records';
 
 export const REVIEW_SEEN_KEYS_STORAGE_KEY = 'kronos.review.seenKeys.v1';
 
@@ -18,9 +18,8 @@ export function normalizeReviewSeenKeys(value: unknown): string[] | undefined {
   if (value === undefined) { return undefined; }
   const keys = new Set<string>();
   for (const item of arrayFromUnknown(value)) {
-    if (typeof item === 'string' && item.trim()) {
-      keys.add(item.trim());
-    }
+    const key = optionalTrimmedStringFromUnknown(item);
+    if (key) { keys.add(key); }
   }
   return [...keys].sort();
 }

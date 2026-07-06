@@ -1087,10 +1087,11 @@ for (const marker of [
   }
 }
 for (const marker of [
-  "import { arrayFromUnknown } from './records'",
+  "import { arrayFromUnknown, optionalTrimmedStringFromUnknown } from './records'",
   "export const REVIEW_SEEN_KEYS_STORAGE_KEY = 'kronos.review.seenKeys.v1'",
   'export function normalizeReviewSeenKeys',
   'for (const item of arrayFromUnknown(value))',
+  'const key = optionalTrimmedStringFromUnknown(item)',
   'export function planNewReviewNotification',
   'nextNotifiedKeys',
   'newReviewNotificationMessage',
