@@ -1,6 +1,7 @@
 import { isActiveRunStatus } from './runStatus';
 import { isRecord, recordFromUnknown, recordString } from './records';
 import { toValidDate } from './dateValues';
+import { countLabel } from './countLabels';
 
 interface RunProgressSummary {
   toolCalls: number;
@@ -71,10 +72,6 @@ function fileCount(events: Array<Record<string, unknown>>, pattern: RegExp): num
     }
   }
   return files.size;
-}
-
-function countLabel(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function formatElapsed(seconds: number): string {

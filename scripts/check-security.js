@@ -110,6 +110,7 @@ const projectSetupPlan = readSource('src/services/projectSetupPlan.ts');
 const severityRank = readSource('src/services/severityRank.ts');
 const records = readSource('src/services/records.ts');
 const commandPayloads = readSource('src/services/commandPayloads.ts');
+const countLabels = readSource('src/services/countLabels.ts');
 const dateValues = readSource('src/services/dateValues.ts');
 const dateLabels = sources['src/services/dateLabels.ts'];
 const ticketFields = sources['src/services/ticketFields.ts'];
@@ -443,7 +444,9 @@ const serviceOwnedSafetyMarkers = new Set([
   'function isResumableRun(run: RunActionRecord): boolean',
   'export const FINISHED_ARCHIVE_STATUSES',
   'function isFinishedArchiveRun(run: RunActionRecord): boolean',
+  "import { countLabel } from './countLabels'",
   'function runCountLabel(count: number): string',
+  "return countLabel(count, 'finished run')",
   'return !isFreshActiveRun(run) && resolveRunArtifactFile(run.promptPath).ok',
   'function resolveRunWorkspace',
   "import { isExistingRealPathInside } from './pathUtils'",
@@ -2515,6 +2518,16 @@ for (const marker of [
 }
 
 for (const marker of [
+  'export function countLabel(count: number, singular: string, plural = `${singular}s`): string',
+  'export function nonZeroCountLabel(count: unknown, singular: string, plural = `${singular}s`): string',
+  "return safeCount === 0 ? '' : countLabel(safeCount, singular, plural)",
+]) {
+  if (!countLabels.includes(marker)) {
+    fail(`Missing count label helper marker: ${marker}`);
+  }
+}
+
+for (const marker of [
   'export function mergeRequestCommentsFromRecord(record: object | null | undefined): MergeRequestComment[]',
   'Reflect.get(record, \'comments\')',
   "value.filter((item): item is MergeRequestComment => isRecord(item) && typeof item['body'] === 'string')",
@@ -4015,6 +4028,7 @@ for (const marker of [
   'export function runProgressSummary',
   'export function formatRunProgress',
   "import { isRecord, recordFromUnknown, recordString } from './records'",
+  "import { countLabel } from './countLabels'",
   'function elapsedRunSeconds',
   'function fileCount',
   'function formatElapsed',
@@ -4024,6 +4038,9 @@ for (const marker of [
   if (!runProgress.includes(marker)) {
     fail(`Missing run progress marker: ${marker}`);
   }
+}
+if (runProgress.includes('function countLabel')) {
+  fail('runProgress must use the shared count label helper.');
 }
 
 for (const marker of [
@@ -4082,6 +4099,7 @@ for (const [name, source, marker] of [
 }
 
 for (const marker of [
+  "import { nonZeroCountLabel } from './countLabels'",
   'export function computeAttentionBadge',
   'function attentionBadgeCount',
   'buildHumanReviewInbox',
@@ -4093,6 +4111,9 @@ for (const marker of [
   if (!attentionBadge.includes(marker)) {
     fail(`Missing attention badge marker: ${marker}`);
   }
+}
+if (attentionBadge.includes('function countLabel')) {
+  fail('attentionBadge must use the shared count label helper.');
 }
 
 for (const marker of [

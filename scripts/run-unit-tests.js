@@ -261,6 +261,7 @@ const ticketPanelView = require('../out/services/ticketPanelView.js');
 const ticketFields = require('../out/services/ticketFields.js');
 const webviewHtml = require('../out/services/webviewHtml.js');
 const webviewFormat = require('../out/services/webviewFormat.js');
+const countLabels = require('../out/services/countLabels.js');
 const fileNames = require('../out/services/fileNames.js');
 const sessionStore = require('../out/services/sessionStore.js');
 const worktreeRegistry = require('../out/services/worktreeRegistry.js');
@@ -4345,11 +4346,26 @@ test('run action helpers resolve safe artifacts and quick-pick labels', () => {
   assert.equal(runActionHelpers.isFinishedArchiveRun({ status: 'completed' }), true);
   assert.equal(runActionHelpers.isFinishedArchiveRun({ status: 'waiting_for_review' }), true);
   assert.equal(runActionHelpers.isFinishedArchiveRun({ status: 'running' }), false);
+  assert.equal(countLabels.countLabel(1, 'tool'), '1 tool');
+  assert.equal(countLabels.countLabel(2, 'tool'), '2 tools');
+  assert.equal(countLabels.countLabel(2, 'changed', 'changed'), '2 changed');
+  assert.equal(countLabels.nonZeroCountLabel(0, 'item'), '');
+  assert.equal(countLabels.nonZeroCountLabel(1.8, 'item'), '1 item');
+  assert.equal(countLabels.nonZeroCountLabel(Number.NaN, 'item'), '');
   assert.equal(runActionHelpers.runCountLabel(1), '1 finished run');
   assert.equal(runActionHelpers.runCountLabel(2), '2 finished runs');
   assert.equal(runActionHelpers.runProcessPid({ processPid: '1234' }), 1234);
   assert.equal(runActionHelpers.runProcessPid({ pid: '5678' }), 5678);
   assert.equal(runActionHelpers.runProcessPid({ processPid: '-1' }), undefined);
+
+  const countLabelsSource = readSourceFixture('src', 'services', 'countLabels.ts');
+  for (const marker of [
+    'export function countLabel(count: number, singular: string, plural = `${singular}s`): string',
+    'export function nonZeroCountLabel(count: unknown, singular: string, plural = `${singular}s`): string',
+    "return safeCount === 0 ? '' : countLabel(safeCount, singular, plural)",
+  ]) {
+    assert.ok(countLabelsSource.includes(marker), marker);
+  }
 });
 
 test('json file helper centralizes labeled script output parsing', () => {
@@ -7087,6 +7103,7 @@ test('run progress helper summarizes active run activity', () => {
     "import { isActiveRunStatus } from './runStatus'",
     "import { toValidDate } from './dateValues'",
     "import { isRecord, recordFromUnknown, recordString } from './records'",
+    "import { countLabel } from './countLabels'",
     'export function runProgressSummary',
     'export function formatRunProgress',
     'function elapsedRunSeconds',
@@ -7097,6 +7114,7 @@ test('run progress helper summarizes active run activity', () => {
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+  assert.equal(source.includes('function countLabel'), false, 'runProgress should use shared count label helper');
 });
 
 test('run operator summary highlights progress, files, readiness, and blockers', () => {
@@ -7378,6 +7396,7 @@ test('attention badge aggregates review, aging, and paused-run signals', () => {
 
   const source = readSourceFixture('src', 'services', 'attentionBadge.ts');
   for (const marker of [
+    "import { nonZeroCountLabel } from './countLabels'",
     'export function computeAttentionBadge',
     'function attentionBadgeCount',
     'buildHumanReviewInbox',
@@ -7388,6 +7407,7 @@ test('attention badge aggregates review, aging, and paused-run signals', () => {
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+  assert.equal(source.includes('function countLabel'), false, 'attentionBadge should use shared count label helper');
 });
 
 test('collision detector flags active runs, duplicate queue work, and open MRs', () => {
@@ -10726,7 +10746,9 @@ test('extension run recovery helpers use typed run records', () => {
     'function isResumableRun(run: RunActionRecord): boolean',
     'export const FINISHED_ARCHIVE_STATUSES',
     'function isFinishedArchiveRun(run: RunActionRecord): boolean',
+    "import { countLabel } from './countLabels'",
     'function runCountLabel(count: number): string',
+    "return countLabel(count, 'finished run')",
     'return !isFreshActiveRun(run) && resolveRunArtifactFile(run.promptPath).ok',
     "Run ${run.id} is still active. Stop it or let it finish before attempting to ${action}.",
     'async function resumeSelectedRun(state: KronosState, run: KronosRun)',

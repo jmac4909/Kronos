@@ -4,6 +4,7 @@ import { evaluateEvidenceGates } from './evidenceGate';
 import { buildHumanReviewInbox } from './humanReviewInbox';
 import { RunRecord } from './runStore';
 import { isActiveRun, runStatus } from './runStatus';
+import { nonZeroCountLabel } from './countLabels';
 
 interface AttentionBadgeInput {
   state?: KronosState | null;
@@ -64,21 +65,15 @@ function formatAttentionBadgeTooltip(summary: Omit<AttentionBadgeSummary, 'count
     return 'Kronos: no items need attention';
   }
   return [
-    `Kronos: ${countLabel(count, 'item')} ${count === 1 ? 'needs' : 'need'} attention`,
-    countLabel(summary.newReviewItems, 'new review item'),
-    countLabel(summary.humanReviewItems, 'human review item'),
-    countLabel(summary.evidenceGateFailures, 'evidence gate failure'),
-    countLabel(summary.evidenceGateWarnings, 'evidence gate warning'),
-    countLabel(summary.staleCritical, 'critical stale item'),
-    countLabel(summary.staleWarning, 'stale warning'),
-    countLabel(summary.pausedRuns, 'paused run'),
+    `Kronos: ${nonZeroCountLabel(count, 'item')} ${count === 1 ? 'needs' : 'need'} attention`,
+    nonZeroCountLabel(summary.newReviewItems, 'new review item'),
+    nonZeroCountLabel(summary.humanReviewItems, 'human review item'),
+    nonZeroCountLabel(summary.evidenceGateFailures, 'evidence gate failure'),
+    nonZeroCountLabel(summary.evidenceGateWarnings, 'evidence gate warning'),
+    nonZeroCountLabel(summary.staleCritical, 'critical stale item'),
+    nonZeroCountLabel(summary.staleWarning, 'stale warning'),
+    nonZeroCountLabel(summary.pausedRuns, 'paused run'),
   ].filter(Boolean).join('\n');
-}
-
-function countLabel(count: number, singular: string): string {
-  const safeCount = nonNegativeInteger(count);
-  if (safeCount === 0) { return ''; }
-  return `${safeCount} ${singular}${safeCount === 1 ? '' : 's'}`;
 }
 
 function nonNegativeInteger(value: unknown): number {
