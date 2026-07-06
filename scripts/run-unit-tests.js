@@ -4321,8 +4321,12 @@ test('record guard helper centralizes unknown object narrowing', () => {
   assert.ok(ticketMutationsSource.includes("import { mergeRequestCommentsFromRecord, sortMergeRequestCommentsByCreated } from './mergeRequestComments'"));
   assert.ok(ticketMutationsSource.includes('for (const project of ticketStringArray(orphan.projects))'));
   assert.ok(ticketMutationsSource.includes('JSON.stringify(mergeRequestCommentsFromRecord(target)) === JSON.stringify(comments)'));
+  assert.ok(ticketMutationsSource.includes('if (!isRecord(evidence.environment_results))'));
+  assert.ok(ticketMutationsSource.includes('if (!isRecord(ticket.evidence))'));
   assert.equal(ticketMutationsSource.includes('for (const project of orphan.projects || [])'), false);
   assert.equal(ticketMutationsSource.includes('JSON.stringify(target.comments || []) === JSON.stringify(comments)'), false);
+  assert.equal(ticketMutationsSource.includes("if (!ticket.evidence || typeof ticket.evidence !== 'object')"), false);
+  assert.equal(ticketMutationsSource.includes("!evidence.environment_results || typeof evidence.environment_results !== 'object' || Array.isArray(evidence.environment_results)"), false);
   for (const marker of [
     "import { arrayFromUnknown, trimmedStringFromUnknown } from './records'",
     'export function ticketStringField(record: object | null | undefined, key: string, fallback = \'\'): string',
@@ -7607,6 +7611,8 @@ test('ticket timeline combines queue, runs, evidence, MR, build, and ticket even
   assert.equal(events.some(event => event.source === 'run' && event.detail.includes('project app')), false);
   assert.equal(events.some(event => event.source === 'run' && event.detail.includes('prompt abcdef123456')), false);
   assert.ok(events.some(event => event.source === 'run' && event.id.includes('needs-human') && event.detail.includes('Dirty worktree: .claude/')));
+  assert.equal(events.some(event => /\n/.test(event.detail)), false);
+  assert.ok(events.every(event => event.detail.length <= 150));
   assert.ok(events.some(event => event.source === 'mr' && event.severity === 'failure'));
   assert.ok(events.some(event => event.source === 'build' && event.severity === 'failure'));
   assert.equal(events.some(event => event.id.includes('other-run')), false);
@@ -7617,10 +7623,13 @@ test('ticket timeline combines queue, runs, evidence, MR, build, and ticket even
   assert.ok(source.includes("import { isAttentionRunStatus, runAttentionDetail } from './runAttention'"));
   assert.ok(source.includes("import { isSuccessfulRunStatus } from './runStatus'"));
   assert.ok(source.includes("import { runProgressSummary } from './runProgress'"));
+  assert.ok(source.includes("import { compactSingleLineText } from './textFormat'"));
   assert.ok(source.includes('runs?: unknown[]'));
   assert.ok(source.includes("if (isSuccessfulRunStatus(status)) { return 'success'; }"));
   assert.ok(source.includes('const attentionDetail = isAttentionRunStatus(status) ? runAttentionDetail(run) :'));
   assert.ok(source.includes('const progress = runProgressSummary(run)'));
+  assert.ok(source.includes('function compactTimelineDetail'));
+  assert.ok(source.includes('return compactSingleLineText(value, 150)'));
   assert.equal(source.includes("recordString(run, 'promptHash')"), false);
   assert.equal(source.includes('interface TimelineRun'), false);
   assert.equal(source.includes('const rawRuns'), false);
@@ -7798,10 +7807,13 @@ test('run operator summary highlights progress, files, readiness, and blockers',
       { type: 'tool', label: 'Editing src/app.ts', timestamp: '2026-07-02T00:02:00.000Z' },
       { type: 'tool', label: 'Writing src/new.ts', timestamp: '2026-07-02T00:03:00.000Z' },
       { type: 'thinking', label: 'Checking the failing test path', detail: 'Running tests', timestamp: '2026-07-02T00:04:00.000Z' },
+      { type: 'thinking', label: 'Reviewer summary', detail: '.allowedTools) ? permissions.allowedTools.length', timestamp: '2026-07-02T00:05:00.000Z' },
+      { type: 'text', label: 'I could not auto-switch you because tmux currently shows no attached client.', timestamp: '2026-07-02T00:05:10.000Z' },
     ],
   }, new Date('2026-07-02T00:05:30.000Z'));
   assert.equal(running.tone, 'info');
   assert.match(running.headline, /K-1 implement is running: Running tests/);
+  assert.equal(running.latestSignal, 'Running tests');
   assert.match(running.detail, /3 tools/);
   assert.deepEqual(running.changedFiles, ['src/app.ts', 'src/new.ts']);
   assert.deepEqual(running.readFiles, ['src/app.ts']);
@@ -7844,7 +7856,11 @@ test('run operator summary highlights progress, files, readiness, and blockers',
     'function eventFiles',
     "return recordsFromUnknown(record['events'])",
     'function runNextStep',
-    'return compactSingleLineText(value, 160)',
+    'function signalText',
+    'function isLowValueSignal',
+    'const compact = compactSingleLineText(value, 96)',
+    '/^Reviewer summary$/i.test(value)',
+    "/\\.allowedTools\\b/.test(value)",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -12155,6 +12171,7 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
     'Discussions: ${esc(discussionCount ||',
     'const timeline = buildTicketTimeline({',
     '...(input.runs !== undefined ? { runs: input.runs } : {})',
+    '<h3>Agent Timeline</h3>',
     "kronosActionPanelScript(input.nonce, 'Kronos Ticket Detail', input.actionScriptUri)",
   ]) {
     assert.ok(ticketPanelViewSource.includes(marker), marker);
@@ -12209,6 +12226,7 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
   assert.match(html, /Reviewer &lt;A&gt;/);
   assert.match(html, /Looks &lt;good&gt; &amp; safe/);
   assert.match(html, /Remove Queue/);
+  assert.match(html, /Agent Timeline/);
   assert.match(html, /Run completed: verify-local/);
   assert.match(html, /href="https:\/\/gitlab\.example\/mr\/7\?x=1&amp;name=%22bad%22"/);
   assert.match(html, /href="https:\/\/jenkins\.example\/job\?x=1&amp;name=%22bad%22"/);

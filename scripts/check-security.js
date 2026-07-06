@@ -1856,6 +1856,7 @@ for (const marker of [
   "import { ticketStringArray, ticketStringField } from './ticketFields'",
   'const timeline = buildTicketTimeline({',
   '...(input.runs !== undefined ? { runs: input.runs } : {})',
+  '<h3>Agent Timeline</h3>',
   'const projectList = ticketStringArray(ticket.projects)',
   'const mr = ticket.mr',
   'const build = ticket.build',
@@ -2515,6 +2516,8 @@ for (const marker of [
   "const body = optionalTrimmedStringFromUnknown(value['body'])",
   'for (const project of ticketStringArray(orphan.projects))',
   'JSON.stringify(mergeRequestCommentsFromRecord(target)) === JSON.stringify(comments)',
+  'if (!isRecord(evidence.environment_results))',
+  'if (!isRecord(ticket.evidence))',
   'function mutateState',
   "writeJsonFileAtomic(STATE_FILE, state, action)",
   'validateStateFileShape(state)',
@@ -2531,6 +2534,12 @@ if (ticketMutations.includes('for (const project of orphan.projects || [])')) {
 }
 if (ticketMutations.includes('JSON.stringify(target.comments || []) === JSON.stringify(comments)')) {
   fail('Ticket MR comment updates must compare through mergeRequestCommentsFromRecord.');
+}
+if (ticketMutations.includes("if (!ticket.evidence || typeof ticket.evidence !== 'object')")) {
+  fail('Ticket evidence containers must normalize through isRecord.');
+}
+if (ticketMutations.includes("!evidence.environment_results || typeof evidence.environment_results !== 'object' || Array.isArray(evidence.environment_results)")) {
+  fail('Ticket environment result containers must normalize through isRecord.');
 }
 
 for (const marker of [
@@ -4719,8 +4728,18 @@ for (const [name, source, marker] of [
 if (!runAttention.includes('return compactSingleLineText(runAttentionDetail(run), maxLength)')) {
   fail('runAttentionLine should use shared compact text helper.');
 }
-if (!runOperatorSummary.includes('return compactSingleLineText(value, 160)')) {
+if (!runOperatorSummary.includes('const compact = compactSingleLineText(value, 96)')) {
   fail('runOperatorSummary should use shared compact text helper.');
+}
+for (const marker of [
+  'function signalText',
+  'function isLowValueSignal',
+  '/^Reviewer summary$/i.test(value)',
+  "/\\.allowedTools\\b/.test(value)",
+]) {
+  if (!runOperatorSummary.includes(marker)) {
+    fail(`Missing run operator signal filter marker: ${marker}`);
+  }
 }
 if (!runAttention.includes("import { isFailedTerminalRunStatus } from './runStatus'")) {
   fail('runAttention must import the shared failed terminal run predicate.');
@@ -5398,6 +5417,7 @@ for (const marker of [
   "import { isAttentionRunStatus, runAttentionDetail } from './runAttention'",
   "import { isSuccessfulRunStatus } from './runStatus'",
   "import { runProgressSummary } from './runProgress'",
+  "import { compactSingleLineText } from './textFormat'",
   'const runs = runLikeRecordsFromUnknown(input.runs)',
   'const notes = evidenceNotes(ticket)',
   'const checks = evidenceChecks(ticket)',
@@ -5407,6 +5427,8 @@ for (const marker of [
   'const progress = runProgressSummary(run)',
   "if (isSuccessfulRunStatus(status)) { return 'success'; }",
   'function runDetail',
+  'function compactTimelineDetail',
+  'return compactSingleLineText(value, 150)',
 ]) {
   if (!ticketTimeline.includes(marker)) {
     fail(`Missing ticket timeline marker: ${marker}`);

@@ -219,7 +219,7 @@ export function buildTicketHtml(key: string, ticket: Ticket, input: TicketPanelR
   .timeline-event.failure::before { background: #f44336; }
   .timeline-title { font-weight: 650; }
   .timeline-meta { color: var(--k-muted); font-size: 10px; text-transform: uppercase; margin-bottom: 2px; }
-  .timeline-detail { color: var(--k-muted); white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+  .timeline-detail { color: var(--k-muted); white-space: normal; overflow-wrap: anywhere; line-height: 1.45; }
   .criteria-list, .evidence-list { display: grid; gap: 7px; }
   .criterion { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; background: var(--k-surface-soft); border: 1px solid var(--k-border); border-radius: var(--k-radius-sm); font-size: 12px; line-height: 1.45; }
   .criterion.checked { opacity: 0.72; }
@@ -297,5 +297,5 @@ export function buildTicketTimelineHtml(events: TimelineEvent[]): string {
       ${event.detail ? `<div class="timeline-detail">${escapeHtml(event.detail)}${artifact}</div>` : ''}
     </div>`;
   }).join('');
-  return `<div class="section"><h3>Ticket Timeline</h3><div class="timeline">${rows}</div></div>`;
+  return `<div class="section"><h3>Agent Timeline</h3><div class="timeline">${rows}</div></div>`;
 }

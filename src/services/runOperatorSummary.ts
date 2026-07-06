@@ -147,14 +147,27 @@ function latestMeaningfulSignal(events: Array<Record<string, unknown>>): string 
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const event = events[i];
     if (!event) { continue; }
-    const detail = recordString(event, 'detail');
-    const label = recordString(event, 'label');
-    const value = detail || label;
-    if (value && !/^Session complete/i.test(value) && !/^Complete - /i.test(value)) {
-      return compactSingleLineText(value, 160);
-    }
+    const detail = signalText(recordString(event, 'detail'));
+    if (detail) { return detail; }
+    const label = signalText(recordString(event, 'label'));
+    if (label) { return label; }
   }
   return '';
+}
+
+function signalText(value: string): string {
+  const compact = compactSingleLineText(value, 96);
+  return isLowValueSignal(compact) ? '' : compact;
+}
+
+function isLowValueSignal(value: string): boolean {
+  if (!value) { return true; }
+  if (/^Session complete/i.test(value) || /^Complete - /i.test(value)) { return true; }
+  if (/^Reviewer summary$/i.test(value)) { return true; }
+  if (/^checked\s+\d/i.test(value)) { return true; }
+  if (/tmux currently shows no attached client/i.test(value)) { return true; }
+  if (/\.allowedTools\b/.test(value)) { return true; }
+  return false;
 }
 
 function shortDateTime(value: unknown): string {

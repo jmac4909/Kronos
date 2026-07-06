@@ -8,6 +8,7 @@ import { toValidDate } from './dateValues';
 import { isSuccessfulRunStatus } from './runStatus';
 import { runLikeRecordsFromUnknown, type RunLikeRecord } from './runRecords';
 import { runProgressSummary } from './runProgress';
+import { compactSingleLineText } from './textFormat';
 
 type TimelineSource = 'jira' | 'queue' | 'run' | 'evidence' | 'mr' | 'build' | 'ticket';
 type TimelineSeverity = 'info' | 'success' | 'warning' | 'failure';
@@ -158,11 +159,18 @@ function timelineEvent(
   core: Omit<TimelineEvent, 'at' | 'url' | 'artifactPath'>,
   refs: { at?: string | undefined; url?: string | undefined; artifactPath?: string | undefined } = {},
 ): TimelineEvent {
-  const event: TimelineEvent = { ...core };
+  const event: TimelineEvent = {
+    ...core,
+    detail: compactTimelineDetail(core.detail),
+  };
   if (refs.at) { event.at = refs.at; }
   if (refs.url) { event.url = refs.url; }
   if (refs.artifactPath) { event.artifactPath = refs.artifactPath; }
   return event;
+}
+
+function compactTimelineDetail(value: string): string {
+  return compactSingleLineText(value, 150);
 }
 
 function compareTimelineEvents(a: TimelineEvent, b: TimelineEvent): number {

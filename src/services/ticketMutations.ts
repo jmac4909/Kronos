@@ -120,7 +120,7 @@ export function recordTicketEnvironmentResult(ticketKey: string, input: TicketEn
     const ticket = requireTicket(state, ticketKey);
     const evidence = ensureEvidence(ticket);
     const at = isoNow(input.now);
-    if (!evidence.environment_results || typeof evidence.environment_results !== 'object' || Array.isArray(evidence.environment_results)) {
+    if (!isRecord(evidence.environment_results)) {
       evidence.environment_results = {};
     }
     const result: TicketEnvironmentResult = {
@@ -333,7 +333,7 @@ function requireTicket(state: KronosState, ticketKey: string): Ticket {
 }
 
 function ensureEvidence(ticket: Ticket): TicketEvidence {
-  if (!ticket.evidence || typeof ticket.evidence !== 'object') {
+  if (!isRecord(ticket.evidence)) {
     ticket.evidence = {};
   }
   return ticket.evidence;
