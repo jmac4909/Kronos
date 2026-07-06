@@ -1990,7 +1990,7 @@ for (const marker of [
   'isExistingRealPathInside(filePath, ARCHIVED_RUNS_DIR)',
   'outside active runs directory',
   'run.archiveWarnings = warnings',
-  "import { effectiveRunStatus, isActiveRunStatus, isStaleActiveRun } from './runStatus'",
+  "import { effectiveRunStatus, isActiveRunStatus, isStaleActiveRun, numericPid } from './runStatus'",
   "import { toValidDate } from './dateValues'",
   'function normalizeTerminalActiveRun',
   'const effectiveStatus = effectiveRunStatus(run)',
@@ -2033,6 +2033,9 @@ if (runStore.includes('function normalizeRunFile')) {
 }
 if (runStore.includes('[key: string]: any')) {
   fail('Run store records must keep extension fields unknown, not any.');
+}
+if (runStore.includes('function numericPid(value: unknown): number | undefined')) {
+  fail('Run store must use the shared runStatus numericPid helper.');
 }
 
 for (const marker of [
@@ -4309,7 +4312,7 @@ for (const marker of [
   'processPid?: unknown',
   "if (hasLiveProcess(run['processPid'])) { return false; }",
   'function hasLiveProcess',
-  'function numericPid',
+  'export function numericPid',
   'process.kill(pid, 0)',
   "hasDateLikeValue(run['endedAt'])",
   "label.startsWith('Session exited with code')",

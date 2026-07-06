@@ -6065,6 +6065,7 @@ test('run store surfaces invalid records and blocks strict mutations', () => {
   const source = readSourceFixture('src', 'services', 'runStore.ts');
   for (const marker of [
     "import { unknownErrorCode, unknownErrorMessage } from './errorUtils'",
+    "import { effectiveRunStatus, isActiveRunStatus, isStaleActiveRun, numericPid } from './runStatus'",
     "import { toValidDate } from './dateValues'",
     '[key: string]: unknown',
     "type RunRecoveryAction = NonNullable<RunRecord['recoveryActions']>[number]",
@@ -6098,6 +6099,7 @@ test('run store surfaces invalid records and blocks strict mutations', () => {
     'run.recoveryActions.push({ at, action: mutation.action, reason: detail })',
     "run.events.push({ type: 'recovery', label: mutation.label, detail, timestamp: at })",
     'normalized.events = Array.isArray(normalized.events) ? [...normalized.events] : []',
+    'function numericPid(value: unknown): number | undefined',
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }
@@ -7306,6 +7308,10 @@ test('run status helper centralizes active persisted run semantics', () => {
   assert.equal(runStatus.isFreshActiveRun({ status: 'running', startedAt: '2000-01-01T00:00:00.000Z', processPid: process.pid }, new Date('2026-07-01T12:00:00.000Z')), true);
   assert.equal(runStatus.isStaleActiveRun({ status: 'running', startedAt: '2000-01-01T00:00:00.000Z', processPid: process.pid }, new Date('2026-07-01T12:00:00.000Z')), false);
   assert.equal(runStatus.isStaleActiveRun({ status: 'running', startedAt: '2000-01-01T00:00:00.000Z', processPid: 999999999 }, new Date('2026-07-01T12:00:00.000Z')), true);
+  assert.equal(runStatus.numericPid(process.pid), process.pid);
+  assert.equal(runStatus.numericPid(String(process.pid)), process.pid);
+  assert.equal(runStatus.numericPid(0), undefined);
+  assert.equal(runStatus.numericPid('not-a-pid'), undefined);
   assert.equal(runStatus.isFreshActiveRun({ status: 'paused', startedAt: '2026-06-30T23:00:00.000Z' }, new Date('2026-07-01T12:00:00.000Z')), true);
   assert.equal(runStatus.isActiveRun({ status: 'running', endedAt: '2026-07-01T10:00:00.000Z' }), false);
   assert.equal(runStatus.isActiveRun({ status: 'running', exitCode: 0 }), false);
@@ -7367,7 +7373,7 @@ test('run status helper centralizes active persisted run semantics', () => {
     'processPid?: unknown',
     "if (hasLiveProcess(run['processPid'])) { return false; }",
     'function hasLiveProcess',
-    'function numericPid',
+    'export function numericPid',
     'process.kill(pid, 0)',
     "hasDateLikeValue(run['endedAt'])",
     'label.startsWith(\'Session exited with code\')',

@@ -3,7 +3,7 @@ import * as path from 'path';
 import { safeFileStem } from './fileNames';
 import { KRONOS_DIR } from './stateStore';
 import { unknownErrorCode, unknownErrorMessage } from './errorUtils';
-import { effectiveRunStatus, isActiveRunStatus, isStaleActiveRun } from './runStatus';
+import { effectiveRunStatus, isActiveRunStatus, isStaleActiveRun, numericPid } from './runStatus';
 import { readJsonFile } from './jsonFiles';
 import { isRecord, recordString } from './records';
 import { isExistingRealPathInside, isPathInside } from './pathUtils';
@@ -411,11 +411,6 @@ function readLogTail(logPath: string, maxBytes = 64 * 1024): string {
 function logModifiedAt(logPath: unknown): string | undefined {
   if (typeof logPath !== 'string' || !isReadableActiveRunLog(logPath)) { return undefined; }
   return fs.statSync(logPath).mtime.toISOString();
-}
-
-function numericPid(value: unknown): number | undefined {
-  const pid = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN;
-  return Number.isInteger(pid) && pid > 0 ? pid : undefined;
 }
 
 function processIsGone(pid: number): boolean {

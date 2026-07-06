@@ -139,7 +139,7 @@ function hasLiveProcess(value: unknown): boolean {
   }
 }
 
-function numericPid(value: unknown): number | undefined {
+export function numericPid(value: unknown): number | undefined {
   const parsed = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN;
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
