@@ -4044,6 +4044,8 @@ for (const marker of [
   'data-action="openSonar"',
   "kronosActionPanelScript(input.nonce, 'Kronos Sonar Report', input.actionScriptUri)",
   "optionalTrimmedStringFromUnknown(projectStatus['status'])",
+  "const componentMeasures = component ? recordsFromUnknown(component['measures']) : []",
+  "const list = componentMeasures.length > 0 ? componentMeasures : recordsFromUnknown(measures['measures'])",
   "const severity = optionalTrimmedStringFromUnknown(issue['severity'])",
   'issueList.slice(0, 50)',
 ]) {
@@ -4054,6 +4056,7 @@ for (const marker of [
 for (const forbidden of [
   "import { webviewVsCodeApiScript } from './webviewSecurity'",
   'kronosVsCodeApi().postMessage',
+  "Array.isArray(component['measures'])",
 ]) {
   if (sonarReportView.includes(forbidden)) {
     fail(`Sonar report view must use the packaged action-panel runtime: ${forbidden}`);

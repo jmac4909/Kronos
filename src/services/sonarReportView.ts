@@ -101,10 +101,8 @@ function sonarConditionList(gate: unknown): SonarCondition[] {
 function sonarMeasureList(measures: unknown): SonarMeasure[] {
   if (!isRecord(measures)) { return []; }
   const component = isRecord(measures['component']) ? measures['component'] : undefined;
-  const componentMeasures = component && Array.isArray(component['measures'])
-    ? recordsFromUnknown(component['measures'])
-    : undefined;
-  const list = componentMeasures || recordsFromUnknown(measures['measures']);
+  const componentMeasures = component ? recordsFromUnknown(component['measures']) : [];
+  const list = componentMeasures.length > 0 ? componentMeasures : recordsFromUnknown(measures['measures']);
   return list.map(measure => {
     const normalized: SonarMeasure = { value: measure['value'] };
     const metric = optionalTrimmedStringFromUnknown(measure['metric']);

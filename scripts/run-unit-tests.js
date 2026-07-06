@@ -3892,6 +3892,23 @@ test('sonar report view renders escaped report data and command buttons', () => 
   assert.match(malformedPayload.html, /Quality Gate: WARN/);
   assert.match(malformedPayload.html, /No metrics available/);
   assert.match(malformedPayload.html, /kronos-pill major/);
+
+  const rootMeasureFallback = sonarReportView.buildSonarReport({
+    projectName: 'app',
+    branch: 'main',
+    sonarKey: 'app',
+    nonce: 'n',
+    gate: {},
+    measures: {
+      component: { measures: { malformed: true } },
+      measures: [{ metric: 'new_coverage', value: '91' }],
+    },
+    issues: {},
+    actionScriptUri: ACTION_SCRIPT_URI,
+  });
+  assert.match(rootMeasureFallback.html, /New Coverage/);
+  assert.match(rootMeasureFallback.html, /91%/);
+
   assert.doesNotThrow(() => sonarReportView.buildSonarReport({
     projectName: 'app',
     branch: 'main',
@@ -3929,6 +3946,16 @@ test('sonar report view renders escaped report data and command buttons', () => 
   });
   assert.equal(nonHttpDashboard.dashboardUrl, undefined);
   assert.doesNotMatch(nonHttpDashboard.html, /Open in SonarQube/);
+
+  const source = readSourceFixture('src', 'services', 'sonarReportView.ts');
+  for (const marker of [
+    "import { isRecord, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records'",
+    "const componentMeasures = component ? recordsFromUnknown(component['measures']) : []",
+    "const list = componentMeasures.length > 0 ? componentMeasures : recordsFromUnknown(measures['measures'])",
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  assert.equal(source.includes("Array.isArray(component['measures'])"), false);
 });
 
 test('sonar command plan normalizes issue payloads and builds fix instructions', () => {
