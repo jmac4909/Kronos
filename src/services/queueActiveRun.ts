@@ -3,6 +3,7 @@ import { skillForAction } from './nextActionContext';
 import { projectPathKey } from './pathUtils';
 import { recordString } from './records';
 import { isFreshActiveRun } from './runStatus';
+import { ticketStringArray } from './ticketFields';
 
 interface QueueActiveRunLike {
   [key: string]: unknown;
@@ -39,7 +40,7 @@ function runMatchesQueueTicket(run: QueueActiveRunLike, item: QueueItem): boolea
 }
 
 function runMatchesQueueProject(run: QueueActiveRunLike, item: QueueItem): boolean {
-  const projects = item.projects || [];
+  const projects = ticketStringArray(item.projects);
   const runProject = recordString(run, 'project');
   const runProjectPath = projectPathKey(recordString(run, 'projectPath'));
   const itemProjectPath = projectPathKey(item.project_path);
@@ -47,7 +48,7 @@ function runMatchesQueueProject(run: QueueActiveRunLike, item: QueueItem): boole
 }
 
 function runMatchesQueueProjectScope(run: QueueActiveRunLike, item: QueueItem): boolean {
-  if ((item.projects || []).length === 0 && !item.project_path) {
+  if (ticketStringArray(item.projects).length === 0 && !item.project_path) {
     return true;
   }
   return runMatchesQueueProject(run, item);

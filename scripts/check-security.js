@@ -3391,6 +3391,7 @@ for (const marker of [
   "import { skillForAction } from './nextActionContext'",
   "import { projectPathKey } from './pathUtils'",
   "import { isFreshActiveRun } from './runStatus'",
+  "import { ticketStringArray } from './ticketFields'",
   'interface QueueActiveRunLike',
   'export function activeRunForQueueItem<T extends QueueActiveRunLike>',
   'return runs.find(run => isFreshActiveRun(run, now) && runMatchesQueueItem(run, item));',
@@ -3399,13 +3400,18 @@ for (const marker of [
   'function runMatchesQueueProject(run: QueueActiveRunLike, item: QueueItem): boolean',
   'function runMatchesQueueProjectScope(run: QueueActiveRunLike, item: QueueItem): boolean',
   'function runMatchesQueueAction(run: QueueActiveRunLike, item: QueueItem): boolean',
+  'const projects = ticketStringArray(item.projects)',
   "projectPathKey(recordString(run, 'projectPath'))",
   'projectPathKey(item.project_path)',
+  'ticketStringArray(item.projects).length === 0',
   "recordString(run, 'skill') === skillForAction(item.action)",
 ]) {
   if (!queueActiveRun.includes(marker)) {
     fail(`Missing queue active-run service marker: ${marker}`);
   }
+}
+if (queueActiveRun.includes('item.projects || []')) {
+  fail('Queue active-run matching must normalize queue projects through ticketStringArray.');
 }
 if (`${queueTreeProvider}\n${queueActiveRun}`.includes('activeRuns.find(run => runMatchesQueueTicket(run, item))\n    || activeRuns.find')) {
   fail('Queue active-run matching must not use broad ticket-only or project-only fallbacks.');

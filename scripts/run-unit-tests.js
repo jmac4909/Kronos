@@ -7620,7 +7620,7 @@ test('active run display summarizes status bar text and tooltip progress', () =>
 test('queue active-run helper matches active runs without broad fallbacks', () => {
   const queueItem = (overrides = {}) => ({
     id: 'q-1',
-    projects: ['app'],
+    projects: [' ', 'app', 42],
     project_path: '/repo/app',
     ticket: 'APP-123',
     action: 'implement',
@@ -7660,6 +7660,7 @@ test('queue active-run helper matches active runs without broad fallbacks', () =
     "import { skillForAction } from './nextActionContext'",
     "import { projectPathKey } from './pathUtils'",
     "import { isFreshActiveRun } from './runStatus'",
+    "import { ticketStringArray } from './ticketFields'",
     'interface QueueActiveRunLike',
     'export function activeRunForQueueItem<T extends QueueActiveRunLike>',
     'return runs.find(run => isFreshActiveRun(run, now) && runMatchesQueueItem(run, item));',
@@ -7668,12 +7669,15 @@ test('queue active-run helper matches active runs without broad fallbacks', () =
     'function runMatchesQueueProject(run: QueueActiveRunLike, item: QueueItem): boolean',
     'function runMatchesQueueProjectScope(run: QueueActiveRunLike, item: QueueItem): boolean',
     'function runMatchesQueueAction(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'const projects = ticketStringArray(item.projects)',
     "projectPathKey(recordString(run, 'projectPath'))",
     'projectPathKey(item.project_path)',
+    'ticketStringArray(item.projects).length === 0',
     "recordString(run, 'skill') === skillForAction(item.action)",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+  assert.equal(source.includes('item.projects || []'), false, 'queue active-run matching should normalize queue projects through ticketStringArray');
 });
 
 test('relative time formatter handles invalid, past, and future timestamps', () => {
@@ -11993,6 +11997,7 @@ test('tree providers share action labels and icons', () => {
   for (const marker of [
     "import { skillForAction } from './nextActionContext'",
     "import { isFreshActiveRun } from './runStatus'",
+    "import { ticketStringArray } from './ticketFields'",
     'interface QueueActiveRunLike',
     'export function activeRunForQueueItem<T extends QueueActiveRunLike>',
     'return runs.find(run => isFreshActiveRun(run, now) && runMatchesQueueItem(run, item));',
@@ -12001,10 +12006,13 @@ test('tree providers share action labels and icons', () => {
     'function runMatchesQueueProject(run: QueueActiveRunLike, item: QueueItem): boolean',
     'function runMatchesQueueProjectScope(run: QueueActiveRunLike, item: QueueItem): boolean',
     'function runMatchesQueueAction(run: QueueActiveRunLike, item: QueueItem): boolean',
+    'const projects = ticketStringArray(item.projects)',
+    'ticketStringArray(item.projects).length === 0',
     "recordString(run, 'skill') === skillForAction(item.action)",
   ]) {
     assert.ok(queueActiveRunSource.includes(marker), marker);
   }
+  assert.equal(queueActiveRunSource.includes('item.projects || []'), false, 'queue active-run matching should normalize queue projects through ticketStringArray');
   assert.equal(
     `${queueTree}\n${queueActiveRunSource}`.includes('activeRuns.find(run => runMatchesQueueTicket(run, item))\n    || activeRuns.find'),
     false,
