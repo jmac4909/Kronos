@@ -4056,6 +4056,7 @@ test('record guard helper centralizes unknown object narrowing', () => {
   assert.deepEqual(records.recordFromUnknown(null), {});
   assert.deepEqual(records.arrayFromUnknown(['ok']), ['ok']);
   assert.deepEqual(records.arrayFromUnknown({ ok: true }), []);
+  assert.deepEqual(records.definedValues(['ok', null, undefined, '', 'done']), ['ok', '', 'done']);
   assert.deepEqual(records.recordsFromUnknown([{ ok: true }, null, [], 'raw']), [{ ok: true }]);
   assert.deepEqual(records.recordEntriesFromUnknown({ a: { ok: true }, b: 42 }), [['a', { ok: true }], ['b', 42]]);
   assert.deepEqual(records.recordEntriesFromUnknown(null), []);
@@ -4084,6 +4085,7 @@ test('record guard helper centralizes unknown object narrowing', () => {
     'export function isRecord(value: unknown): value is Record<string, unknown>',
     'export function recordFromUnknown(value: unknown): Record<string, unknown>',
     'export function arrayFromUnknown(value: unknown): unknown[]',
+    'export function definedValues<T>(values: Array<T | null | undefined>): T[]',
     'export function recordsFromUnknown(value: unknown): Record<string, unknown>[]',
     'export function recordEntriesFromUnknown<T>(value: Record<string, T> | null | undefined): Array<[string, T]>',
     'export function recordKeysFromUnknown(value: unknown): string[]',
@@ -4091,6 +4093,7 @@ test('record guard helper centralizes unknown object narrowing', () => {
     'export function recordString(record: Record<string, unknown>, key: string): string',
     'return isRecord(value) ? value : {}',
     'return Array.isArray(value) ? value : []',
+    'value !== undefined && value !== null',
     'return arrayFromUnknown(value).filter(isRecord)',
     'return isRecord(value) ? Object.entries(value) : []',
     'return isRecord(value) ? Object.keys(value) : []',
@@ -4217,9 +4220,11 @@ test('record guard helper centralizes unknown object narrowing', () => {
     const source = readSourceFixture('src', 'services', file);
     const marker = file === 'activeRunDisplay.ts'
       ? "import { recordFromUnknown, recordString } from './records'"
-      : file === 'runProgress.ts'
-        ? "import { recordsFromUnknown, recordFromUnknown, recordString } from './records'"
-        : "import { recordString } from './records'";
+      : file === 'agentQualityScore.ts'
+        ? "import { definedValues, recordString } from './records'"
+        : file === 'runProgress.ts'
+          ? "import { recordsFromUnknown, recordFromUnknown, recordString } from './records'"
+          : "import { recordString } from './records'";
     assert.ok(source.includes(marker), `${file} should import shared record string helper`);
     assert.equal(source.includes('function runString'), false, `${file} should not carry a local runString helper`);
     assert.equal(source.includes('function eventString'), false, `${file} should not carry a local eventString helper`);
@@ -8061,6 +8066,8 @@ test('script client keeps raw JSON and process errors unknown by default', () =>
     'function scriptError(scriptName: RequiredScriptName, args: string[], error: unknown)',
     'function pythonCandidateAvailable(candidate: string): boolean',
     "import { parseJsonWithLabel } from './jsonFiles'",
+    "import { definedValues } from './records'",
+    "const candidates = definedValues([process.env['PYTHON'], 'python', 'python3'])",
     'return parseJsonWithLabel<T>(raw, `${scriptName} ${args.join(\' \')}`, { includePreview: true })',
     "import { unknownErrorField, unknownErrorMessage } from './errorUtils'",
     "unknownErrorField(error, 'stderr')",
@@ -12149,7 +12156,7 @@ test('trend metrics report rework, build pass, verification pass, and cycle time
   const source = readSourceFixture('src', 'services', 'trendMetrics.ts');
   for (const marker of [
     'runs: unknown[]',
-    "import { recordString } from './records'",
+    "import { definedValues, recordEntriesFromUnknown, recordString } from './records'",
     "import { isFailedTerminalRunStatus, isFinishedRunStatus, isSuccessfulRunStatus } from './runStatus'",
     "import { hasRetryMetadata, runLikeRecordsFromUnknown, type RunLikeRecord } from './runRecords'",
     "import { countLabel } from './countLabels'",
@@ -12289,6 +12296,7 @@ test('agent quality score combines run outcomes, evidence gates, builds, reviews
   assert.ok(source.includes("import { isActiveRun, isFailedOrCancelledRunStatus, isSuccessfulRunStatus } from './runStatus'"));
   assert.ok(source.includes("import { hasRetryMetadata, runLikeRecordsFromUnknown } from './runRecords'"));
   assert.ok(source.includes("import { countLabel } from './countLabels'"));
+  assert.ok(source.includes("import { definedValues, recordString } from './records'"));
   assert.ok(source.includes('runs: unknown[]'));
   assert.ok(source.includes('const runs = runLikeRecordsFromUnknown(input.runs)'));
   assert.ok(source.includes("isSuccessfulRunStatus(recordString(run, 'status'))"));
@@ -12302,6 +12310,7 @@ test('agent quality score combines run outcomes, evidence gates, builds, reviews
   assert.equal(source.includes('type RunQualityRecord'), false);
   assert.equal(source.includes('type RunQualityRecord = RunRecord & Record<string, any>'), false);
   assert.equal(source.includes('function hasRetryMetadata'), false);
+  assert.equal(source.includes('.filter(Boolean) as'), false);
   for (const marker of ['build(s)', 'MR(s)', 'evidence gate(s)', 'run(s)']) {
     assert.equal(source.includes(marker), false, marker);
   }

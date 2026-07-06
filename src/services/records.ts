@@ -10,6 +10,10 @@ export function arrayFromUnknown(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+export function definedValues<T>(values: Array<T | null | undefined>): T[] {
+  return values.filter((value): value is T => value !== undefined && value !== null);
+}
+
 export function recordsFromUnknown(value: unknown): Record<string, unknown>[] {
   return arrayFromUnknown(value).filter(isRecord);
 }

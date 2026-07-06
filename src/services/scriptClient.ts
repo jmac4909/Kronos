@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { unknownErrorField, unknownErrorMessage } from './errorUtils';
 import { parseJsonWithLabel } from './jsonFiles';
+import { definedValues } from './records';
 
 const SCRIPTS_DIR = process.env['KRONOS_SCRIPTS_DIR'] || path.join(os.homedir(), '.claude', 'scripts');
 const PYTHON = findPython();
@@ -137,7 +138,8 @@ function assertScriptAvailable(scriptName: RequiredScriptName): string {
 }
 
 function findPython(): string {
-  const candidates = [process.env['PYTHON'], 'python', 'python3'].filter(Boolean) as string[];
+  const candidates = definedValues([process.env['PYTHON'], 'python', 'python3'])
+    .filter(candidate => candidate.length > 0);
   for (const candidate of candidates) {
     if (pythonCandidateAvailable(candidate)) {
       return candidate;

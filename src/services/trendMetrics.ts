@@ -1,12 +1,11 @@
 import { Ticket } from '../state/types';
 import { isFailingBuildStatus, isPassingBuildStatus } from './buildStatus';
 import { evidenceChecks, evidenceEnvironmentResults, evidenceString } from './evidenceData';
-import { recordString } from './records';
 import { toValidDate } from './dateValues';
 import { isFailedTerminalRunStatus, isFinishedRunStatus, isSuccessfulRunStatus } from './runStatus';
 import { hasRetryMetadata, runLikeRecordsFromUnknown, type RunLikeRecord } from './runRecords';
 import { countLabel } from './countLabels';
-import { recordEntriesFromUnknown } from './records';
+import { definedValues, recordEntriesFromUnknown, recordString } from './records';
 
 interface TrendMetricsInput {
   runs: unknown[];
@@ -47,11 +46,11 @@ export function computeTrendMetrics(input: TrendMetricsInput): TrendMetricsRepor
   const verificationRuns = finishedRuns.filter(run => recordString(run, 'skill').includes('verify'));
   const passedVerificationRuns = verificationRuns.filter(run => isSuccessfulRunStatus(recordString(run, 'status'))).length;
 
-  const builds = tickets.map(([_, ticket]) => ticket.build).filter(Boolean) as NonNullable<Ticket['build']>[];
+  const builds = definedValues(tickets.map(([_, ticket]) => ticket.build));
   const passedBuilds = builds.filter(build => isPassingBuildStatus(build.status)).length;
   const failedBuilds = builds.filter(build => isFailingBuildStatus(build.status)).length;
 
-  const mrs = tickets.map(([_, ticket]) => ticket.mr).filter(Boolean) as NonNullable<Ticket['mr']>[];
+  const mrs = definedValues(tickets.map(([_, ticket]) => ticket.mr));
   const changesRequestedMrs = mrs.filter(mr => mr.review_status === 'changes_requested').length;
   const approvedMrs = mrs.filter(mr => mr.review_status === 'approved').length;
 

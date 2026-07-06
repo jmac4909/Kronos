@@ -2512,6 +2512,8 @@ for (const marker of [
   'export function requiredScripts',
   'function pythonCandidateAvailable(candidate: string): boolean',
   "import { parseJsonWithLabel } from './jsonFiles'",
+  "import { definedValues } from './records'",
+  "const candidates = definedValues([process.env['PYTHON'], 'python', 'python3'])",
   "return parseJsonWithLabel<T>(raw, `${scriptName} ${args.join(' ')}`, { includePreview: true })",
   'Kronos integration script unavailable:',
 ]) {
@@ -2596,6 +2598,7 @@ for (const marker of [
   'export function isRecord(value: unknown): value is Record<string, unknown>',
   'export function recordFromUnknown(value: unknown): Record<string, unknown>',
   'export function arrayFromUnknown(value: unknown): unknown[]',
+  'export function definedValues<T>(values: Array<T | null | undefined>): T[]',
   'export function recordsFromUnknown(value: unknown): Record<string, unknown>[]',
   'export function recordEntriesFromUnknown<T>(value: Record<string, T> | null | undefined): Array<[string, T]>',
   'export function recordKeysFromUnknown(value: unknown): string[]',
@@ -2603,6 +2606,7 @@ for (const marker of [
   'export function recordString(record: Record<string, unknown>, key: string): string',
   'return isRecord(value) ? value : {}',
   'return Array.isArray(value) ? value : []',
+  'value !== undefined && value !== null',
   'return arrayFromUnknown(value).filter(isRecord)',
   'return isRecord(value) ? Object.entries(value) : []',
   'return isRecord(value) ? Object.keys(value) : []',
@@ -2961,7 +2965,7 @@ for (const [name, source, marker] of [
   ['src/services/runStore.ts', runStore, "import { isRecord, recordString } from './records'"],
   ['src/services/sessionStore.ts', sessionStore, "import { isRecord, recordsFromUnknown } from './records'"],
   ['src/services/sonarReportView.ts', sonarReportView, "import { isRecord, recordsFromUnknown } from './records'"],
-  ['src/services/trendMetrics.ts', trendMetrics, "import { recordEntriesFromUnknown } from './records'"],
+  ['src/services/trendMetrics.ts', trendMetrics, "import { definedValues, recordEntriesFromUnknown, recordString } from './records'"],
   ['src/services/stateStore.ts', stateStore, "import { isRecord as isPlainObject } from './records'"],
   ['src/services/stateScriptAdapter.ts', stateScriptAdapter, "import { arrayFromUnknown, isRecord as isPlainObject } from './records'"],
   ['src/runners/sessionDispatcher.ts', dispatcher, "import { arrayFromUnknown, isRecord, recordEntriesFromUnknown, recordFromUnknown } from '../services/records'"],
@@ -3040,13 +3044,13 @@ if (runStore.includes('function stringField(value: unknown): string')) {
 
 for (const [name, source, marker] of [
   ['src/services/activeRunDisplay.ts', activeRunDisplay, "import { recordFromUnknown, recordString } from './records'"],
-  ['src/services/agentQualityScore.ts', agentQualityScore, "import { recordString } from './records'"],
+  ['src/services/agentQualityScore.ts', agentQualityScore, "import { definedValues, recordString } from './records'"],
   ['src/services/dashboardWorklist.ts', dashboardWorklist, "import { recordString } from './records'"],
   ['src/services/humanReviewInbox.ts', humanReviewInbox, "import { recordString } from './records'"],
   ['src/services/queueActiveRun.ts', queueActiveRun, "import { recordString } from './records'"],
   ['src/services/runProgress.ts', runProgress, "import { recordsFromUnknown, recordFromUnknown, recordString } from './records'"],
   ['src/services/ticketTimeline.ts', ticketTimeline, "import { recordString } from './records'"],
-  ['src/services/trendMetrics.ts', trendMetrics, "import { recordString } from './records'"],
+  ['src/services/trendMetrics.ts', trendMetrics, "import { definedValues, recordEntriesFromUnknown, recordString } from './records'"],
 ]) {
   if (!source.includes(marker)) {
     fail(`${name} must import the shared record string helper.`);
@@ -4767,7 +4771,7 @@ for (const marker of [
   "isFailedOrCancelledRunStatus(recordString(run, 'status'))",
   'gradeForScore',
   'const runs = runLikeRecordsFromUnknown(input.runs)',
-  "import { recordString } from './records'",
+  "import { definedValues, recordString } from './records'",
   "countLabel(totalRuns, 'run')",
   "countLabel(gateFailures, 'failing evidence gate')",
   "countLabel(needsHumanRuns, 'needs-human run')",
@@ -4958,7 +4962,7 @@ for (const marker of [
   'Verification pass rate',
   'Average cycle time',
   'Review health',
-  "import { recordString } from './records'",
+  "import { definedValues, recordEntriesFromUnknown, recordString } from './records'",
   "import { isFailedTerminalRunStatus, isFinishedRunStatus, isSuccessfulRunStatus } from './runStatus'",
   "import { hasRetryMetadata, runLikeRecordsFromUnknown, type RunLikeRecord } from './runRecords'",
   "import { countLabel } from './countLabels'",

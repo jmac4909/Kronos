@@ -3,7 +3,7 @@ import { isReviewReadyAction } from './actionSemantics';
 import { isFailingBuildStatus, isPassingBuildStatus } from './buildStatus';
 import { evaluateEvidenceGates } from './evidenceGate';
 import { isActiveRun, isFailedOrCancelledRunStatus, isSuccessfulRunStatus } from './runStatus';
-import { recordString } from './records';
+import { definedValues, recordString } from './records';
 import { hasRetryMetadata, runLikeRecordsFromUnknown } from './runRecords';
 import { countLabel } from './countLabels';
 
@@ -50,10 +50,10 @@ export function computeAgentQualityScore(input: {
   const gateWarnings = reviewRelevantGates.filter(gate => gate.status === 'warn').length;
 
   const ticketList = Object.values(tickets);
-  const builds = ticketList.map(ticket => ticket.build).filter(Boolean) as NonNullable<Ticket['build']>[];
+  const builds = definedValues(ticketList.map(ticket => ticket.build));
   const failedBuilds = builds.filter(build => isFailingBuildStatus(build.status)).length;
   const successfulBuilds = builds.filter(build => isPassingBuildStatus(build.status)).length;
-  const mrs = ticketList.map(ticket => ticket.mr).filter(Boolean) as NonNullable<Ticket['mr']>[];
+  const mrs = definedValues(ticketList.map(ticket => ticket.mr));
   const approvedMrs = mrs.filter(mr => mr.review_status === 'approved').length;
   const changesRequestedMrs = mrs.filter(mr => mr.review_status === 'changes_requested').length;
 
