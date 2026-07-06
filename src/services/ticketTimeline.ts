@@ -7,6 +7,7 @@ import { recordString } from './records';
 import { toValidDate } from './dateValues';
 import { isSuccessfulRunStatus } from './runStatus';
 import { runLikeRecordsFromUnknown, type RunLikeRecord } from './runRecords';
+import { runProgressSummary } from './runProgress';
 
 type TimelineSource = 'jira' | 'queue' | 'run' | 'evidence' | 'mr' | 'build' | 'ticket';
 type TimelineSeverity = 'info' | 'success' | 'warning' | 'failure';
@@ -212,15 +213,13 @@ function severityForRun(status: string | undefined): TimelineSeverity {
 }
 
 function runDetail(run: RunLikeRecord): string {
-  const promptHash = recordString(run, 'promptHash');
   const status = recordString(run, 'status');
   const attentionDetail = isAttentionRunStatus(status) ? runAttentionDetail(run) : '';
+  const progress = runProgressSummary(run);
   const parts = [
     attentionDetail || recordString(run, 'failureReason'),
-    recordString(run, 'project') ? `project ${recordString(run, 'project')}` : '',
-    recordString(run, 'model') ? `model ${recordString(run, 'model')}` : '',
-    promptHash ? `prompt ${promptHash.substring(0, 12)}` : '',
-    recordString(run, 'worktreePath') ? `worktree ${recordString(run, 'worktreePath')}` : '',
+    progress.label,
+    progress.detail,
   ].filter(Boolean);
   return parts.join(' | ');
 }

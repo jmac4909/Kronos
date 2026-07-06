@@ -7524,6 +7524,10 @@ test('ticket timeline combines queue, runs, evidence, MR, build, and ticket even
       endedAt: '2026-07-01T07:30:00.000Z',
       failureReason: 'unit test failed',
       promptHash: 'abcdef1234567890',
+      events: [
+        { type: 'tool', label: 'Reading src/app.ts', timestamp: '2026-07-01T07:05:00.000Z' },
+        { type: 'tool', label: 'Editing src/app.ts', timestamp: '2026-07-01T07:10:00.000Z' },
+      ],
     },
     {
       id: 'bad-hash',
@@ -7553,6 +7557,9 @@ test('ticket timeline combines queue, runs, evidence, MR, build, and ticket even
   assert.ok(events.some(event => event.title.includes('Environment local') && event.detail.includes('local replay failed')));
   assert.ok(events.some(event => event.source === 'queue' && event.detail.includes('score 99')));
   assert.ok(events.some(event => event.source === 'run' && event.detail.includes('unit test failed')));
+  assert.ok(events.some(event => event.source === 'run' && event.detail.includes('2 tools | 1 changed | 30m')));
+  assert.equal(events.some(event => event.source === 'run' && event.detail.includes('project app')), false);
+  assert.equal(events.some(event => event.source === 'run' && event.detail.includes('prompt abcdef123456')), false);
   assert.ok(events.some(event => event.source === 'run' && event.id.includes('needs-human') && event.detail.includes('Dirty worktree: .claude/')));
   assert.ok(events.some(event => event.source === 'mr' && event.severity === 'failure'));
   assert.ok(events.some(event => event.source === 'build' && event.severity === 'failure'));
@@ -7563,8 +7570,11 @@ test('ticket timeline combines queue, runs, evidence, MR, build, and ticket even
   assert.ok(source.includes('const runs = runLikeRecordsFromUnknown(input.runs)'));
   assert.ok(source.includes("import { isAttentionRunStatus, runAttentionDetail } from './runAttention'"));
   assert.ok(source.includes("import { isSuccessfulRunStatus } from './runStatus'"));
+  assert.ok(source.includes("import { runProgressSummary } from './runProgress'"));
   assert.ok(source.includes("if (isSuccessfulRunStatus(status)) { return 'success'; }"));
   assert.ok(source.includes('const attentionDetail = isAttentionRunStatus(status) ? runAttentionDetail(run) :'));
+  assert.ok(source.includes('const progress = runProgressSummary(run)'));
+  assert.equal(source.includes("recordString(run, 'promptHash')"), false);
   assert.equal(source.includes('const rawRuns'), false);
   assert.equal(source.includes('filter(isRunLikeRecord)'), false);
   assert.equal(source.includes('type TimelineRunRecord = TimelineRun & Record<string, unknown>'), false);
