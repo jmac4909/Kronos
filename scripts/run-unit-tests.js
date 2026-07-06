@@ -6314,8 +6314,8 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "import { toValidDate } from '../services/dateValues'",
     "import { formatDateTimeLabel, formatTimeLabel } from '../services/dateLabels'",
     'function progressDateOr',
-    'function progressEventTimeLabel',
-    'function progressDateTimeLabel',
+    'formatTimeLabel(e.timestamp)',
+    "formatDateTimeLabel(run.startedAt, 'Unknown')",
     'function stringOrDefault',
     "import { arrayFromUnknown, isRecord, recordFromUnknown } from '../services/records'",
     'function streamString(value: unknown): string',
@@ -6338,7 +6338,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     'durationSec: progress.elapsedSeconds',
     'Duration: ${progress.elapsedSeconds}s',
     'const statusClass = escapeClass(status)',
-    'const started = progressDateTimeLabel(run.startedAt)',
+    "const started = formatDateTimeLabel(run.startedAt, 'Unknown')",
     'const runEvents = arrayFromUnknown(run.events)',
     'const lastEvent = runEvents.length ? recordFromUnknown(runEvents[runEvents.length - 1]) : undefined',
     'const missingVariables = arrayFromUnknown(rawMissingVariables).map(String)',
@@ -6516,6 +6516,16 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     source.includes("target.closest('[data-action][data-run-id]')"),
     false,
     'Run Center script should allow panel-level actions without a run id',
+  );
+  assert.equal(
+    source.includes('function progressEventTimeLabel'),
+    false,
+    'dispatcher should use shared date label helpers directly',
+  );
+  assert.equal(
+    source.includes('function progressDateTimeLabel'),
+    false,
+    'dispatcher should use shared date label helpers directly',
   );
 
   assert.ok(

@@ -2203,8 +2203,8 @@ for (const marker of [
   "import { toValidDate } from '../services/dateValues'",
   "import { formatDateTimeLabel, formatTimeLabel } from '../services/dateLabels'",
   'function progressDateOr',
-  'function progressEventTimeLabel',
-  'function progressDateTimeLabel',
+  'formatTimeLabel(e.timestamp)',
+  "formatDateTimeLabel(run.startedAt, 'Unknown')",
   'function stringOrDefault',
   "import { arrayFromUnknown, isRecord, recordFromUnknown } from '../services/records'",
   'function streamString(value: unknown): string',
@@ -2229,7 +2229,7 @@ for (const marker of [
   'durationSec: progress.elapsedSeconds',
   'Duration: ${progress.elapsedSeconds}s',
   'const statusClass = escapeClass(status)',
-  'const started = progressDateTimeLabel(run.startedAt)',
+  "const started = formatDateTimeLabel(run.startedAt, 'Unknown')",
   'const runEvents = arrayFromUnknown(run.events)',
   'const lastEvent = runEvents.length ? recordFromUnknown(runEvents[runEvents.length - 1]) : undefined',
   'const missingVariables = arrayFromUnknown(rawMissingVariables).map(String)',
@@ -2258,6 +2258,9 @@ for (const staleMarker of [
   if (dispatcher.includes(staleMarker)) {
     fail(`Dispatcher must use shared record/array helpers instead of ${staleMarker}.`);
   }
+}
+if (dispatcher.includes('function progressEventTimeLabel') || dispatcher.includes('function progressDateTimeLabel')) {
+  fail('Dispatcher should use shared date label helpers directly instead of private progress date wrappers.');
 }
 for (const marker of [
   'export interface RunBranchMetadata',

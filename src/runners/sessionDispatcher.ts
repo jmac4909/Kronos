@@ -1213,14 +1213,6 @@ function progressDateOr(value: unknown, fallback: Date): Date {
   return toValidDate(value) || fallback;
 }
 
-function progressEventTimeLabel(value: unknown): string {
-  return formatTimeLabel(value);
-}
-
-function progressDateTimeLabel(value: unknown, fallback = 'Unknown'): string {
-  return formatDateTimeLabel(value, fallback);
-}
-
 function stringOrDefault(value: unknown, fallback: string): string {
   if (typeof value !== 'string' && typeof value !== 'number') { return fallback; }
   const trimmed = String(value).trim();
@@ -1351,7 +1343,7 @@ function buildProgressHtml(project: string, skill: string, ticket: string, event
 
   const eventRows = events.slice(-20).map(e => {
     const icon = e.type === 'tool' ? '&#128295;' : e.type === 'text' ? '&#128172;' : e.type === 'thinking' ? '&#128161;' : e.type === 'done' ? '&#10003;' : e.type === 'error' ? '&#10007;' : '&#8226;';
-    const time = progressEventTimeLabel(e.timestamp);
+    const time = formatTimeLabel(e.timestamp);
     return `<div class="event ${e.type}"><span class="time">${time}</span><span class="event-icon">${icon}</span><strong>${escapeHtml(e.label)}</strong>${e.detail ? `<div class="detail">${escapeHtml(e.detail)}</div>` : ''}</div>`;
   }).join('');
 
@@ -1544,8 +1536,8 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
     const statusClass = escapeClass(status);
     const operatorSummary = buildRunOperatorSummary(run);
     const rowClass = `${statusClass}${focused ? ' focused-run' : ''}`;
-    const ended = run.endedAt ? progressDateTimeLabel(run.endedAt) : '';
-    const started = progressDateTimeLabel(run.startedAt);
+    const ended = run.endedAt ? formatDateTimeLabel(run.endedAt, 'Unknown') : '';
+    const started = formatDateTimeLabel(run.startedAt, 'Unknown');
     const runEvents = arrayFromUnknown(run.events);
     const lastEvent = runEvents.length ? recordFromUnknown(runEvents[runEvents.length - 1]) : undefined;
     const promptMeta = isRecord(run.promptMetadata) ? run.promptMetadata : undefined;
