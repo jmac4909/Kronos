@@ -1,6 +1,7 @@
 import { classifyRunFailure, type RunFailureKind } from './postRunReadiness';
 import { recordFromUnknown } from './records';
 import { runStatusDisplayLabel } from './runLabels';
+import { isFailedTerminalRunStatus } from './runStatus';
 import { compactSingleLineText } from './textFormat';
 
 type RunAttentionSource =
@@ -34,10 +35,8 @@ const FAILURE_KIND_LABELS: Record<RunFailureKind, string> = {
   cancelled: 'Cancelled',
   unknown: '',
 };
-const ATTENTION_RUN_STATUSES = new Set(['failed', 'needs_human', 'cancelled']);
-
 export function isAttentionRunStatus(status: unknown): boolean {
-  return typeof status === 'string' && ATTENTION_RUN_STATUSES.has(status);
+  return isFailedTerminalRunStatus(status);
 }
 
 function summarizeRunAttention(run: unknown): RunAttentionSummary {

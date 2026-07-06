@@ -1094,11 +1094,12 @@ for (const marker of [
 for (const marker of [
   'export function resolveDeployMonitorProject',
   "import { projectPathKey } from './pathUtils'",
+  "import { isFailedTerminalRunStatus, isFreshActiveRun, isSuccessfulRunStatus } from './runStatus'",
   'linkedProjects.length > 1',
   'export function hasHandledDeployMonitorRun',
   'isHandledDeployMonitorRun(run)',
-  'HANDLED_DEPLOY_MONITOR_STATUSES',
-  "'completed', 'waiting_for_review'",
+  'isSuccessfulRunStatus(run.status)',
+  'isFailedTerminalRunStatus(run.status)',
   'promptMetadataMergeRequestIid',
   'if (match.mrIid === undefined) { return true; }',
   'if (runMrIid === undefined) { return false; }',
@@ -1114,6 +1115,9 @@ for (const marker of [
 }
 if (deployMonitorHandoff.includes('function deployMonitorProjectPathKey')) {
   fail('deployMonitorHandoff must use the shared project path identity helper.');
+}
+if (deployMonitorHandoff.includes('HANDLED_DEPLOY_MONITOR_STATUSES') || deployMonitorHandoff.includes('ATTENTION_DEPLOY_MONITOR_STATUSES')) {
+  fail('deployMonitorHandoff must use shared run status predicates instead of local deploy monitor status sets.');
 }
 for (const marker of [
   'function notifyMergeRequestStatusChange',
@@ -2836,6 +2840,15 @@ if (!dashboardPanelView.includes('return arrayFromUnknown(brief[key])')) {
 if (dashboardPanelView.includes('return Array.isArray(value) ? value : []')) {
   fail('Dashboard panel must not carry a local unknown-array fallback.');
 }
+if (!dashboardPanelView.includes("import { isFailedOrCancelledRunStatus, isFreshActiveRun } from './runStatus'")) {
+  fail('Dashboard panel must import shared run status predicates.');
+}
+if (!dashboardPanelView.includes("runs.filter(run => isFailedOrCancelledRunStatus(recordString(run, 'status'))).length")) {
+  fail('Dashboard panel failed-run count must use the shared failed/cancelled run predicate.');
+}
+if (dashboardPanelView.includes("['failed', 'cancelled'].includes(recordString(run, 'status'))")) {
+  fail('Dashboard panel must not carry a local failed/cancelled status list.');
+}
 
 for (const [name, source, marker] of [
   ['src/services/activeRunDisplay.ts', activeRunDisplay, "import { recordFromUnknown, recordString } from './records'"],
@@ -4231,6 +4244,30 @@ if (!runAttention.includes('return compactSingleLineText(runAttentionDetail(run)
 if (!runOperatorSummary.includes('return compactSingleLineText(value, 160)')) {
   fail('runOperatorSummary should use shared compact text helper.');
 }
+if (!runAttention.includes("import { isFailedTerminalRunStatus } from './runStatus'")) {
+  fail('runAttention must import the shared failed terminal run predicate.');
+}
+if (!runAttention.includes('return isFailedTerminalRunStatus(status)')) {
+  fail('runAttention must use the shared failed terminal run predicate for attention status.');
+}
+if (runAttention.includes('ATTENTION_RUN_STATUSES')) {
+  fail('runAttention must not carry a local attention status set.');
+}
+if (!runOperatorSummary.includes("import { effectiveRunStatus, isActiveRunStatus, isFailedTerminalRunStatus, isSuccessfulRunStatus } from './runStatus'")) {
+  fail('runOperatorSummary must import shared success and failed terminal run predicates.');
+}
+if (!runOperatorSummary.includes("if (isFailedTerminalRunStatus(status) || readinessStatus === 'blocked')")) {
+  fail('runOperatorSummary bad tone must use the shared failed terminal run predicate.');
+}
+if (!runOperatorSummary.includes("if (isSuccessfulRunStatus(status) || readinessStatus === 'ready')")) {
+  fail('runOperatorSummary good tone must use the shared successful run predicate.');
+}
+if (!runOperatorSummary.includes("if (!isFailedTerminalRunStatus(status)) { return ''; }")) {
+  fail('runOperatorSummary attention summary must use the shared failed terminal run predicate.');
+}
+if (runOperatorSummary.includes("['failed', 'cancelled', 'needs_human'].includes(status)")) {
+  fail('runOperatorSummary must not carry a local failed terminal status list.');
+}
 if (!reviewTreeProvider.includes('const summary = compactSingleLineText(latest.body, 180)')) {
   fail('ReviewTreeProvider should use shared compact text helper for MR comment summaries.');
 }
@@ -4727,6 +4764,7 @@ for (const marker of [
   'export function buildTicketTimeline',
   "import { isRunLikeRecord, type RunLikeRecord } from './runRecords'",
   "import { isAttentionRunStatus, runAttentionDetail } from './runAttention'",
+  "import { isSuccessfulRunStatus } from './runStatus'",
   'const rawRuns: unknown[] = Array.isArray(input.runs) ? input.runs : []',
   'const runs = rawRuns.filter(isRunLikeRecord)',
   'const notes = evidenceNotes(ticket)',
@@ -4734,6 +4772,7 @@ for (const marker of [
   'const environmentResults = evidenceEnvironmentResults(ticket)',
   "recordString(run, 'promptHash')",
   'const attentionDetail = isAttentionRunStatus(status) ? runAttentionDetail(run) :',
+  "if (isSuccessfulRunStatus(status)) { return 'success'; }",
   'function runDetail',
 ]) {
   if (!ticketTimeline.includes(marker)) {

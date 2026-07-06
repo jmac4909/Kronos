@@ -10,7 +10,7 @@ import { actionButton, actionRow, kronosActionPanelScript } from './operatorPane
 import type { PlannedAction } from './queuePlanner';
 import { arrayFromUnknown, recordString } from './records';
 import { isRunLikeRecord } from './runRecords';
-import { isFreshActiveRun } from './runStatus';
+import { isFailedOrCancelledRunStatus, isFreshActiveRun } from './runStatus';
 import { computeTrendMetrics } from './trendMetrics';
 import { escapeClass, escapeHtml, kronosWebviewBaseCss } from './webviewHtml';
 
@@ -61,7 +61,7 @@ export function buildDashboardHtml(input: DashboardPanelInput): string {
   const allTickets = input.state?.tickets || {};
   const runs = (Array.isArray(input.runs) ? input.runs : []).filter(isRunLikeRecord);
   const activeRuns = runs.filter(run => isFreshActiveRun(run)).length;
-  const failedRuns = runs.filter(run => ['failed', 'cancelled'].includes(recordString(run, 'status'))).length;
+  const failedRuns = runs.filter(run => isFailedOrCancelledRunStatus(recordString(run, 'status'))).length;
   const needsHumanRuns = runs.filter(run => recordString(run, 'status') === 'needs_human').length;
   const waitingForReviewRuns = runs.filter(run => recordString(run, 'status') === 'waiting_for_review').length;
   const evidenceGates = evaluateEvidenceGates(allTickets);

@@ -2,7 +2,7 @@ import { KronosState, Ticket } from '../state/types';
 import { evidenceChecks, evidenceString } from './evidenceData';
 import { projectPathKey } from './pathUtils';
 import { runAttentionLine } from './runAttention';
-import { isFreshActiveRun } from './runStatus';
+import { isFailedTerminalRunStatus, isFreshActiveRun, isSuccessfulRunStatus } from './runStatus';
 
 const DEPLOY_MONITOR_HANDOFF_CHECK_PREFIX = 'Deploy monitor handoff';
 
@@ -31,9 +31,6 @@ interface DeployMonitorRunMatch {
   ticketKey: string;
   mrIid?: number | undefined;
 }
-
-const HANDLED_DEPLOY_MONITOR_STATUSES = new Set(['completed', 'waiting_for_review']);
-const ATTENTION_DEPLOY_MONITOR_STATUSES = new Set(['failed', 'needs_human', 'cancelled']);
 
 export function resolveDeployMonitorProject(
   state: Pick<KronosState, 'projects'> | null | undefined,
@@ -80,11 +77,11 @@ function isDeployMonitorRunMatch(run: DeployMonitorRunLike, match: DeployMonitor
 }
 
 function isHandledDeployMonitorRun(run: DeployMonitorRunLike): boolean {
-  return isFreshActiveRun(run) || (typeof run.status === 'string' && HANDLED_DEPLOY_MONITOR_STATUSES.has(run.status));
+  return isFreshActiveRun(run) || isSuccessfulRunStatus(run.status);
 }
 
 function isAttentionDeployMonitorRun(run: DeployMonitorRunLike): boolean {
-  return typeof run.status === 'string' && ATTENTION_DEPLOY_MONITOR_STATUSES.has(run.status);
+  return isFailedTerminalRunStatus(run.status);
 }
 
 function runStatusLabel(status: unknown): string {

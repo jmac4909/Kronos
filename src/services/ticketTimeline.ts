@@ -5,6 +5,7 @@ import { mergeRequestReviewStatusLabel } from './mergeRequestLabels';
 import { isAttentionRunStatus, runAttentionDetail } from './runAttention';
 import { recordString } from './records';
 import { toValidDate } from './dateValues';
+import { isSuccessfulRunStatus } from './runStatus';
 import { isRunLikeRecord, type RunLikeRecord } from './runRecords';
 
 type TimelineSource = 'jira' | 'queue' | 'run' | 'evidence' | 'mr' | 'build' | 'ticket';
@@ -205,7 +206,7 @@ function severityForBuild(status: string): TimelineSeverity {
 }
 
 function severityForRun(status: string | undefined): TimelineSeverity {
-  if (status === 'completed' || status === 'waiting_for_review') { return 'success'; }
+  if (isSuccessfulRunStatus(status)) { return 'success'; }
   if (status === 'failed' || status === 'needs_human') { return 'failure'; }
   if (status === 'cancelled' || status === 'running' || status === 'preflight') { return 'warning'; }
   return 'info';

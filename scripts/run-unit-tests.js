@@ -1631,6 +1631,13 @@ test('deploy monitor handoff resolves projects and only suppresses handled runs'
   assert.equal(deployMonitorHandoff.hasDeployMonitorHandoffIssue(issueTicket, 'project path missing'), true);
   assert.equal(deployMonitorHandoff.hasDeployMonitorHandoffIssue(issueTicket, 'different failure'), false);
   assert.equal(deployMonitorHandoff.hasDeployMonitorHandoffIssue(ticket({ mr: merged.mr }), 'deploy monitor did not start'), false);
+
+  const source = readSourceFixture('src', 'services', 'deployMonitorHandoff.ts');
+  assert.ok(source.includes("import { isFailedTerminalRunStatus, isFreshActiveRun, isSuccessfulRunStatus } from './runStatus'"));
+  assert.ok(source.includes('isSuccessfulRunStatus(run.status)'));
+  assert.ok(source.includes('isFailedTerminalRunStatus(run.status)'));
+  assert.equal(source.includes('HANDLED_DEPLOY_MONITOR_STATUSES'), false);
+  assert.equal(source.includes('ATTENTION_DEPLOY_MONITOR_STATUSES'), false);
 });
 
 test('queue mutation helpers centralize queue membership and ticket project links', () => {
@@ -6711,7 +6718,10 @@ test('run attention summarizes actionable failure reasons', () => {
   }
   const runAttentionSource = readSourceFixture('src', 'services', 'runAttention.ts');
   assert.ok(runAttentionSource.includes("import { compactSingleLineText } from './textFormat'"));
+  assert.ok(runAttentionSource.includes("import { isFailedTerminalRunStatus } from './runStatus'"));
+  assert.ok(runAttentionSource.includes('return isFailedTerminalRunStatus(status)'));
   assert.ok(runAttentionSource.includes('return compactSingleLineText(runAttentionDetail(run), maxLength)'));
+  assert.equal(runAttentionSource.includes('ATTENTION_RUN_STATUSES'), false);
   assert.equal(runAttentionSource.includes("replace(/\\s+/g, ' ').trim()"), false, 'runAttention should use shared compact text helper');
 });
 
@@ -7111,6 +7121,8 @@ test('ticket timeline combines queue, runs, evidence, MR, build, and ticket even
   assert.ok(source.includes('const rawRuns: unknown[] = Array.isArray(input.runs) ? input.runs : []'));
   assert.ok(source.includes('const runs = rawRuns.filter(isRunLikeRecord)'));
   assert.ok(source.includes("import { isAttentionRunStatus, runAttentionDetail } from './runAttention'"));
+  assert.ok(source.includes("import { isSuccessfulRunStatus } from './runStatus'"));
+  assert.ok(source.includes("if (isSuccessfulRunStatus(status)) { return 'success'; }"));
   assert.ok(source.includes('const attentionDetail = isAttentionRunStatus(status) ? runAttentionDetail(run) :'));
   assert.equal(source.includes('type TimelineRunRecord = TimelineRun & Record<string, unknown>'), false);
   assert.equal(source.includes('type TimelineRunRecord = TimelineRun & Record<string, any>'), false);
@@ -7306,10 +7318,13 @@ test('run operator summary highlights progress, files, readiness, and blockers',
   const source = readSourceFixture('src', 'services', 'runOperatorSummary.ts');
   for (const marker of [
     "import { runProgressSummary } from './runProgress'",
-    "import { effectiveRunStatus, isActiveRunStatus } from './runStatus'",
+    "import { effectiveRunStatus, isActiveRunStatus, isFailedTerminalRunStatus, isSuccessfulRunStatus } from './runStatus'",
     "import { runAttentionDetail } from './runAttention'",
     "import { compactSingleLineText } from './textFormat'",
     'export function buildRunOperatorSummary',
+    "if (isFailedTerminalRunStatus(status) || readinessStatus === 'blocked')",
+    "if (isSuccessfulRunStatus(status) || readinessStatus === 'ready')",
+    "if (!isFailedTerminalRunStatus(status)) { return ''; }",
     'function latestMeaningfulSignal',
     'function eventFiles',
     'function runNextStep',
@@ -7318,6 +7333,7 @@ test('run operator summary highlights progress, files, readiness, and blockers',
     assert.ok(source.includes(marker), marker);
   }
   assert.equal(source.includes('function compactText'), false, 'runOperatorSummary should use shared compact text helper');
+  assert.equal(source.includes("['failed', 'cancelled', 'needs_human'].includes(status)"), false);
 });
 
 test('active run display summarizes status bar text and tooltip progress', () => {
@@ -9978,7 +9994,10 @@ test('dashboard panel view renders escaped command center data', () => {
 
   const source = readSourceFixture('src', 'services', 'dashboardPanelView.ts');
   assert.ok(source.includes("import { arrayFromUnknown, recordString } from './records'"));
+  assert.ok(source.includes("import { isFailedOrCancelledRunStatus, isFreshActiveRun } from './runStatus'"));
+  assert.ok(source.includes("runs.filter(run => isFailedOrCancelledRunStatus(recordString(run, 'status'))).length"));
   assert.ok(source.includes('return arrayFromUnknown(brief[key])'));
+  assert.equal(source.includes("['failed', 'cancelled'].includes(recordString(run, 'status'))"), false);
   assert.equal(source.includes('return Array.isArray(value) ? value : []'), false, 'dashboard panel should use shared array fallback helper');
 });
 

@@ -3,7 +3,7 @@ import { isRecord, recordFromUnknown, recordString } from './records';
 import { runAttentionDetail } from './runAttention';
 import { runStatusDisplayLabel } from './runLabels';
 import { runProgressSummary } from './runProgress';
-import { effectiveRunStatus, isActiveRunStatus } from './runStatus';
+import { effectiveRunStatus, isActiveRunStatus, isFailedTerminalRunStatus, isSuccessfulRunStatus } from './runStatus';
 import { compactSingleLineText } from './textFormat';
 
 export type RunOperatorTone = 'good' | 'warn' | 'bad' | 'info' | 'neutral';
@@ -116,15 +116,15 @@ function runFacts(
 }
 
 function runTone(status: string, readinessStatus: string): RunOperatorTone {
-  if (['failed', 'cancelled', 'needs_human'].includes(status) || readinessStatus === 'blocked') { return 'bad'; }
+  if (isFailedTerminalRunStatus(status) || readinessStatus === 'blocked') { return 'bad'; }
   if (status === 'running') { return 'info'; }
   if (['paused', 'preflight'].includes(status) || ['not_ready', 'unknown'].includes(readinessStatus)) { return 'warn'; }
-  if (status === 'completed' || status === 'waiting_for_review' || readinessStatus === 'ready') { return 'good'; }
+  if (isSuccessfulRunStatus(status) || readinessStatus === 'ready') { return 'good'; }
   return 'neutral';
 }
 
 function attentionSummary(record: Record<string, unknown>, status: string): string {
-  if (!['failed', 'cancelled', 'needs_human'].includes(status)) { return ''; }
+  if (!isFailedTerminalRunStatus(status)) { return ''; }
   return runAttentionDetail(record);
 }
 
