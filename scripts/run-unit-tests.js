@@ -196,6 +196,7 @@ const dashboardWorklist = require('../out/services/dashboardWorklist.js');
 const integrationManifest = require('../out/services/integrationManifest.js');
 const profileManager = require('../out/services/profileManager.js');
 const projectSelection = require('../out/services/projectSelection.js');
+const projectSetupPlan = require('../out/services/projectSetupPlan.js');
 const agingAnalyzer = require('../out/services/agingAnalyzer.js');
 const safetyGate = require('../out/services/safetyGate.js');
 const trendMetrics = require('../out/services/trendMetrics.js');
@@ -1805,6 +1806,39 @@ test('project mutation helpers centralize project config, scan dirs, and removal
   assert.throws(() => projectMutations.setProjectConfigValue('missing', 'sonar_project_key', 'x'), /Project not found/);
   assert.throws(() => projectMutations.setProjectConfigValue('other', 'gitlab_project_id', 'not-number'), /positive number/);
   assert.throws(() => projectMutations.setProjectConfigValue('other', 'deploy_approvers', 'Ada'), /structured config editor/);
+});
+
+test('project setup plan keeps setup prompts operational and documentation-free', () => {
+  assert.equal(
+    projectSetupPlan.projectSetupConfirmation('billing-api'),
+    'Set up billing-api? This will configure Kronos project metadata and inspect GitLab/SonarQube settings.'
+  );
+  const prompt = projectSetupPlan.buildProjectSetupPrompt({
+    projectName: 'billing-api',
+    projectPath: '/repo/billing-api',
+    gitlabProjectId: 123,
+    sonarProjectKey: 'billing-api',
+  });
+  for (const marker of [
+    'Set up project billing-api at /repo/billing-api',
+    'Read the pom.xml',
+    'Read src/main/resources/application*.yml',
+    'Inspect existing build, run, mock server, API endpoint, test data, and SonarQube config files',
+    'Do not create or edit CLAUDE.md or other documentation files',
+    'Do NOT touch .claude/project.json',
+    'gitlab_project_id=123',
+    'sonar_project_key=billing-api',
+    'Report the discovered build/run/test commands',
+  ]) {
+    assert.ok(prompt.includes(marker), marker);
+  }
+  for (const forbidden of [
+    'generate CLAUDE.md',
+    'update it, or create one if missing',
+    'The CLAUDE.md should document',
+  ]) {
+    assert.equal(prompt.includes(forbidden), false, forbidden);
+  }
 });
 
 test('queue planner ranks queued items first and avoids duplicate queued tickets', () => {
@@ -10883,7 +10917,7 @@ test('extension queue command handlers normalize payloads before use', () => {
 test('extension publish and project command handlers normalize unknown errors', () => {
   const source = readSourceFixture('src', 'extension.ts');
   const commandStart = source.indexOf("vscode.commands.registerCommand('kronos.publishEvidence'");
-  const commandEnd = source.indexOf('            const setupPrompt = `Set up project', commandStart);
+  const commandEnd = source.indexOf("    vscode.commands.registerCommand('kronos.startQueueItem'", commandStart);
   assert.ok(commandStart >= 0 && commandEnd > commandStart, 'publish/project command handler block should be present');
   const commandSource = source.slice(commandStart, commandEnd);
   for (const marker of [
@@ -10893,12 +10927,17 @@ test('extension publish and project command handlers normalize unknown errors', 
     "unknownErrorMessage(e, 'Could not resolve GitLab project ID.')",
     "unknownErrorMessage(e, 'Could not resolve SonarQube project key.')",
     "unknownErrorMessage(e, 'Could not update Kronos project integration config.')",
+    'projectSetupConfirmation(projectName)',
+    'const setupPrompt = buildProjectSetupPrompt({',
   ]) {
     assert.ok(commandSource.includes(marker), marker);
   }
   for (const marker of [
     'catch (e: any)',
     'e?.message',
+    'This will generate CLAUDE.md',
+    'Check for existing CLAUDE.md',
+    'The CLAUDE.md should document',
   ]) {
     assert.equal(commandSource.includes(marker), false, marker);
   }

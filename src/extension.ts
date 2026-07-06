@@ -80,6 +80,7 @@ import { buildPromptWorkspaceModel, promptHistoryTemplatesForProjects } from './
 import { buildSonarReport } from './services/sonarReportView';
 import { buildSonarBranchPickItems, buildSonarFixBranchStrategy, buildSonarFixInstructionBlock } from './services/sonarCommandPlan';
 import { buildRegisteredProjectItems, buildTicketGroupProjectItems, buildTicketProjectItems, getProjectNameForPath, getProjectPath, groupTicketsByProject } from './services/projectSelection';
+import { buildProjectSetupPrompt, projectSetupConfirmation } from './services/projectSetupPlan';
 import { buildAgingReportHtml } from './services/agingReportView';
 import { buildTicketHtml } from './services/ticketPanelView';
 import { buildDashboardHtml } from './services/dashboardPanelView';
@@ -2086,7 +2087,7 @@ export function activate(context: vscode.ExtensionContext) {
           vscode.window.showInformationMessage(`Registered: ${projectName}`);
 
           const setup = await vscode.window.showInformationMessage(
-            `Set up ${projectName}? This will generate CLAUDE.md and find GitLab/SonarQube config.`,
+            projectSetupConfirmation(projectName),
             'Set Up', 'Skip'
           );
           if (setup === 'Set Up') {
@@ -2132,14 +2133,12 @@ export function activate(context: vscode.ExtensionContext) {
               vscode.window.showWarningMessage(unknownErrorMessage(e, 'Could not update Kronos project integration config.'));
             }
 
-            const setupPrompt = `Set up project ${projectName} at ${projectPath}. Do these things:
-
-1. Read the pom.xml for artifactId, groupId, parent, dependencies, build profiles
-2. Read src/main/resources/application*.yml for datasources, ports, profiles
-3. Check for existing CLAUDE.md — update it, or create one if missing
-4. The CLAUDE.md should document: build commands (including gen profiles), run commands (profiles, port), mock server (if any), API endpoints, test data files, SonarQube config
-5. Do NOT touch .claude/project.json — it has already been configured with gitlab_project_id=${gitlabId} and sonar_project_key=${sonarKey}
-6. Report what was set up`;
+            const setupPrompt = buildProjectSetupPrompt({
+              projectName,
+              projectPath,
+              gitlabProjectId: gitlabId,
+              sonarProjectKey: sonarKey,
+            });
 
             await startClaudeDispatch(projectPath, 'init-project', undefined, {
               onComplete: refreshAfterDispatch(state, projectName),

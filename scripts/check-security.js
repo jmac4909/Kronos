@@ -100,6 +100,7 @@ const queueDispatchPlan = readSource('src/services/queueDispatchPlan.ts');
 const actionCatalog = readSource('src/services/actionCatalog.ts');
 const actionSemantics = readSource('src/services/actionSemantics.ts');
 const projectSelection = readSource('src/services/projectSelection.ts');
+const projectSetupPlan = readSource('src/services/projectSetupPlan.ts');
 const severityRank = readSource('src/services/severityRank.ts');
 const records = readSource('src/services/records.ts');
 const commandPayloads = readSource('src/services/commandPayloads.ts');
@@ -1301,7 +1302,7 @@ for (const forbidden of [
 }
 
 const publishProjectCommandStart = extension.indexOf("vscode.commands.registerCommand('kronos.publishEvidence'");
-const publishProjectCommandEnd = extension.indexOf('            const setupPrompt = `Set up project', publishProjectCommandStart);
+const publishProjectCommandEnd = extension.indexOf("    vscode.commands.registerCommand('kronos.startQueueItem'", publishProjectCommandStart);
 if (publishProjectCommandStart < 0 || publishProjectCommandEnd <= publishProjectCommandStart) {
   fail('Missing publish/project command handler block.');
 }
@@ -1312,6 +1313,23 @@ for (const forbidden of [
 ]) {
   if (publishProjectCommandSource.includes(forbidden)) {
     fail(`Publish/project command handlers must normalize unknown errors instead of using ${forbidden}.`);
+  }
+}
+for (const marker of [
+  'projectSetupConfirmation(projectName)',
+  'const setupPrompt = buildProjectSetupPrompt({',
+]) {
+  if (!publishProjectCommandSource.includes(marker)) {
+    fail(`Project setup command should use service-owned setup planning: ${marker}`);
+  }
+}
+for (const forbidden of [
+  'This will generate CLAUDE.md',
+  'Check for existing CLAUDE.md',
+  'The CLAUDE.md should document',
+]) {
+  if (publishProjectCommandSource.includes(forbidden)) {
+    fail(`Project setup command should not ask agents to write docs: ${forbidden}`);
   }
 }
 
@@ -2345,6 +2363,25 @@ for (const marker of [
 ]) {
   if (!projectMutations.includes(marker)) {
     fail(`Missing project mutation marker: ${marker}`);
+  }
+}
+for (const marker of [
+  'export function projectSetupConfirmation',
+  'export function buildProjectSetupPrompt',
+  'Do not create or edit CLAUDE.md or other documentation files',
+  'Do NOT touch .claude/project.json',
+]) {
+  if (!projectSetupPlan.includes(marker)) {
+    fail(`Missing project setup plan marker: ${marker}`);
+  }
+}
+for (const forbidden of [
+  'generate CLAUDE.md',
+  'update it, or create one if missing',
+  'The CLAUDE.md should document',
+]) {
+  if (projectSetupPlan.includes(forbidden)) {
+    fail(`Project setup plan should not ask agents to write docs: ${forbidden}`);
   }
 }
 
