@@ -4,6 +4,7 @@ import { Ticket } from '../state/types';
 import { evidenceAcceptanceCriteria, evidenceChecked, evidenceChecks, evidenceEnvironmentResults, evidenceNotes, evidenceRiskNotes, evidenceString } from './evidenceData';
 import { safeFileStem } from './fileNames';
 import { KRONOS_DIR } from './stateStore';
+import { ticketStringArray } from './ticketFields';
 
 const EVIDENCE_DIR = path.join(KRONOS_DIR, 'evidence');
 
@@ -22,7 +23,7 @@ function formatEvidenceMarkdown(ticketKey: string, ticket: Ticket): string {
     `- Priority: ${ticket.priority || ''}`,
     `- Jira status: ${ticket.jira_status || ''}`,
     `- Next action: ${ticket.next_action || ''}`,
-    `- Projects: ${(ticket.projects || []).join(', ') || 'none'}`,
+    `- Projects: ${ticketStringArray(ticket.projects).join(', ') || 'none'}`,
   ];
 
   if (ticket.jira_url) { lines.push(`- Jira: ${ticket.jira_url}`); }

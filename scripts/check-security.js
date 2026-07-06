@@ -4237,6 +4237,8 @@ for (const marker of [
 for (const marker of [
   '## Evidence Checks',
   '## Environment Results',
+  "import { ticketStringArray } from './ticketFields'",
+  "ticketStringArray(ticket.projects).join(', ') || 'none'",
   'evidenceRiskNotes(ticket)',
   'evidenceNotes(ticket)',
   'evidenceChecks(ticket)',
@@ -4246,6 +4248,9 @@ for (const marker of [
   if (!evidenceStore.includes(marker)) {
     fail(`Missing evidence store marker: ${marker}`);
   }
+}
+if (evidenceStore.includes('(ticket.projects || []).join')) {
+  fail('Evidence store must normalize project lists through ticketStringArray.');
 }
 
 for (const marker of [

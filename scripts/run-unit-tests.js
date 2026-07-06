@@ -5253,6 +5253,7 @@ test('ticket filters match operator search facets and grouped views', () => {
 test('evidence store formats markdown and compact comment handoff', () => {
   const t = ticket({
     summary: 'Fix checkout',
+    projects: [' app ', '', 42, 'web'],
     next_action: 'await_review',
     mr: { iid: 42, state: 'opened', review_status: 'approved', url: 'https://gitlab.example/mr/42' },
     build: { number: 77, status: 'SUCCESS', url: 'https://jenkins.example/77' },
@@ -5305,6 +5306,8 @@ test('evidence store formats markdown and compact comment handoff', () => {
   const comment = evidenceStore.formatEvidenceComment('K-9', t);
 
   assert.match(markdown, /# Evidence for K-9/);
+  assert.match(markdown, /- Projects: app, web/);
+  assert.equal(/- Projects:.*42/.test(markdown), false, 'evidence markdown should not render malformed project entries');
   assert.match(markdown, /## Acceptance Criteria/);
   assert.match(markdown, /- \[x\] User can retry checkout after timeout/);
   assert.match(markdown, /Build: #77 SUCCESS/);
@@ -5319,6 +5322,11 @@ test('evidence store formats markdown and compact comment handoff', () => {
   assert.match(comment, /\[pass\] checkout retry smoke/);
   assert.match(comment, /Environment results:/);
   assert.match(comment, /\[test\] npm test passed/);
+
+  const source = readSourceFixture('src', 'services', 'evidenceStore.ts');
+  assert.ok(source.includes("import { ticketStringArray } from './ticketFields'"));
+  assert.ok(source.includes("ticketStringArray(ticket.projects).join(', ') || 'none'"));
+  assert.equal(source.includes('(ticket.projects || []).join'), false);
 });
 
 test('evidence store keeps long ticket keys in bounded distinct filenames', () => {
