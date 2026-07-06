@@ -19,42 +19,11 @@ function listFilesRecursive(dir, predicate) {
   return files;
 }
 
-const namedFiles = [
-  'src/extension.ts',
-  'src/runners/sessionDispatcher.ts',
-  'src/state/KronosState.ts',
-  'src/services/scriptClient.ts',
-  'src/services/queueActiveRun.ts',
-  'src/services/queuePlannerPanelView.ts',
-  'src/services/operationsReportPanelView.ts',
-  'src/services/dashboardPanelView.ts',
-  'src/services/diffPanelView.ts',
-  'src/services/jiraBoardPanelView.ts',
-  'src/services/operatorPanel.ts',
-  'src/services/webviewSecurity.ts',
-  'src/services/promptPanelView.ts',
-  'src/services/recoveryPanelView.ts',
-  'src/services/humanReviewPanelView.ts',
-  'src/services/evidencePanelView.ts',
-  'src/services/sonarCommandPlan.ts',
-  'src/services/sonarReportView.ts',
-  'src/services/agingReportView.ts',
-  'src/services/dateLabels.ts',
-  'src/services/ticketFields.ts',
-  'src/services/mergeRequestLabels.ts',
-  'src/services/webviewFormat.ts',
-  'src/services/webviewHtml.ts',
-  'src/views/ProjectTreeProvider.ts',
-  'src/views/TicketTreeProvider.ts',
-  'media/kronos-webview-runtime.js',
-  'media/kronos-action-panel.js',
-  'media/kronos-jira-board.js',
-];
 const liveSecurityScanFiles = [
   ...listFilesRecursive('src', file => file.endsWith('.ts')),
   ...listFilesRecursive('media', file => file.endsWith('.js')),
 ].sort();
-const files = [...new Set([...namedFiles, ...liveSecurityScanFiles])].sort();
+const files = liveSecurityScanFiles;
 
 const sources = Object.fromEntries(files.map((file) => [file, readSource(file)]));
 const allSource = Object.values(sources).join('\n');

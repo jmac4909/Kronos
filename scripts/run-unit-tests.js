@@ -10676,11 +10676,10 @@ test('security check validates semantic webview script policy', () => {
     "'src/services/agingReportView.ts'",
     "'src/services/webviewHtml.ts'",
     'function listFilesRecursive(dir, predicate)',
-    'const namedFiles = [',
     'const liveSecurityScanFiles = [',
     "...listFilesRecursive('src', file => file.endsWith('.ts'))",
     "...listFilesRecursive('media', file => file.endsWith('.js'))",
-    'const files = [...new Set([...namedFiles, ...liveSecurityScanFiles])].sort();',
+    'const files = liveSecurityScanFiles;',
     "assertAbsent(/(^|[^\\w.])exec\\s*\\(/m, 'Use execFile instead of shell-string exec.');",
     "const promptPanelView = sources['src/services/promptPanelView.ts']",
     "const webviewActionPanelScript = sources['media/kronos-action-panel.js']",
@@ -10688,6 +10687,7 @@ test('security check validates semantic webview script policy', () => {
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+  assert.equal(source.includes('const namedFiles = ['), false, 'security check should rely on the live recursive source/media scan');
   for (const marker of [
     'enableScriptsTrue !== 27',
     'Expected exactly 27 literal script-enabled webviews',
