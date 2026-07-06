@@ -155,7 +155,7 @@ function normalizeSonarBranches(value: unknown): SonarBranch[] {
 }
 
 function normalizeJiraComments(value: unknown): JiraComment[] {
-  const rawComments = Array.isArray(value) ? value : isRecord(value) ? arrayFromUnknown(value['comments']) : [];
+  const rawComments = isRecord(value) ? arrayFromUnknown(value['comments']) : arrayFromUnknown(value);
   return rawComments.slice(0, 100).map(normalizeJiraComment);
 }
 

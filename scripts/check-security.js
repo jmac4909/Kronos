@@ -5007,6 +5007,7 @@ for (const marker of [
   'export const sonarAdapter',
   'interface JiraComment',
   'function normalizeJiraComments',
+  "const rawComments = isRecord(value) ? arrayFromUnknown(value['comments']) : arrayFromUnknown(value)",
   'interface MergeRequestStatusResult',
   'export function normalizeMergeRequestStatus',
   'function normalizeMergeRequestComments',
@@ -5038,6 +5039,9 @@ for (const marker of [
   if (!integrationAdapters.includes(marker)) {
     fail(`Missing integration adapter marker: ${marker}`);
   }
+}
+if (integrationAdapters.includes("Array.isArray(value) ? value : isRecord(value) ? arrayFromUnknown(value['comments']) : []")) {
+  fail('Integration adapters must use the shared array fallback helper for Jira comment payloads.');
 }
 
 if (process.exitCode) {

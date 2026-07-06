@@ -8498,6 +8498,7 @@ test('integration adapters keep raw provider payloads unknown until normalized',
     'function isUnsupportedMergeRequestStatusCommand',
     'function isUnsupportedMergeRequestStatusText',
     'function mergeRequestCommentInputs',
+    "const rawComments = isRecord(value) ? arrayFromUnknown(value['comments']) : arrayFromUnknown(value)",
     "const notes = arrayFromUnknown(item['notes'])",
   ]) {
     assert.ok(source.includes(marker), marker);
@@ -8510,6 +8511,7 @@ test('integration adapters keep raw provider payloads unknown until normalized',
     'e?.message',
     'value is Record<string, any>',
     'function unknownErrorMessage(error: unknown',
+    "Array.isArray(value) ? value : isRecord(value) ? arrayFromUnknown(value['comments']) : []",
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }
