@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { unknownErrorField, unknownErrorMessage } from './errorUtils';
 import { parseJsonWithLabel } from './jsonFiles';
-import { definedValues } from './records';
+import { definedValues, isRecord } from './records';
 
 const SCRIPTS_DIR = process.env['KRONOS_SCRIPTS_DIR'] || path.join(os.homedir(), '.claude', 'scripts');
 const PYTHON = findPython();
@@ -38,8 +38,8 @@ class KronosScriptMissingError extends Error {
 export function isKronosScriptMissingError(error: unknown): boolean {
   if (error instanceof KronosScriptMissingError) { return true; }
   if (typeof error === 'string') { return isKronosScriptMissingMessage(error); }
-  if (!error || typeof error !== 'object') { return false; }
-  const record = error as Record<string, unknown>;
+  if (!isRecord(error)) { return false; }
+  const record = error;
   const structurallyMissing = record['name'] === 'KronosScriptMissingError'
     && isRequiredScriptName(record['scriptName'])
     && typeof record['filePath'] === 'string';

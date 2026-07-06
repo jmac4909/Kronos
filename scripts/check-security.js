@@ -2639,7 +2639,8 @@ for (const marker of [
   'export function requiredScripts',
   'function pythonCandidateAvailable(candidate: string): boolean',
   "import { parseJsonWithLabel } from './jsonFiles'",
-  "import { definedValues } from './records'",
+  "import { definedValues, isRecord } from './records'",
+  'if (!isRecord(error)) { return false; }',
   "const candidates = definedValues([process.env['PYTHON'], 'python', 'python3'])",
   "return parseJsonWithLabel<T>(raw, `${scriptName} ${args.join(' ')}`, { includePreview: true })",
   'Kronos integration script unavailable:',
@@ -2653,6 +2654,14 @@ if (scriptClient.includes('} catch {}')) {
 }
 if (scriptClient.includes('export class KronosScriptMissingError')) {
   fail('KronosScriptMissingError should stay private behind isKronosScriptMissingError.');
+}
+for (const marker of [
+  "if (!error || typeof error !== 'object') { return false; }",
+  'const record = error as Record<string, unknown>',
+]) {
+  if (scriptClient.includes(marker)) {
+    fail(`Script client should use shared record helpers instead of ${marker}.`);
+  }
 }
 
 for (const marker of [

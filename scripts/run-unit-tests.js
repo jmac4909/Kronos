@@ -8312,6 +8312,10 @@ test('script client reports required scripts and wraps Python JSON contracts', a
     scriptName: 'not-a-script.py',
     filePath: kronosStatePath,
   }), false);
+  assert.equal(scriptClient.isKronosScriptMissingError([
+    'KronosScriptMissingError',
+    'kronos_state.py',
+  ]), false);
   assert.equal(scriptClient.isKronosScriptMissingError(new Error(`Kronos script missing: ${kronosStatePath}`)), true);
   assert.equal(scriptClient.isKronosScriptMissingError(new Error('Kronos integration script unavailable: kronos_state.py. Run Kronos: Doctor for setup details.')), true);
   assert.equal(scriptClient.isKronosScriptMissingError(new Error('Kronos script missing: old string')), false);
@@ -8337,7 +8341,8 @@ test('script client keeps raw JSON and process errors unknown by default', () =>
     'function scriptError(scriptName: RequiredScriptName, args: string[], error: unknown)',
     'function pythonCandidateAvailable(candidate: string): boolean',
     "import { parseJsonWithLabel } from './jsonFiles'",
-    "import { definedValues } from './records'",
+    "import { definedValues, isRecord } from './records'",
+    'if (!isRecord(error)) { return false; }',
     "const candidates = definedValues([process.env['PYTHON'], 'python', 'python3'])",
     'return parseJsonWithLabel<T>(raw, `${scriptName} ${args.join(\' \')}`, { includePreview: true })',
     "import { unknownErrorField, unknownErrorMessage } from './errorUtils'",
@@ -8352,6 +8357,8 @@ test('script client keeps raw JSON and process errors unknown by default', () =>
     'error: any',
     'e?.message',
     'error?.stderr',
+    "if (!error || typeof error !== 'object') { return false; }",
+    'const record = error as Record<string, unknown>',
     'function unknownErrorMessage(error: unknown',
     'function errorField(error: unknown',
     '} catch {}',
