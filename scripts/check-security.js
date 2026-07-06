@@ -3584,9 +3584,11 @@ if (queueTreeProvider.includes('item.projects || []')) {
 }
 
 for (const marker of [
-  "import { evidenceRecordCount } from '../services/evidenceData'",
+  "import { evidenceAcceptanceCriteria, evidenceRecordCount } from '../services/evidenceData'",
   "import { ticketStringArray } from '../services/ticketFields'",
   'evidenceRecordCount(t)',
+  'const tickets = state.tickets',
+  'const criteriaCount = evidenceAcceptanceCriteria(t).length',
   'const projs = ticketStringArray(t.projects)',
   'const projs = ticketStringArray(ticket.projects)',
 ]) {
@@ -3599,6 +3601,12 @@ if (ticketTreeProvider.includes('function evidenceItemCount')) {
 }
 if (ticketTreeProvider.includes('t.projects || []') || ticketTreeProvider.includes('ticket.projects || []')) {
   fail('Ticket tree must use ticketStringArray before rendering linked projects.');
+}
+if (ticketTreeProvider.includes('state.tickets || {}')) {
+  fail('Ticket tree provider must trust normalized state tickets after load.');
+}
+if (ticketTreeProvider.includes('t.evidence?.acceptance_criteria?.length || 0')) {
+  fail('Ticket tree provider must use shared evidence helpers for acceptance criteria.');
 }
 if (extension.includes('function evidenceCountForTicket')) {
   fail('Extension must call shared evidenceRecordCount directly instead of wrapping it locally.');

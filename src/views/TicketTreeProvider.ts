@@ -3,7 +3,7 @@ import { KronosState } from '../state/KronosState';
 import { Ticket } from '../state/types';
 import { actionDisplayLabel as actionToLabel } from '../services/actionCatalog';
 import { buildStatusKind } from '../services/buildStatus';
-import { evidenceRecordCount } from '../services/evidenceData';
+import { evidenceAcceptanceCriteria, evidenceRecordCount } from '../services/evidenceData';
 import { mergeRequestReviewStatusLabel } from '../services/mergeRequestLabels';
 import { ticketStringArray } from '../services/ticketFields';
 import { TicketFilter, TicketGroupBy, describeTicketFilter, filterTickets, groupTicketEntries, hasTicketFilter } from '../services/ticketFilters';
@@ -45,7 +45,7 @@ export class TicketTreeProvider implements vscode.TreeDataProvider<TicketElement
     if (!state) { return []; }
 
     if (!element) {
-      const tickets = state.tickets || {};
+      const tickets = state.tickets;
       if (Object.keys(tickets).length === 0) {
         return [new EmptyTicketItem('No tickets — run Refresh', 'info')];
       }
@@ -92,7 +92,7 @@ export class TicketTreeProvider implements vscode.TreeDataProvider<TicketElement
         evidenceItem.iconPath = new vscode.ThemeIcon('notebook', new vscode.ThemeColor('charts.blue'));
         items.push(evidenceItem);
       }
-      const criteriaCount = t.evidence?.acceptance_criteria?.length || 0;
+      const criteriaCount = evidenceAcceptanceCriteria(t).length;
       if (criteriaCount > 0) {
         const criteriaItem = new TicketDetailItem(`${criteriaCount} acceptance criterion item${criteriaCount === 1 ? '' : 's'}`, '', 'evidence_info', element.ticketKey);
         criteriaItem.iconPath = new vscode.ThemeIcon('checklist', new vscode.ThemeColor('testing.iconPassed'));
