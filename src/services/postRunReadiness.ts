@@ -6,7 +6,7 @@ import { evidenceChecks, evidenceNotes, evidenceString } from './evidenceData';
 import { runProgressSummary } from './runProgress';
 import { isSuccessfulRunStatus, terminalRunOutcome } from './runStatus';
 import { escapeRegExp } from './regexp';
-import { arrayFromUnknown, recordFromUnknown, trimmedStringFromUnknown } from './records';
+import { arrayFromUnknown, optionalTrimmedStringFromUnknown, recordFromUnknown } from './records';
 
 type PostRunReadinessStatus = 'ready' | 'needs_human' | 'blocked' | 'not_ready' | 'unknown';
 export type RunFailureKind = 'none' | 'auth' | 'model' | 'script' | 'git' | 'build' | 'test' | 'sonar' | 'timeout' | 'cancelled' | 'unknown';
@@ -66,7 +66,7 @@ export function resolvePostRunTicket(input: {
   projectName?: string;
   run?: unknown;
 }): PostRunTicketResolution {
-  const ticketKey = trimmedString(input.ticketKey);
+  const ticketKey = optionalTrimmedStringFromUnknown(input.ticketKey);
   const tickets = input.tickets;
   if (!tickets) {
     return postRunTicketResolution(ticketKey);
@@ -87,7 +87,7 @@ export function resolvePostRunTicket(input: {
     return runResolved;
   }
 
-  const projectName = trimmedString(input.projectName) || runString(recordFromUnknown(input.run)['project']);
+  const projectName = optionalTrimmedStringFromUnknown(input.projectName) || runString(recordFromUnknown(input.run)['project']);
   if (!projectName) {
     return postRunTicketResolution(ticketKey);
   }
@@ -351,11 +351,6 @@ function runCompletionEvidenceCommand(runId: string): string {
 
 function runString(value: unknown): string {
   return typeof value === 'string' ? value : '';
-}
-
-function trimmedString(value: unknown): string | undefined {
-  const text = trimmedStringFromUnknown(value);
-  return text || undefined;
 }
 
 function runText(value: unknown): string | undefined {

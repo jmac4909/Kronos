@@ -1,6 +1,6 @@
 import { ScriptRunOptions, runKronosStateScript } from './scriptClient';
 import { parseJsonWithLabel } from './jsonFiles';
-import { arrayFromUnknown, finiteNumberFromUnknown, isRecord as isPlainObject } from './records';
+import { arrayFromUnknown, finiteNumberFromUnknown, isRecord as isPlainObject, optionalTrimmedStringFromUnknown } from './records';
 import { DiscoveredProject } from '../state/types';
 
 type StateScriptRunner = (args: string[], options?: ScriptRunOptions) => string;
@@ -59,16 +59,16 @@ function normalizeDiscoveredProjects(value: unknown): DiscoveredProject[] {
 
 function normalizeDiscoveredProject(value: unknown): DiscoveredProject | null {
   if (!isPlainObject(value)) { return null; }
-  const path = stringOrNull(value['path']);
+  const path = optionalTrimmedStringFromUnknown(value['path']) ?? null;
   if (!path) { return null; }
-  const repoName = stringOrNull(value['repo_name']) || path.replace(/\\/g, '/').split('/').filter(Boolean).pop() || path;
+  const repoName = optionalTrimmedStringFromUnknown(value['repo_name']) || path.replace(/\\/g, '/').split('/').filter(Boolean).pop() || path;
   return {
     path,
     repo_name: repoName,
     has_project_json: value['has_project_json'] === true,
-    git_remote: stringOrNull(value['git_remote']),
-    pom_artifact_id: stringOrNull(value['pom_artifact_id']),
-    suggested_jira_key: stringOrNull(value['suggested_jira_key']),
+    git_remote: optionalTrimmedStringFromUnknown(value['git_remote']) ?? null,
+    pom_artifact_id: optionalTrimmedStringFromUnknown(value['pom_artifact_id']) ?? null,
+    suggested_jira_key: optionalTrimmedStringFromUnknown(value['suggested_jira_key']) ?? null,
   };
 }
 
@@ -103,10 +103,4 @@ export function readMorningBriefJson(options: StateScriptAdapterOptions = {}): M
     overnight_actions: finiteNumberFromUnknown(parsed['overnight_actions']),
     vpn_drops: finiteNumberFromUnknown(parsed['vpn_drops']),
   };
-}
-
-function stringOrNull(value: unknown): string | null {
-  if (typeof value !== 'string') { return null; }
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
 }

@@ -2340,7 +2340,7 @@ for (const marker of [
     fail(`Missing session store marker: ${marker}`);
   }
 }
-if (!sessionStore.includes("import { finiteNumberFromUnknown, isRecord, recordsFromUnknown } from './records'")) {
+if (!sessionStore.includes("import { finiteNumberFromUnknown, isRecord, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records'")) {
   fail('Session store must import the shared record-list normalizer.');
 }
 if (sessionStore.includes('if (!Array.isArray(value)) { return []; }')) {
@@ -2605,6 +2605,7 @@ for (const marker of [
   'export function arrayFromUnknown(value: unknown): unknown[]',
   'export function definedValues<T>(values: Array<T | null | undefined>): T[]',
   'export function trimmedStringFromUnknown(value: unknown, fallback = \'\'): string',
+  'export function optionalTrimmedStringFromUnknown(value: unknown): string | undefined',
   'export function finiteNumberFromUnknown(value: unknown, fallback = 0): number',
   'export function recordsFromUnknown(value: unknown): Record<string, unknown>[]',
   'export function recordEntriesFromUnknown<T>(value: Record<string, T> | null | undefined): Array<[string, T]>',
@@ -2625,6 +2626,7 @@ for (const marker of [
   "typeof value === 'object'",
   '!Array.isArray(value)',
   "typeof value === 'string' ? value.trim() : fallback",
+  'return trimmed || undefined',
 ]) {
   if (!records.includes(marker)) {
     fail(`Missing record helper marker: ${marker}`);
@@ -2985,11 +2987,11 @@ for (const [name, source, marker] of [
   ['src/services/runStatus.ts', runStatus, "import { isRecord, recordsFromUnknown } from './records'"],
   ['src/services/runRecords.ts', runRecords, "import { isRecord, recordsFromUnknown, recordString } from './records'"],
   ['src/services/runStore.ts', runStore, "import { isRecord, recordString } from './records'"],
-  ['src/services/sessionStore.ts', sessionStore, "import { finiteNumberFromUnknown, isRecord, recordsFromUnknown } from './records'"],
+  ['src/services/sessionStore.ts', sessionStore, "import { finiteNumberFromUnknown, isRecord, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records'"],
   ['src/services/sonarReportView.ts', sonarReportView, "import { isRecord, recordsFromUnknown } from './records'"],
   ['src/services/trendMetrics.ts', trendMetrics, "import { definedValues, recordEntriesFromUnknown, recordString } from './records'"],
   ['src/services/stateStore.ts', stateStore, "import { finiteNumberFromUnknown, isRecord as isPlainObject } from './records'"],
-  ['src/services/stateScriptAdapter.ts', stateScriptAdapter, "import { arrayFromUnknown, finiteNumberFromUnknown, isRecord as isPlainObject } from './records'"],
+  ['src/services/stateScriptAdapter.ts', stateScriptAdapter, "import { arrayFromUnknown, finiteNumberFromUnknown, isRecord as isPlainObject, optionalTrimmedStringFromUnknown } from './records'"],
   ['src/runners/sessionDispatcher.ts', dispatcher, "import { arrayFromUnknown, isRecord, recordEntriesFromUnknown, recordFromUnknown } from '../services/records'"],
 ]) {
   if (!source.includes(marker)) {
@@ -3043,7 +3045,7 @@ for (const [name, source, marker] of [
   ['src/services/runCompletionNotification.ts', runCompletionNotification, "import { recordFromUnknown, recordString } from './records'"],
   ['src/services/runProgress.ts', runProgress, "import { recordsFromUnknown, recordFromUnknown, recordString } from './records'"],
   ['src/services/queueMutations.ts', queueMutations, "import { finiteNumberFromUnknown, recordFromUnknown } from './records'"],
-  ['src/services/postRunReadiness.ts', postRunReadiness, "import { arrayFromUnknown, recordFromUnknown, trimmedStringFromUnknown } from './records'"],
+  ['src/services/postRunReadiness.ts', postRunReadiness, "import { arrayFromUnknown, optionalTrimmedStringFromUnknown, recordFromUnknown } from './records'"],
 ]) {
   if (!source.includes(marker)) {
     fail(`${name} must import the shared unknown-record helper.`);
@@ -3184,10 +3186,10 @@ for (const marker of [
   'export function completeAdhocTask',
   'function readMorningBrief(',
   'export function readMorningBriefJson',
-  "import { arrayFromUnknown, finiteNumberFromUnknown, isRecord as isPlainObject } from './records'",
+  "import { arrayFromUnknown, finiteNumberFromUnknown, isRecord as isPlainObject, optionalTrimmedStringFromUnknown } from './records'",
   "overnight_actions: finiteNumberFromUnknown(parsed['overnight_actions'])",
   "vpn_drops: finiteNumberFromUnknown(parsed['vpn_drops'])",
-  'function stringOrNull',
+  "const path = optionalTrimmedStringFromUnknown(value['path']) ?? null",
   "completed: arrayFromUnknown(parsed['completed'])",
   "ready_to_go: arrayFromUnknown(parsed['ready_to_go'])",
   "parseJsonWithLabel(discoverProjects(options), 'kronos_state.py --discover', { includePreview: true })",
@@ -3201,6 +3203,9 @@ for (const marker of [
 }
 if (stateScriptAdapter.includes('function arrayOrEmpty')) {
   fail('State script adapter must use the shared array fallback helper.');
+}
+if (stateScriptAdapter.includes('function stringOrNull')) {
+  fail('State script adapter must use the shared optional trimmed string helper.');
 }
 for (const marker of [
   'export function discoverProjects(',
@@ -5097,7 +5102,7 @@ for (const marker of [
   'run: unknown',
   "import { runProgressSummary } from './runProgress'",
   "import { evidenceChecks, evidenceNotes, evidenceString } from './evidenceData'",
-  "import { arrayFromUnknown, recordFromUnknown, trimmedStringFromUnknown } from './records'",
+  "import { arrayFromUnknown, optionalTrimmedStringFromUnknown, recordFromUnknown } from './records'",
   'export function shouldRecordRunCompletionEvidence',
   'export function resolvePostRunTicket',
   'interface PostRunTicketResolution',
@@ -5109,7 +5114,7 @@ for (const marker of [
   'function runSearchStrings(record: Record<string, unknown>): string[]',
   'function ticketKeyAppearsInStrings(ticketKey: string, values: string[]): boolean',
   "import { escapeRegExp } from './regexp'",
-  'function trimmedString(value: unknown): string | undefined',
+  'const ticketKey = optionalTrimmedStringFromUnknown(input.ticketKey)',
   "runString(record['skill']) === 'implement'",
   "input.ticket.next_action === 'await_review'",
   '!hasRunCompletionEvidence(input.ticket, runId)',
@@ -5138,7 +5143,7 @@ for (const marker of [
   'exitCode === 124',
   "skill.includes('sonar')",
   "skill.includes('verify')",
-  "import { arrayFromUnknown, recordFromUnknown, trimmedStringFromUnknown } from './records'",
+  "import { arrayFromUnknown, optionalTrimmedStringFromUnknown, recordFromUnknown } from './records'",
   'arrayFromUnknown(value).flatMap',
   'function runString(value: unknown): string',
   'function runText(value: unknown): string | undefined',

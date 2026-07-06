@@ -18,6 +18,11 @@ export function trimmedStringFromUnknown(value: unknown, fallback = ''): string 
   return typeof value === 'string' ? value.trim() : fallback;
 }
 
+export function optionalTrimmedStringFromUnknown(value: unknown): string | undefined {
+  const trimmed = trimmedStringFromUnknown(value);
+  return trimmed || undefined;
+}
+
 export function finiteNumberFromUnknown(value: unknown, fallback = 0): number {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : fallback;

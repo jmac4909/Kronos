@@ -4,7 +4,7 @@ import { safeFileStem } from './fileNames';
 import { KRONOS_DIR } from './stateStore';
 import { unknownErrorMessage } from './errorUtils';
 import { readJsonFile } from './jsonFiles';
-import { finiteNumberFromUnknown, isRecord, recordsFromUnknown } from './records';
+import { finiteNumberFromUnknown, isRecord, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records';
 import { toValidDate } from './dateValues';
 
 const SESSIONS_DIR = path.join(KRONOS_DIR, 'sessions');
@@ -145,11 +145,11 @@ function readSavedSessionFileResult(filePath: string): { session?: SavedSession;
     return {
       session: {
         ...parsed,
-        id: stringOrDefault(parsed['id'], 'unknown'),
-        project: stringOrDefault(parsed['project'], 'unknown'),
-        skill: stringOrDefault(parsed['skill'], 'unknown'),
-        ticket: stringOrDefault(parsed['ticket'], ''),
-        startedAt: stringOrDefault(parsed['startedAt'], ''),
+        id: optionalTrimmedStringFromUnknown(parsed['id']) ?? 'unknown',
+        project: optionalTrimmedStringFromUnknown(parsed['project']) ?? 'unknown',
+        skill: optionalTrimmedStringFromUnknown(parsed['skill']) ?? 'unknown',
+        ticket: optionalTrimmedStringFromUnknown(parsed['ticket']) ?? '',
+        startedAt: optionalTrimmedStringFromUnknown(parsed['startedAt']) ?? '',
         events: normalizeSavedSessionEvents(parsed['events']),
       } as SavedSession,
     };
@@ -204,35 +204,29 @@ function normalizeSavedSessionEvents(value: unknown): SavedSessionEvent[] {
 function normalizeSavedSessionEvent(value: unknown): SavedSessionEvent | null {
   if (!isRecord(value)) { return null; }
   return {
-    type: stringOrDefault(value['type'], 'unknown'),
-    label: stringOrDefault(value['label'], ''),
-    detail: stringOrDefault(value['detail'], ''),
-    timestamp: stringOrDefault(value['timestamp'], ''),
+    type: optionalTrimmedStringFromUnknown(value['type']) ?? 'unknown',
+    label: optionalTrimmedStringFromUnknown(value['label']) ?? '',
+    detail: optionalTrimmedStringFromUnknown(value['detail']) ?? '',
+    timestamp: optionalTrimmedStringFromUnknown(value['timestamp']) ?? '',
   };
 }
 
 function normalizeAggregateSession(value: unknown): AggregateSessionStats | null {
   if (!isRecord(value)) { return null; }
   return {
-    id: stringOrDefault(value['id'], 'unknown'),
-    project: stringOrDefault(value['project'], 'unknown'),
-    skill: stringOrDefault(value['skill'], 'unknown'),
-    ticket: stringOrDefault(value['ticket'], ''),
-    startedAt: stringOrDefault(value['startedAt'], ''),
+    id: optionalTrimmedStringFromUnknown(value['id']) ?? 'unknown',
+    project: optionalTrimmedStringFromUnknown(value['project']) ?? 'unknown',
+    skill: optionalTrimmedStringFromUnknown(value['skill']) ?? 'unknown',
+    ticket: optionalTrimmedStringFromUnknown(value['ticket']) ?? '',
+    startedAt: optionalTrimmedStringFromUnknown(value['startedAt']) ?? '',
     toolCalls: finiteNumberFromUnknown(value['toolCalls']),
     toolErrors: finiteNumberFromUnknown(value['toolErrors']),
     thinkingCount: finiteNumberFromUnknown(value['thinkingCount']),
     filesRead: finiteNumberFromUnknown(value['filesRead']),
     filesEdited: finiteNumberFromUnknown(value['filesEdited']),
     durationSec: finiteNumberFromUnknown(value['durationSec']),
-    verdict: stringOrDefault(value['verdict'], 'unknown'),
+    verdict: optionalTrimmedStringFromUnknown(value['verdict']) ?? 'unknown',
   };
-}
-
-function stringOrDefault(value: unknown, fallback: string): string {
-  if (typeof value !== 'string') { return fallback; }
-  const trimmed = value.trim();
-  return trimmed || fallback;
 }
 
 function invalidSessionIssue(kind: SessionStoreIssue['kind'], filePath: string, detail: string): SessionStoreIssue {

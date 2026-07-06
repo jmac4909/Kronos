@@ -4060,6 +4060,9 @@ test('record guard helper centralizes unknown object narrowing', () => {
   assert.deepEqual(records.definedValues(['ok', null, undefined, '', 'done']), ['ok', '', 'done']);
   assert.equal(records.trimmedStringFromUnknown(' K-1 '), 'K-1');
   assert.equal(records.trimmedStringFromUnknown(42, 'fallback'), 'fallback');
+  assert.equal(records.optionalTrimmedStringFromUnknown(' K-1 '), 'K-1');
+  assert.equal(records.optionalTrimmedStringFromUnknown('   '), undefined);
+  assert.equal(records.optionalTrimmedStringFromUnknown(42), undefined);
   assert.equal(records.finiteNumberFromUnknown('42'), 42);
   assert.equal(records.finiteNumberFromUnknown('bad', 7), 7);
   assert.equal(records.finiteNumberFromUnknown(3.5), 3.5);
@@ -4096,6 +4099,7 @@ test('record guard helper centralizes unknown object narrowing', () => {
     'export function arrayFromUnknown(value: unknown): unknown[]',
     'export function definedValues<T>(values: Array<T | null | undefined>): T[]',
     'export function trimmedStringFromUnknown(value: unknown, fallback = \'\'): string',
+    'export function optionalTrimmedStringFromUnknown(value: unknown): string | undefined',
     'export function finiteNumberFromUnknown(value: unknown, fallback = 0): number',
     'export function recordsFromUnknown(value: unknown): Record<string, unknown>[]',
     'export function recordEntriesFromUnknown<T>(value: Record<string, T> | null | undefined): Array<[string, T]>',
@@ -4105,6 +4109,7 @@ test('record guard helper centralizes unknown object narrowing', () => {
     'return isRecord(value) ? value : {}',
     'return Array.isArray(value) ? value : []',
     'value !== undefined && value !== null',
+    'return trimmed || undefined',
     "if (typeof value === 'number')",
     "if (typeof value !== 'string' || !value.trim())",
     'const parsed = Number(value)',
@@ -4132,10 +4137,10 @@ test('record guard helper centralizes unknown object narrowing', () => {
     ['runStatus.ts', "import { isRecord, recordsFromUnknown } from './records'"],
     ['runRecords.ts', "import { isRecord, recordsFromUnknown, recordString } from './records'"],
     ['runStore.ts', "import { isRecord, recordString } from './records'"],
-    ['sessionStore.ts', "import { finiteNumberFromUnknown, isRecord, recordsFromUnknown } from './records'"],
+    ['sessionStore.ts', "import { finiteNumberFromUnknown, isRecord, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records'"],
     ['sonarReportView.ts', "import { isRecord, recordsFromUnknown } from './records'"],
     ['stateStore.ts', "import { finiteNumberFromUnknown, isRecord as isPlainObject } from './records'"],
-    ['stateScriptAdapter.ts', "import { arrayFromUnknown, finiteNumberFromUnknown, isRecord as isPlainObject } from './records'"],
+    ['stateScriptAdapter.ts', "import { arrayFromUnknown, finiteNumberFromUnknown, isRecord as isPlainObject, optionalTrimmedStringFromUnknown } from './records'"],
   ]) {
     const source = readSourceFixture('src', 'services', file);
     assert.ok(source.includes(marker), `${file} should import shared record guard`);
@@ -6727,7 +6732,7 @@ test('session store normalizes aggregate stats rows for rendering', () => {
   const source = readSourceFixture('src', 'services', 'sessionStore.ts');
   for (const marker of [
     "import { unknownErrorMessage } from './errorUtils'",
-    "import { finiteNumberFromUnknown, isRecord, recordsFromUnknown } from './records'",
+    "import { finiteNumberFromUnknown, isRecord, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records'",
     'catch (e: unknown)',
     "unknownErrorMessage(e, 'Unable to parse saved session JSON.')",
     "unknownErrorMessage(e, 'Unable to parse stats.json.')",
@@ -6736,6 +6741,7 @@ test('session store normalizes aggregate stats rows for rendering', () => {
     'function normalizeAggregateSessions',
     'recordsFromUnknown(value)',
     "toolCalls: finiteNumberFromUnknown(value['toolCalls'])",
+    "id: optionalTrimmedStringFromUnknown(value['id']) ?? 'unknown'",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -6744,6 +6750,7 @@ test('session store normalizes aggregate stats rows for rendering', () => {
     'e?.message',
     'if (!Array.isArray(value)) { return []; }',
     'function finiteNumber(value: unknown)',
+    'function stringOrDefault(value: unknown',
   ]) {
     assert.equal(source.includes(marker), false, marker);
   }
@@ -8244,13 +8251,14 @@ test('state script adapter keeps raw JSON payloads unknown until normalized', ()
   for (const marker of [
     '[key: string]: unknown',
     "parseJsonWithLabel(discoverProjects(options), 'kronos_state.py --discover', { includePreview: true })",
-    "import { arrayFromUnknown, finiteNumberFromUnknown, isRecord as isPlainObject } from './records'",
+    "import { arrayFromUnknown, finiteNumberFromUnknown, isRecord as isPlainObject, optionalTrimmedStringFromUnknown } from './records'",
     "import { parseJsonWithLabel } from './jsonFiles'",
     'for (const item of arrayFromUnknown(value))',
     "completed: arrayFromUnknown(parsed['completed'])",
     "ready_to_go: arrayFromUnknown(parsed['ready_to_go'])",
     "overnight_actions: finiteNumberFromUnknown(parsed['overnight_actions'])",
     "vpn_drops: finiteNumberFromUnknown(parsed['vpn_drops'])",
+    "const path = optionalTrimmedStringFromUnknown(value['path']) ?? null",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -8259,6 +8267,7 @@ test('state script adapter keeps raw JSON payloads unknown until normalized', ()
     'function parseStateScriptJson',
     'function arrayOrEmpty',
     'function finiteNumberOrZero',
+    'function stringOrNull',
     'catch (e: any)',
     'e?.message',
     'value is Record<string, any>',
@@ -9980,7 +9989,7 @@ test('post-run readiness distinguishes process completion from handoff readiness
     "import { runProgressSummary } from './runProgress'",
     "import { isSuccessfulRunStatus, terminalRunOutcome } from './runStatus'",
     "import { evidenceChecks, evidenceNotes, evidenceString } from './evidenceData'",
-    "import { arrayFromUnknown, recordFromUnknown, trimmedStringFromUnknown } from './records'",
+    "import { arrayFromUnknown, optionalTrimmedStringFromUnknown, recordFromUnknown } from './records'",
     'export function shouldRecordRunCompletionEvidence',
     'export function resolvePostRunTicket',
     'export function postRunReadinessRunPatch',
@@ -9995,7 +10004,7 @@ test('post-run readiness distinguishes process completion from handoff readiness
     'function runSearchStrings(record: Record<string, unknown>): string[]',
     'function ticketKeyAppearsInStrings(ticketKey: string, values: string[]): boolean',
     "import { escapeRegExp } from './regexp'",
-    'function trimmedString(value: unknown): string | undefined',
+    'const ticketKey = optionalTrimmedStringFromUnknown(input.ticketKey)',
     "runString(record['skill']) === 'implement'",
     "input.ticket.next_action === 'await_review'",
     '!hasRunCompletionEvidence(input.ticket, runId)',
@@ -10013,7 +10022,7 @@ test('post-run readiness distinguishes process completion from handoff readiness
     "import { isPassingBuildStatus } from './buildStatus'",
     'function isPassingSonar',
     'export function classifyRunFailure(run: unknown): RunFailureKind',
-    "import { arrayFromUnknown, recordFromUnknown, trimmedStringFromUnknown } from './records'",
+    "import { arrayFromUnknown, optionalTrimmedStringFromUnknown, recordFromUnknown } from './records'",
     'function runCompletedForEvidence(record: Record<string, unknown>): boolean',
     'function runString(value: unknown): string',
     'function runText(value: unknown): string | undefined',
