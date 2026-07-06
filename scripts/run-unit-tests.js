@@ -4523,6 +4523,32 @@ test('run action helpers resolve safe artifacts and quick-pick labels', () => {
   assert.equal(extensionSource.includes('runCountLabel('), false, 'extension should use the shared count label helper directly');
   assert.ok(extensionSource.includes("countLabel(runs.length, 'finished run')"));
   assert.ok(extensionSource.includes("countLabel(archived, 'finished run')"));
+  for (const marker of [
+    "countLabel(cleanupPreview.results.length, 'tracked worktree')",
+    "countLabel(registered, 'project')",
+    "countLabel(existingCount, 'acceptance criterion item')",
+    "countLabel(result.ticketsUnlinked.length, 'ticket')",
+    "countLabel(tickets.length, 'merged ticket')",
+    "countLabel(issues.length, 'saved session store issue')",
+    "countLabel(preview.removable, 'clean tracked Kronos worktree')",
+    "countLabel(missing.length, 'missing required prompt template file')",
+    "countLabel(planWindow.plans.length, 'action')",
+    "countLabel(plans.length, 'linked implementation/build candidate')",
+  ]) {
+    assert.ok(extensionSource.includes(marker), marker);
+  }
+  for (const marker of [
+    'worktree(s)',
+    'project(s)',
+    'acceptance criterion item(s)',
+    'ticket(s)',
+    'session store issue(s)',
+    'prompt template(s)',
+    'action(s)',
+    'candidate(s)',
+  ]) {
+    assert.equal(extensionSource.includes(marker), false, marker);
+  }
 
   const countLabelsSource = readSourceFixture('src', 'services', 'countLabels.ts');
   for (const marker of [

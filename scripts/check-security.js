@@ -2638,6 +2638,36 @@ for (const marker of [
     fail(`Missing count label helper marker: ${marker}`);
   }
 }
+for (const marker of [
+  "countLabel(cleanupPreview.results.length, 'tracked worktree')",
+  "countLabel(registered, 'project')",
+  "countLabel(existingCount, 'acceptance criterion item')",
+  "countLabel(result.ticketsUnlinked.length, 'ticket')",
+  "countLabel(tickets.length, 'merged ticket')",
+  "countLabel(issues.length, 'saved session store issue')",
+  "countLabel(preview.removable, 'clean tracked Kronos worktree')",
+  "countLabel(missing.length, 'missing required prompt template file')",
+  "countLabel(planWindow.plans.length, 'action')",
+  "countLabel(plans.length, 'linked implementation/build candidate')",
+]) {
+  if (!extension.includes(marker)) {
+    fail(`Missing extension count label marker: ${marker}`);
+  }
+}
+for (const forbidden of [
+  'worktree(s)',
+  'project(s)',
+  'acceptance criterion item(s)',
+  'ticket(s)',
+  'session store issue(s)',
+  'prompt template(s)',
+  'action(s)',
+  'candidate(s)',
+]) {
+  if (extension.includes(forbidden)) {
+    fail(`Extension must use the shared count label helper instead of ${forbidden}.`);
+  }
+}
 
 for (const marker of [
   'export function compactSingleLineText(value: unknown, maxLength: number): string',

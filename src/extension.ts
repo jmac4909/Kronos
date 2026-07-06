@@ -1142,7 +1142,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (cleanupPreview.removable > 0 || cleanupPreview.blocked > 0) {
         runNotificationCommandAction(
           vscode.window.showWarningMessage(
-            `Kronos found ${cleanupPreview.results.length} tracked worktree(s): ${cleanupPreview.removable} clean, ${cleanupPreview.blocked} need review.`,
+            `Kronos found ${countLabel(cleanupPreview.results.length, 'tracked worktree')}: ${countLabel(cleanupPreview.removable, 'clean worktree')}, ${countLabel(cleanupPreview.blocked, 'worktree needing review')}.`,
             'Review Cleanup'
           ),
           'Review Cleanup',
@@ -1272,7 +1272,7 @@ export function activate(context: vscode.ExtensionContext) {
                   vscode.window.showWarningMessage(unknownErrorMessage(e, `Failed to register ${s.label || s.detail}.`));
                 }
               }
-              vscode.window.showInformationMessage(`Registered ${registered} project(s). Run Refresh to pull tickets.`);
+              vscode.window.showInformationMessage(`Registered ${countLabel(registered, 'project')}. Run Refresh to pull tickets.`);
             }
           } catch (e: unknown) {
             vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to parse discovery results.'));
@@ -1850,7 +1850,7 @@ export function activate(context: vscode.ExtensionContext) {
       const existingCount = existingCriteria.length;
       if (existingCount > 0) {
         const confirm = await vscode.window.showWarningMessage(
-          `${ticketKey} already has ${existingCount} acceptance criterion item(s). Replace with ${extracted.length} extracted item(s)? Existing checked state is preserved when text matches.`,
+          `${ticketKey} already has ${countLabel(existingCount, 'acceptance criterion item')}. Replace with ${countLabel(extracted.length, 'extracted item')}? Existing checked state is preserved when text matches.`,
           'Replace',
           'Cancel'
         );
@@ -1860,7 +1860,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         replaceTicketAcceptanceCriteria(ticketKey, extracted);
         state.reloadAndNotify();
-        vscode.window.showInformationMessage(`Extracted ${extracted.length} acceptance criterion item(s) for ${ticketKey}.`);
+        vscode.window.showInformationMessage(`Extracted ${countLabel(extracted.length, 'acceptance criterion item')} for ${ticketKey}.`);
       } catch (e: unknown) {
         vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to extract acceptance criteria.'));
       }
@@ -1902,7 +1902,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         updateTicketAcceptanceCriteria(ticketKey, picked.map(item => item.criterionId));
         state.reloadAndNotify();
-        vscode.window.showInformationMessage(`Updated ${picked.length}/${criteria.length} checked acceptance criterion item(s) for ${ticketKey}.`);
+        vscode.window.showInformationMessage(`Updated ${countLabel(picked.length, 'checked acceptance criterion item')} out of ${countLabel(criteria.length, 'acceptance criterion item')} for ${ticketKey}.`);
       } catch (e: unknown) {
         vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to update acceptance criteria.'));
       }
@@ -2070,7 +2070,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         const result = removeProjectFromState(name);
         state.reloadAndNotify();
-        vscode.window.showInformationMessage(`Removed ${name}. Unlinked ${result.ticketsUnlinked.length} ticket(s) and kept it in discovered repos.`);
+        vscode.window.showInformationMessage(`Removed ${name}. Unlinked ${countLabel(result.ticketsUnlinked.length, 'ticket')} and kept it in discovered repos.`);
       } catch (e: unknown) {
         vscode.window.showErrorMessage(unknownErrorMessage(e, `Failed to remove ${name}.`));
       }
@@ -2713,7 +2713,7 @@ export function activate(context: vscode.ExtensionContext) {
         target: `${projectName}: ${ticketList}`,
         risks: ['repo-write'],
         changes: [
-          `Dispatch TEST verification for ${tickets.length} merged ticket(s).`,
+          `Dispatch TEST verification for ${countLabel(tickets.length, 'merged ticket')}.`,
           'May start local tooling and write verification artifacts.',
         ],
         confirmationLabel: 'Verify',
@@ -3038,7 +3038,7 @@ export function activate(context: vscode.ExtensionContext) {
       const issues = listSessionStoreIssues();
       if (sessions.length === 0) {
         if (issues.length > 0) {
-          vscode.window.showWarningMessage(`No readable saved sessions. Kronos found ${issues.length} saved session store issue(s). Run Kronos: Doctor.`);
+          vscode.window.showWarningMessage(`No readable saved sessions. Kronos found ${countLabel(issues.length, 'saved session store issue')}. Run Kronos: Doctor.`);
         } else {
           vscode.window.showInformationMessage('No saved sessions yet.');
         }
@@ -3203,16 +3203,16 @@ export function activate(context: vscode.ExtensionContext) {
         target: `${preview.removable} clean / ${preview.blocked} blocked`,
         risks: ['destructive'],
         changes: [
-          `Remove ${preview.removable} clean tracked Kronos worktree(s).`,
+          `Remove ${countLabel(preview.removable, 'clean tracked Kronos worktree')}.`,
           'Untrack missing worktrees from Kronos metadata.',
-          `Leave ${preview.blocked} blocked worktree(s) untouched for manual review.`,
+          `Leave ${countLabel(preview.blocked, 'blocked worktree')} untouched for manual review.`,
         ],
         warnings: ['Only the dry-run removable set will be cleaned. Dirty worktrees are not removed.'],
         confirmationLabel: 'Remove Clean Worktrees',
       });
       if (!canClean) { return; }
       const cleaned = cleanupStaleWorktrees({ remove: true });
-      vscode.window.showInformationMessage(`Removed ${cleaned.removed} worktree(s). ${cleaned.blocked} still need manual review.`);
+      vscode.window.showInformationMessage(`Removed ${countLabel(cleaned.removed, 'worktree')}. ${countLabel(cleaned.blocked, 'blocked worktree')} still ${cleaned.blocked === 1 ? 'needs' : 'need'} manual review.`);
     }),
   );
 
@@ -3424,7 +3424,7 @@ async function repairPromptPack(state: KronosState, extensionUri?: vscode.Uri): 
     target: path.join(KRONOS_DIR, 'prompts'),
     risks: ['state-write'],
     changes: [
-      `Create ${missing.length} missing required prompt template file(s).`,
+      `Create ${countLabel(missing.length, 'missing required prompt template file')}.`,
       'Leave existing prompt templates untouched.',
       'Generated templates are starter prompts that should be reviewed before production use.',
     ],
@@ -3434,7 +3434,7 @@ async function repairPromptPack(state: KronosState, extensionUri?: vscode.Uri): 
   if (!canRepair) { return; }
   const result = repairRequiredPromptTemplates(REQUIRED_PROMPTS);
   const action = await vscode.window.showInformationMessage(
-    `Created ${result.created.length} prompt template(s). ${result.existing.length} already existed.`,
+    `Created ${countLabel(result.created.length, 'prompt template')}. ${countLabel(result.existing.length, 'prompt template')} already existed.`,
     'Open Prompt Manager'
   );
   if (action === 'Open Prompt Manager') {
@@ -4046,7 +4046,7 @@ function openQueuePlanWindowPanel(state: KronosState, extensionUri?: vscode.Uri)
         plans: planWindow.plans,
         html: buildQueuePlanModeHtml(
           'Kronos Plan Next 2 Hours',
-          `${planWindow.plans.length} action(s), estimated ${planWindow.estimatedMinutes} minutes`,
+          `${countLabel(planWindow.plans.length, 'action')}, estimated ${planWindow.estimatedMinutes} minutes`,
           planWindow.plans,
           nonce,
           actionScriptUri,
@@ -4068,7 +4068,7 @@ function openOvernightCandidatesPanel(state: KronosState, extensionUri?: vscode.
         plans,
         html: buildQueuePlanModeHtml(
           'Kronos Overnight Candidates',
-          `${plans.length} linked implementation/build candidate(s)`,
+          countLabel(plans.length, 'linked implementation/build candidate'),
           plans,
           nonce,
           actionScriptUri,
