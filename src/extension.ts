@@ -3338,7 +3338,7 @@ async function runSettingsMenu(state: KronosState): Promise<void> {
         prompt: 'Scan directories (comma-separated)',
         value: currentState?.settings?.scan_dirs?.join(', ') || '',
       });
-      if (val) {
+      if (val !== undefined) {
         const newDirs = val.split(',').map(d => d.trim()).filter(Boolean);
         try {
           const result = setScanDirs(newDirs);

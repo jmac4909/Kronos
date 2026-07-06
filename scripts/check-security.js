@@ -755,6 +755,9 @@ for (const marker of [
   "type SettingsMenuItemId = 'profile' | 'dispatchModel' | 'pollInterval' | 'sessionPoll' | 'scanDirectories' | 'authCheck'",
   'const pick = await vscode.window.showQuickPick<SettingsMenuItem>',
   'switch (pick.id)',
+  "case 'scanDirectories':",
+  'if (val !== undefined)',
+  "const result = setScanDirs(newDirs)",
   "case 'profile':",
   "case 'authCheck':",
   'const exhaustive: never = pick.id',
@@ -1036,6 +1039,9 @@ if (extension.includes('runCountLabel(')) {
 }
 if (extension.includes('Number.isFinite' + '(intervalMs)')) {
   fail('Extension polling helpers must use the shared interval config helper.');
+}
+if (extension.includes('if (val) {\n        const newDirs = val.split')) {
+  fail('Scan directory settings must allow clearing all configured directories.');
 }
 if (extension.indexOf('const startupSideEffectsTimer = setTimeout(runStartupSideEffects, 0)') < extension.indexOf("vscode.commands.registerCommand('kronos.cleanupWorktrees'")) {
   fail('Kronos startup side effects must be deferred until after command registration.');

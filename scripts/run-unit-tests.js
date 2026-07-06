@@ -10671,6 +10671,9 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "type SettingsMenuItemId = 'profile' | 'dispatchModel' | 'pollInterval' | 'sessionPoll' | 'scanDirectories' | 'authCheck'",
     'const pick = await vscode.window.showQuickPick<SettingsMenuItem>',
     'switch (pick.id)',
+    "case 'scanDirectories':",
+    'if (val !== undefined)',
+    "const result = setScanDirs(newDirs)",
     "case 'profile':",
     "case 'authCheck':",
     'const exhaustive: never = pick.id',
@@ -11187,6 +11190,7 @@ test('security check validates semantic webview script policy', () => {
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+  assert.equal(source.includes('if (val) {\n        const newDirs = val.split'), false, 'scan directory settings should allow clearing all dirs');
   assert.equal(source.includes('const namedFiles = ['), false, 'security check should rely on the live recursive source/media scan');
   for (const marker of [
     'enableScriptsTrue !== 27',
