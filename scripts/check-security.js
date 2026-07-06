@@ -1929,6 +1929,12 @@ for (const marker of [
   'function formatStatus',
   'escapeClass',
   'data-search="${attr(searchText)}"',
+  "type BoardColumnName = 'To Do' | 'Queued' | 'In Progress' | 'Review' | 'Blocked' | 'Done'",
+  "const DEFAULT_BOARD_COLUMN: BoardColumnName = 'To Do'",
+  'const BOARD_COLUMN_BY_ACTION: Record<string, BoardColumnName>',
+  'const columns: Record<BoardColumnName, string[]>',
+  'const col = isQueued ? QUEUED_BOARD_COLUMN : (BOARD_COLUMN_BY_ACTION[nextAction] ?? DEFAULT_BOARD_COLUMN)',
+  'columns[col].push(card)',
   "'To Do': [], 'Queued': [], 'In Progress': [], 'Review': [], 'Blocked': [], 'Done': []",
   "done: 'Done'",
   'data-empty',
@@ -1976,6 +1982,9 @@ for (const marker of [
   if (!extensionUiSource.includes(marker)) {
     fail(`Missing UI/UX marker: ${marker}`);
   }
+}
+if (jiraBoardPanelView.includes('columns[col] || []')) {
+  fail('Jira board columns must use the typed column map instead of impossible array fallbacks.');
 }
 for (const forbidden of [
   "linkTicketToProject(ticket, project);\n              state.reloadAndNotify();\n              renderBoard();",

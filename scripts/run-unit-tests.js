@@ -10727,6 +10727,11 @@ test('jira board panel view renders escaped ticket data and packaged script', ()
           build: { number: 34, status: 'FAILURE' },
           evidence: { notes: [{ text: 'proof' }] },
         }),
+        'K-UNKNOWN': ticket({
+          summary: 'Unknown action falls back',
+          next_action: 'custom_action',
+          projects: ['app<script>'],
+        }),
       },
     },
     queue: { items: [{ id: 'q-board', ticket: 'K-BOARD', action: 'await_review' }], last_computed: '2026-07-01T12:00:00.000Z' },
@@ -10740,6 +10745,8 @@ test('jira board panel view renders escaped ticket data and packaged script', ()
   assert.match(html, /app&lt;script&gt;/);
   assert.match(html, /label&lt;script&gt;/);
   assert.match(html, /trace &lt;one&gt;\.log/);
+  assert.match(html, /To Do <span class="count" data-count>1<\/span>/);
+  assert.match(html, /Queued <span class="count" data-count>1<\/span>/);
   assert.match(html, /data-action="removeFromQueue"/);
   assert.match(html, /data-action="start"/);
   assert.match(html, /id="kronos-jira-board-script"/);
@@ -10854,6 +10861,12 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'data-search="${attr(searchText)}"',
     'function formatStatus',
     'escapeClass',
+    "type BoardColumnName = 'To Do' | 'Queued' | 'In Progress' | 'Review' | 'Blocked' | 'Done'",
+    "const DEFAULT_BOARD_COLUMN: BoardColumnName = 'To Do'",
+    'const BOARD_COLUMN_BY_ACTION: Record<string, BoardColumnName>',
+    'const columns: Record<BoardColumnName, string[]>',
+    'const col = isQueued ? QUEUED_BOARD_COLUMN : (BOARD_COLUMN_BY_ACTION[nextAction] ?? DEFAULT_BOARD_COLUMN)',
+    'columns[col].push(card)',
     'const projects = ticketStringArray(ticket.projects)',
     'if (projects.length === 0)',
     'projects,\n    score: 0',
@@ -11189,6 +11202,7 @@ test('extension webviews use shared UI shell and board filtering affordances', (
   ]) {
     assert.ok(uiSource.includes(marker), marker);
   }
+  assert.equal(jiraBoardPanelViewSource.includes('columns[col] || []'), false);
   assert.equal(uiSource.includes('addToQueueFromModal'), false, 'Jira board modal should use the standard addToQueue command');
   assert.equal(uiSource.includes('pick.label.includes'), false, 'Settings menu should route by stable item ids');
   for (const marker of [

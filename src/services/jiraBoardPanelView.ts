@@ -45,6 +45,16 @@ interface JiraBoardTicketPayload {
   isQueued: boolean;
 }
 
+type BoardColumnName = 'To Do' | 'Queued' | 'In Progress' | 'Review' | 'Blocked' | 'Done';
+
+const DEFAULT_BOARD_COLUMN: BoardColumnName = 'To Do';
+const QUEUED_BOARD_COLUMN: BoardColumnName = 'Queued';
+const BOARD_COLUMN_BY_ACTION: Record<string, BoardColumnName> = {
+  implement: 'To Do', in_progress: 'In Progress', await_review: 'Review',
+  deploy_monitor: 'In Progress', verify: 'In Progress', fix_build: 'In Progress',
+  blocked: 'Blocked', done: 'Done', unknown: 'To Do',
+};
+
 export function buildJiraBoardHtml(input: JiraBoardPanelInput): string {
   const esc = escapeHtml;
   const attr = escapeAttr;
@@ -53,13 +63,8 @@ export function buildJiraBoardHtml(input: JiraBoardPanelInput): string {
   const projects = recordKeysFromUnknown(input.state?.projects);
   const queuedKeys = new Set((input.queue?.items || []).map(i => i.ticket));
 
-  const columns: Record<string, string[]> = {
+  const columns: Record<BoardColumnName, string[]> = {
     'To Do': [], 'Queued': [], 'In Progress': [], 'Review': [], 'Blocked': [], 'Done': [],
-  };
-  const columnMap: Record<string, string> = {
-    implement: 'To Do', in_progress: 'In Progress', await_review: 'Review',
-    deploy_monitor: 'In Progress', verify: 'In Progress', fix_build: 'In Progress',
-    blocked: 'Blocked', done: 'Done', unknown: 'To Do',
   };
 
   const ticketData: Record<string, JiraBoardTicketPayload> = {};
@@ -98,7 +103,7 @@ export function buildJiraBoardHtml(input: JiraBoardPanelInput): string {
       hasMrUrl: Boolean(mr && ticketStringField(mr, 'url')),
       isQueued,
     };
-    const col = queuedKeys.has(key) ? 'Queued' : (columnMap[nextAction] || 'To Do');
+    const col = isQueued ? QUEUED_BOARD_COLUMN : (BOARD_COLUMN_BY_ACTION[nextAction] ?? DEFAULT_BOARD_COLUMN);
 
     const projs = linkedProjects.map((p: string) => `<span class="tag proj">${esc(p)}</span>`).join('');
     const typeClass = ticketType.toLowerCase().includes('bug') || ticketType.toLowerCase().includes('defect') ? 'bug' : 'story';
@@ -150,9 +155,7 @@ export function buildJiraBoardHtml(input: JiraBoardPanelInput): string {
       <div class="card-links">${linkButtons}</div>
       <div class="card-actions">${queueBtn} ${startBtn} ${jiraLink}</div>
     </div>`;
-    const columnCards = columns[col] || [];
-    columnCards.push(card);
-    columns[col] = columnCards;
+    columns[col].push(card);
   }
 
   const colHtml = Object.entries(columns).map(([name, cards]) => {
