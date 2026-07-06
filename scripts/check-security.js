@@ -168,6 +168,7 @@ const evidencePanelView = sources['src/services/evidencePanelView.ts'];
 const cliProbes = readSource('src/services/cliProbes.ts');
 const terminalProfiles = readSource('src/services/terminalProfiles.ts');
 const stringLists = readSource('src/services/stringLists.ts');
+const envValues = readSource('src/services/envValues.ts');
 const combinedVerification = readSource('src/services/combinedVerification.ts');
 const changedFiles = readSource('src/services/changedFiles.ts');
 const sonarCommandPlan = sources['src/services/sonarCommandPlan.ts'];
@@ -2551,6 +2552,16 @@ for (const marker of [
 }
 
 for (const marker of [
+  'export function firstEnvValue(env: NodeJS.ProcessEnv, keys: string[]): string | undefined',
+  'const value = env[key]',
+  'return undefined',
+]) {
+  if (!envValues.includes(marker)) {
+    fail(`Missing env value helper marker: ${marker}`);
+  }
+}
+
+for (const marker of [
   'export function mergeRequestCommentsFromRecord(record: object | null | undefined): MergeRequestComment[]',
   'Reflect.get(record, \'comments\')',
   "value.filter((item): item is MergeRequestComment => isRecord(item) && typeof item['body'] === 'string')",
@@ -3472,8 +3483,10 @@ for (const marker of [
   'export function commandNeedsCmdWrapper',
   'export function windowsCmdFileInvocation',
   'export function readableGoogleApplicationCredentials',
+  "import { firstEnvValue } from './envValues'",
   "import { uniqueCaseInsensitiveStrings } from './stringLists'",
   'function resolveCommandOnPath(command: string',
+  'firstEnvValue(env, [',
   'uniqueCaseInsensitiveStrings([',
   'if (!resolution.available)',
   'install Google Cloud SDK or set GOOGLE_APPLICATION_CREDENTIALS',
@@ -3496,9 +3509,14 @@ if (cliProbes.includes("args: ['/d', '/s', '/c', shellLine]")) {
 if (cliProbes.includes('function unique(values: Array<string | undefined>): string[]')) {
   fail('cliProbes must use the shared case-insensitive string list helper.');
 }
+if (cliProbes.includes('function envValue(env: NodeJS.ProcessEnv, keys: string[]): string | undefined')) {
+  fail('cliProbes must use the shared env value helper.');
+}
 for (const marker of [
+  "import { firstEnvValue } from './envValues'",
   "import { uniqueCaseInsensitiveStrings } from './stringLists'",
   'function gitBashCandidatePaths',
+  'firstEnvValue(env, [',
   'uniqueCaseInsensitiveStrings([',
 ]) {
   if (!terminalProfiles.includes(marker)) {
@@ -3507,6 +3525,9 @@ for (const marker of [
 }
 if (terminalProfiles.includes('function unique(values: Array<string | undefined>): string[]')) {
   fail('terminalProfiles must use the shared case-insensitive string list helper.');
+}
+if (terminalProfiles.includes('function envValue(env: NodeJS.ProcessEnv, keys: string[]): string | undefined')) {
+  fail('terminalProfiles must use the shared env value helper.');
 }
 
 for (const marker of [

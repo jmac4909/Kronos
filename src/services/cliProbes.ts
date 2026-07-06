@@ -2,6 +2,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { unknownErrorMessage } from './errorUtils';
+import { firstEnvValue } from './envValues';
 import { uniqueCaseInsensitiveStrings } from './stringLists';
 
 interface CliProbeCommandOptions {
@@ -36,24 +37,14 @@ const CLAUDE_AGENTS_TIMEOUT_MS = 5000;
 const GCLOUD_AUTH_TIMEOUT_MS = 10000;
 const CLAUDE_MODEL_TIMEOUT_MS = 15000;
 
-function envValue(env: NodeJS.ProcessEnv, keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = env[key];
-    if (value) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
 function gcloudCandidateCommands(env: NodeJS.ProcessEnv = process.env): string[] {
-  const cloudSdkRoot = envValue(env, ['CLOUDSDK_ROOT_DIR', 'GCLOUD_ROOT_DIR']);
-  const localAppData = envValue(env, ['LocalAppData', 'LOCALAPPDATA']);
-  const programFiles = envValue(env, ['ProgramFiles', 'PROGRAMFILES']) || 'C:\\Program Files';
-  const programFilesX86 = envValue(env, ['ProgramFiles(x86)', 'PROGRAMFILES(X86)']) || 'C:\\Program Files (x86)';
+  const cloudSdkRoot = firstEnvValue(env, ['CLOUDSDK_ROOT_DIR', 'GCLOUD_ROOT_DIR']);
+  const localAppData = firstEnvValue(env, ['LocalAppData', 'LOCALAPPDATA']);
+  const programFiles = firstEnvValue(env, ['ProgramFiles', 'PROGRAMFILES']) || 'C:\\Program Files';
+  const programFilesX86 = firstEnvValue(env, ['ProgramFiles(x86)', 'PROGRAMFILES(X86)']) || 'C:\\Program Files (x86)';
 
   return uniqueCaseInsensitiveStrings([
-    envValue(env, ['GCLOUD_PATH']),
+    firstEnvValue(env, ['GCLOUD_PATH']),
     cloudSdkRoot ? path.win32.join(cloudSdkRoot, 'bin', 'gcloud.cmd') : undefined,
     localAppData ? path.win32.join(localAppData, 'Google', 'Cloud SDK', 'google-cloud-sdk', 'bin', 'gcloud.cmd') : undefined,
     path.win32.join(programFiles, 'Google', 'Cloud SDK', 'google-cloud-sdk', 'bin', 'gcloud.cmd'),
@@ -63,7 +54,7 @@ function gcloudCandidateCommands(env: NodeJS.ProcessEnv = process.env): string[]
 }
 
 function resolveCommandOnPath(command: string, env: NodeJS.ProcessEnv, existsSync: (filePath: string) => boolean, platform: string): string | undefined {
-  const pathValue = envValue(env, ['Path', 'PATH']);
+  const pathValue = firstEnvValue(env, ['Path', 'PATH']);
   if (!pathValue) { return undefined; }
   const delimiter = platform === 'win32' ? ';' : ':';
   const dirs = pathValue.split(delimiter).map(value => value.trim()).filter(Boolean);
@@ -80,7 +71,7 @@ export function resolveGcloudCommandStatus(options: Pick<CliProbeOptions, 'platf
   const platform = options.platform || process.platform;
   const env = options.env || process.env;
   if (platform !== 'win32') {
-    return { command: envValue(env, ['GCLOUD_PATH']) || 'gcloud', available: true };
+    return { command: firstEnvValue(env, ['GCLOUD_PATH']) || 'gcloud', available: true };
   }
 
   const existsSync = options.existsSync || fs.existsSync;
@@ -112,7 +103,7 @@ function quoteWindowsCmdToken(value: string): string {
 }
 
 export function windowsCmdFileInvocation(command: string, args: string[], env: NodeJS.ProcessEnv = process.env): { command: string; args: string[] } {
-  const cmd = envValue(env, ['ComSpec', 'COMSPEC']) || 'cmd.exe';
+  const cmd = firstEnvValue(env, ['ComSpec', 'COMSPEC']) || 'cmd.exe';
   const shellLine = ['call', quoteWindowsCmdToken(command), ...args.map(quoteWindowsCmdToken)].join(' ');
   return {
     command: cmd,
@@ -141,7 +132,7 @@ export function defaultCliProbeCommandRunner(command: string, args: string[], op
 
 export function readableGoogleApplicationCredentials(options: Pick<CliProbeOptions, 'env' | 'accessSync'> = {}): string | undefined {
   const env = options.env || process.env;
-  const filePath = envValue(env, ['GOOGLE_APPLICATION_CREDENTIALS']);
+  const filePath = firstEnvValue(env, ['GOOGLE_APPLICATION_CREDENTIALS']);
   if (!filePath) { return undefined; }
   const accessSync = options.accessSync || fs.accessSync;
   try {

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 
+import { firstEnvValue } from './envValues';
 import { uniqueCaseInsensitiveStrings } from './stringLists';
 
 interface KronosTerminalOptions {
@@ -20,28 +21,18 @@ interface TerminalProfileInput {
   cwd?: string;
 }
 
-function envValue(env: NodeJS.ProcessEnv, keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = env[key];
-    if (value) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
 function joinWindowsPath(base: string, suffix: string): string {
   return `${base.replace(/[\\/]+$/, '')}\\${suffix}`;
 }
 
 function gitBashCandidatePaths(env: NodeJS.ProcessEnv = process.env): string[] {
-  const programFiles = envValue(env, ['ProgramFiles', 'PROGRAMFILES']) || 'C:\\Program Files';
-  const programFilesX86 = envValue(env, ['ProgramFiles(x86)', 'PROGRAMFILES(X86)']) || 'C:\\Program Files (x86)';
-  const localAppData = envValue(env, ['LocalAppData', 'LOCALAPPDATA']);
+  const programFiles = firstEnvValue(env, ['ProgramFiles', 'PROGRAMFILES']) || 'C:\\Program Files';
+  const programFilesX86 = firstEnvValue(env, ['ProgramFiles(x86)', 'PROGRAMFILES(X86)']) || 'C:\\Program Files (x86)';
+  const localAppData = firstEnvValue(env, ['LocalAppData', 'LOCALAPPDATA']);
 
   return uniqueCaseInsensitiveStrings([
-    envValue(env, ['GIT_BASH_PATH']),
-    envValue(env, ['BASH_PATH']),
+    firstEnvValue(env, ['GIT_BASH_PATH']),
+    firstEnvValue(env, ['BASH_PATH']),
     joinWindowsPath(programFiles, 'Git\\bin\\bash.exe'),
     joinWindowsPath(programFiles, 'Git\\usr\\bin\\bash.exe'),
     joinWindowsPath(programFilesX86, 'Git\\bin\\bash.exe'),
@@ -88,13 +79,13 @@ export function kronosLoginShellTerminalOptions(input: TerminalProfileInput, dep
   }
 
   if (platform === 'win32') {
-    const bashPath = envValue(deps.env || process.env, ['BASH_PATH']);
+    const bashPath = firstEnvValue(deps.env || process.env, ['BASH_PATH']);
     return { ...options, shellPath: bashPath || 'bash', shellArgs: ['--login'] };
   }
 
   return {
     ...options,
-    shellPath: envValue(deps.env || process.env, ['BASH_PATH']) || '/bin/bash',
+    shellPath: firstEnvValue(deps.env || process.env, ['BASH_PATH']) || '/bin/bash',
     shellArgs: ['--login'],
   };
 }

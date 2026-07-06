@@ -264,6 +264,7 @@ const webviewFormat = require('../out/services/webviewFormat.js');
 const countLabels = require('../out/services/countLabels.js');
 const textFormat = require('../out/services/textFormat.js');
 const stringLists = require('../out/services/stringLists.js');
+const envValues = require('../out/services/envValues.js');
 const fileNames = require('../out/services/fileNames.js');
 const sessionStore = require('../out/services/sessionStore.js');
 const worktreeRegistry = require('../out/services/worktreeRegistry.js');
@@ -3415,9 +3416,13 @@ test('CLI probes normalize failures and invalid Claude agent output', () => {
     stringLists.uniqueCaseInsensitiveStrings(['gcloud.cmd', 'GCLOUD.CMD', undefined, 'custom.cmd', 'Custom.cmd']),
     ['gcloud.cmd', 'custom.cmd'],
   );
+  assert.equal(envValues.firstEnvValue({ PATH: '/bin', Path: '/win' }, ['Path', 'PATH']), '/win');
+  assert.equal(envValues.firstEnvValue({ PATH: '/bin' }, ['Path', 'PATH']), '/bin');
+  assert.equal(envValues.firstEnvValue({ PATH: '' }, ['Path', 'PATH']), undefined);
 
   const source = readSourceFixture('src', 'services', 'cliProbes.ts');
   const stringListsSource = readSourceFixture('src', 'services', 'stringLists.ts');
+  const envValuesSource = readSourceFixture('src', 'services', 'envValues.ts');
   for (const marker of [
     'export function uniqueCaseInsensitiveStrings(values: Array<string | undefined>): string[]',
     'const seen = new Set<string>()',
@@ -3426,15 +3431,25 @@ test('CLI probes normalize failures and invalid Claude agent output', () => {
     assert.ok(stringListsSource.includes(marker), marker);
   }
   for (const marker of [
+    'export function firstEnvValue(env: NodeJS.ProcessEnv, keys: string[]): string | undefined',
+    'const value = env[key]',
+    'return undefined',
+  ]) {
+    assert.ok(envValuesSource.includes(marker), marker);
+  }
+  for (const marker of [
     'catch (e: unknown)',
     "import { unknownErrorMessage } from './errorUtils'",
+    "import { firstEnvValue } from './envValues'",
     "import { uniqueCaseInsensitiveStrings } from './stringLists'",
     'uniqueCaseInsensitiveStrings([',
+    'firstEnvValue(env, [',
     "unknownErrorMessage(e, 'CLI probe failed')",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
   assert.equal(source.includes('function unique(values: Array<string | undefined>): string[]'), false);
+  assert.equal(source.includes('function envValue(env: NodeJS.ProcessEnv, keys: string[]): string | undefined'), false);
   for (const marker of [
     'catch (e: any)',
     'e?.message',
@@ -3605,13 +3620,16 @@ test('terminal profiles prefer Windows Git Bash and avoid PowerShell gcloud shim
 
   const source = readSourceFixture('src', 'services', 'terminalProfiles.ts');
   for (const marker of [
+    "import { firstEnvValue } from './envValues'",
     "import { uniqueCaseInsensitiveStrings } from './stringLists'",
+    'firstEnvValue(env, [',
     'uniqueCaseInsensitiveStrings([',
     'function gitBashCandidatePaths',
   ]) {
     assert.ok(source.includes(marker), marker);
   }
   assert.equal(source.includes('function unique(values: Array<string | undefined>): string[]'), false);
+  assert.equal(source.includes('function envValue(env: NodeJS.ProcessEnv, keys: string[]): string | undefined'), false);
 });
 
 test('combined verification plans merge real MR branches with safe fallbacks', () => {
