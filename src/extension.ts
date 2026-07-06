@@ -2197,7 +2197,7 @@ export function activate(context: vscode.ExtensionContext) {
       const canStart = await confirmDispatchCollisions(state, collisionTarget, context.extensionUri);
       if (!canStart) { return; }
 
-      const actionLabel = queueData.action.replace(/_/g, ' ');
+      const actionLabel = actionToLabel(queueData.action);
       const extra = await vscode.window.showInputBox({
         prompt: `Starting [${actionLabel}] on ${projLabel}/${queueData.ticket || ''}. Any additional context? (leave empty to just start)`,
         placeHolder: 'e.g., focus on the auth flow, skip UI changes',

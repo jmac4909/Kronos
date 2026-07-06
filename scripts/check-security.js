@@ -2862,6 +2862,17 @@ for (const marker of [
     fail(`Action catalog should not export unused action alias: ${marker}`);
   }
 }
+for (const marker of [
+  "import { actionDisplayLabel as actionToLabel } from './services/actionCatalog'",
+  'const actionLabel = actionToLabel(queueData.action)',
+]) {
+  if (!extension.includes(marker)) {
+    fail(`Extension queue dispatch should use shared action labels: ${marker}`);
+  }
+}
+if (extension.includes('queueData.action.replace(')) {
+  fail('Extension queue dispatch must not format action labels locally.');
+}
 
 for (const [name, source, marker] of [
   ['src/extension.ts', extension, 'const CODE_COLLISION_ACTIONS'],

@@ -11596,6 +11596,8 @@ test('tree providers share action labels and icons', () => {
     assert.ok(source.includes('actionDisplayLabel as actionToLabel'), `${name} should import action labels from actionCatalog`);
     assert.equal(source.includes('actionLabels'), false, `${name} should not import the removed actionLabels wrapper`);
   }
+  assert.ok(extensionSource.includes('const actionLabel = actionToLabel(queueData.action)'), 'queue dispatch prompt should use shared action label helper');
+  assert.equal(extensionSource.includes('queueData.action.replace('), false, 'queue dispatch prompt should not format action labels locally');
   assert.equal(ticketTree.includes('function actionToLabel'), false, 'ticket tree should not duplicate action labels');
   assert.equal(ticketTree.includes('function evidenceItemCount'), false, 'ticket tree should not duplicate evidence counting');
   assert.equal(queueTree.includes('function actionIcon'), false, 'queue tree should not duplicate action icons');
