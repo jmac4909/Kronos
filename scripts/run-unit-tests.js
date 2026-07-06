@@ -1748,12 +1748,13 @@ test('queue mutation helpers centralize queue membership and ticket project link
 
   const source = readSourceFixture('src', 'services', 'queueMutations.ts');
   for (const marker of [
-    "import { arrayFromUnknown, recordFromUnknown } from './records'",
+    "import { recordFromUnknown } from './records'",
+    "import { ticketStringArray } from './ticketFields'",
     'function normalizeQueueItem(item: unknown): QueueItem',
     'function queueString(value: unknown): string',
     'function queueNullableString(value: unknown): string | null',
-    'function queueStringArray(value: unknown): string[]',
-    'return arrayFromUnknown(value).map(queueString).filter(Boolean)',
+    'const current = ticketStringArray(ticket.projects)',
+    "projects: ticketStringArray(record['projects'])",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
@@ -1761,6 +1762,7 @@ test('queue mutation helpers centralize queue membership and ticket project link
   assert.equal(source.includes('return Array.isArray(value) ? value.map(queueString).filter(Boolean) : []'), false);
   assert.equal(source.includes('const current = Array.isArray(ticket.projects) ? ticket.projects : []'), false);
   assert.equal(source.includes('function queueRecord(value: unknown): Record<string, unknown>'), false);
+  assert.equal(source.includes('function queueStringArray'), false);
 });
 
 test('project mutation helpers centralize project config, scan dirs, and removal', () => {
@@ -4057,7 +4059,7 @@ test('record guard helper centralizes unknown object narrowing', () => {
   assert.equal(records.recordString({ ticket: 42 }, 'ticket'), '');
   assert.equal(ticketFields.ticketStringField({ ticket: 42 }, 'ticket'), '42');
   assert.equal(ticketFields.ticketStringField({}, 'missing', 'fallback'), 'fallback');
-  assert.deepEqual(ticketFields.ticketStringArray([' K-1 ', 42, '', null]), ['K-1', '42']);
+  assert.deepEqual(ticketFields.ticketStringArray([' K-1 ', 42, '', null, { key: 'K-2' }, true]), ['K-1', '42']);
   assert.deepEqual(mergeRequestComments.mergeRequestCommentsFromRecord({
     comments: [{ body: 'ok', author: 'Reviewer' }, { author: 'missing body' }, 'raw'],
   }), [{ body: 'ok', author: 'Reviewer' }]);
@@ -4123,7 +4125,9 @@ test('record guard helper centralizes unknown object narrowing', () => {
     'export function ticketStringField(record: object | null | undefined, key: string, fallback = \'\'): string',
     'Reflect.get(record, key)',
     'export function ticketStringArray(value: unknown): string[]',
-    "return arrayFromUnknown(value).map(item => String(item ?? '').trim()).filter(Boolean)",
+    'return arrayFromUnknown(value).map(ticketArrayString).filter(Boolean)',
+    'function ticketArrayString(value: unknown): string',
+    "typeof value === 'string' || typeof value === 'number'",
   ]) {
     assert.ok(ticketFieldsSource.includes(marker), marker);
   }

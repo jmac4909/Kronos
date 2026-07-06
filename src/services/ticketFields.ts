@@ -6,5 +6,9 @@ export function ticketStringField(record: object | null | undefined, key: string
 }
 
 export function ticketStringArray(value: unknown): string[] {
-  return arrayFromUnknown(value).map(item => String(item ?? '').trim()).filter(Boolean);
+  return arrayFromUnknown(value).map(ticketArrayString).filter(Boolean);
+}
+
+function ticketArrayString(value: unknown): string {
+  return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
 }

@@ -2414,11 +2414,12 @@ for (const marker of [
   'queue-add-ticket',
   'ticket-link-project',
   'function normalizeQueueItem(item: unknown): QueueItem',
-  "import { arrayFromUnknown, recordFromUnknown } from './records'",
+  "import { recordFromUnknown } from './records'",
+  "import { ticketStringArray } from './ticketFields'",
   'function queueString(value: unknown): string',
   'function queueNullableString(value: unknown): string | null',
-  'function queueStringArray(value: unknown): string[]',
-  'return arrayFromUnknown(value).map(queueString).filter(Boolean)',
+  'const current = ticketStringArray(ticket.projects)',
+  "projects: ticketStringArray(record['projects'])",
 ]) {
   if (!queueMutations.includes(marker)) {
     fail(`Missing queue mutation marker: ${marker}`);
@@ -2431,7 +2432,10 @@ if (queueMutations.includes('return Array.isArray(value) ? value.map(queueString
   fail('Queue mutation string-array normalization must use the shared array fallback helper.');
 }
 if (queueMutations.includes('const current = Array.isArray(ticket.projects) ? ticket.projects : []')) {
-  fail('Queue ticket project mutations must use the shared queue string-array helper.');
+  fail('Queue ticket project mutations must use the shared ticket string-array helper.');
+}
+if (queueMutations.includes('function queueStringArray')) {
+  fail('Queue mutations must use the shared ticket string-array helper.');
 }
 
 for (const marker of [
@@ -2600,7 +2604,9 @@ for (const marker of [
   'export function ticketStringField(record: object | null | undefined, key: string, fallback = \'\'): string',
   'Reflect.get(record, key)',
   'export function ticketStringArray(value: unknown): string[]',
-  "return arrayFromUnknown(value).map(item => String(item ?? '').trim()).filter(Boolean)",
+  'return arrayFromUnknown(value).map(ticketArrayString).filter(Boolean)',
+  'function ticketArrayString(value: unknown): string',
+  "typeof value === 'string' || typeof value === 'number'",
 ]) {
   if (!ticketFields.includes(marker)) {
     fail(`Missing ticket field helper marker: ${marker}`);
@@ -2962,7 +2968,7 @@ for (const [name, source, marker] of [
   ['src/services/runAttention.ts', runAttention, "import { recordsFromUnknown, recordFromUnknown } from './records'"],
   ['src/services/runCompletionNotification.ts', runCompletionNotification, "import { recordFromUnknown, recordString } from './records'"],
   ['src/services/runProgress.ts', runProgress, "import { recordsFromUnknown, recordFromUnknown, recordString } from './records'"],
-  ['src/services/queueMutations.ts', queueMutations, "import { arrayFromUnknown, recordFromUnknown } from './records'"],
+  ['src/services/queueMutations.ts', queueMutations, "import { recordFromUnknown } from './records'"],
   ['src/services/postRunReadiness.ts', postRunReadiness, "import { arrayFromUnknown, recordFromUnknown } from './records'"],
 ]) {
   if (!source.includes(marker)) {

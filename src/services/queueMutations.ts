@@ -1,7 +1,8 @@
 import { KronosState, QueueDecision, QueueItem, QueueState } from '../state/types';
 import { QUEUE_FILE, STATE_FILE, readQueueFile, readStateFile, validateQueueState, validateStateFileShape, writeJsonFileAtomic } from './stateStore';
 import { PlannedAction, clearQueueDecision, planNextActions, planToQueueItem, recordQueueDecision } from './queuePlanner';
-import { arrayFromUnknown, recordFromUnknown } from './records';
+import { recordFromUnknown } from './records';
+import { ticketStringArray } from './ticketFields';
 
 interface AddTicketToQueueResult {
   added: boolean;
@@ -220,7 +221,7 @@ function mutateTicketProjects(ticketKey: string, projectName: string, action: 'l
   if (!state.projects[projectName]) {
     throw new Error(`Project not found: ${projectName}`);
   }
-  const current = queueStringArray(ticket.projects);
+  const current = ticketStringArray(ticket.projects);
   const nextProjects = action === 'link'
     ? Array.from(new Set([...current, projectName])).sort()
     : current.filter(project => project !== projectName);
@@ -277,7 +278,7 @@ function normalizeQueueItem(item: unknown): QueueItem {
   const queueItem: QueueItem = {
     id: queueString(record['id']) || `queued-${queueString(record['ticket']) || Date.now()}`,
     ticket: queueNullableString(record['ticket']),
-    projects: queueStringArray(record['projects']),
+    projects: ticketStringArray(record['projects']),
     project_path: queueString(record['project_path']),
     action: queueString(record['action']) || 'implement',
     priority_score: Number.isFinite(Number(record['priority_score'])) ? Number(record['priority_score']) : 0,
@@ -295,8 +296,4 @@ function queueString(value: unknown): string {
 function queueNullableString(value: unknown): string | null {
   const text = queueString(value);
   return text || null;
-}
-
-function queueStringArray(value: unknown): string[] {
-  return arrayFromUnknown(value).map(queueString).filter(Boolean);
 }
