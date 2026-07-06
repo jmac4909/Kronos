@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { DiscoveredProject, KronosState, ProjectConfig } from '../state/types';
-import { recordEntriesFromUnknown } from './records';
+import { arrayFromUnknown, recordEntriesFromUnknown, trimmedStringFromUnknown } from './records';
 import { STATE_FILE, readStateFile, validateStateFileShape, writeJsonFileAtomic } from './stateStore';
 import { ticketStringArray } from './ticketFields';
 
@@ -174,8 +174,9 @@ function normalizeProjectConfigValue(key: keyof ProjectConfig, rawValue: Project
     return numeric;
   }
   if (key === 'extra_dirs') {
-    if (Array.isArray(rawValue)) { return rawValue; }
-    return String(rawValue).split(',').map(value => value.trim()).filter(Boolean);
+    const rawDirs = arrayFromUnknown(rawValue);
+    const dirs = rawDirs.length > 0 ? rawDirs : String(rawValue).split(',');
+    return dirs.map(value => trimmedStringFromUnknown(value)).filter(Boolean);
   }
   if (key === 'deploy_approvers') {
     throw new Error('deploy_approvers must be edited through a structured config editor.');

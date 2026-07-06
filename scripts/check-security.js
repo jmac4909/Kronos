@@ -2581,8 +2581,11 @@ for (const marker of [
   'export function writeProjectSetupConfig',
   'export function removeProject',
   'export function setScanDirs',
+  "import { arrayFromUnknown, recordEntriesFromUnknown, trimmedStringFromUnknown } from './records'",
   "import { ticketStringArray } from './ticketFields'",
   'const projects = ticketStringArray(ticket.projects)',
+  'const rawDirs = arrayFromUnknown(rawValue)',
+  'return dirs.map(value => trimmedStringFromUnknown(value)).filter(Boolean)',
   'writeJsonFileAtomic(STATE_FILE',
   'project-setup-config',
   'project-integration-config-update',
@@ -2598,6 +2601,9 @@ for (const marker of [
 }
 if (projectMutations.includes('ticket.projects?.includes(projectName)')) {
   fail('Project removal must normalize ticket project links through ticketStringArray.');
+}
+if (projectMutations.includes('if (Array.isArray(rawValue)) { return rawValue; }')) {
+  fail('Project config extra_dirs must trim and filter array input.');
 }
 for (const marker of [
   'export function projectSetupConfirmation',

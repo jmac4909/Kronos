@@ -1887,6 +1887,8 @@ test('project mutation helpers centralize project config, scan dirs, and removal
   assert.equal(sonar.value, 'app-sonar');
   const extraDirs = projectMutations.setProjectConfigValue('app', 'extra_dirs', '/repo/shared, /repo/lib');
   assert.deepEqual(extraDirs.value, ['/repo/shared', '/repo/lib']);
+  const arrayExtraDirs = projectMutations.setProjectConfigValue('app', 'extra_dirs', [' /repo/shared ', '', ' /repo/test ']);
+  assert.deepEqual(arrayExtraDirs.value, ['/repo/shared', '/repo/test']);
   const dirs = projectMutations.setScanDirs(['/repo', '/repo', ' /tmp/repos ']);
   assert.deepEqual(dirs.scanDirs, ['/repo', '/tmp/repos']);
 
@@ -1903,9 +1905,13 @@ test('project mutation helpers centralize project config, scan dirs, and removal
   assert.throws(() => projectMutations.setProjectConfigValue('other', 'deploy_approvers', 'Ada'), /structured config editor/);
 
   const source = readSourceFixture('src', 'services', 'projectMutations.ts');
+  assert.ok(source.includes("import { arrayFromUnknown, recordEntriesFromUnknown, trimmedStringFromUnknown } from './records'"));
+  assert.ok(source.includes('const rawDirs = arrayFromUnknown(rawValue)'));
+  assert.ok(source.includes('return dirs.map(value => trimmedStringFromUnknown(value)).filter(Boolean)'));
   assert.ok(source.includes("import { ticketStringArray } from './ticketFields'"));
   assert.ok(source.includes('const projects = ticketStringArray(ticket.projects)'));
   assert.equal(source.includes('ticket.projects?.includes(projectName)'), false);
+  assert.equal(source.includes('if (Array.isArray(rawValue)) { return rawValue; }'), false);
 });
 
 test('project setup plan keeps setup prompts operational and documentation-free', () => {
