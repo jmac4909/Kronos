@@ -166,6 +166,8 @@ const recoveryPanelView = sources['src/services/recoveryPanelView.ts'];
 const humanReviewPanelView = sources['src/services/humanReviewPanelView.ts'];
 const evidencePanelView = sources['src/services/evidencePanelView.ts'];
 const cliProbes = readSource('src/services/cliProbes.ts');
+const terminalProfiles = readSource('src/services/terminalProfiles.ts');
+const stringLists = readSource('src/services/stringLists.ts');
 const combinedVerification = readSource('src/services/combinedVerification.ts');
 const changedFiles = readSource('src/services/changedFiles.ts');
 const sonarCommandPlan = sources['src/services/sonarCommandPlan.ts'];
@@ -2539,6 +2541,16 @@ for (const marker of [
 }
 
 for (const marker of [
+  'export function uniqueCaseInsensitiveStrings(values: Array<string | undefined>): string[]',
+  'const seen = new Set<string>()',
+  'const key = value.toLowerCase()',
+]) {
+  if (!stringLists.includes(marker)) {
+    fail(`Missing string list helper marker: ${marker}`);
+  }
+}
+
+for (const marker of [
   'export function mergeRequestCommentsFromRecord(record: object | null | undefined): MergeRequestComment[]',
   'Reflect.get(record, \'comments\')',
   "value.filter((item): item is MergeRequestComment => isRecord(item) && typeof item['body'] === 'string')",
@@ -3460,7 +3472,9 @@ for (const marker of [
   'export function commandNeedsCmdWrapper',
   'export function windowsCmdFileInvocation',
   'export function readableGoogleApplicationCredentials',
+  "import { uniqueCaseInsensitiveStrings } from './stringLists'",
   'function resolveCommandOnPath(command: string',
+  'uniqueCaseInsensitiveStrings([',
   'if (!resolution.available)',
   'install Google Cloud SDK or set GOOGLE_APPLICATION_CREDENTIALS',
   "const shellLine = ['call', quoteWindowsCmdToken(command), ...args.map(quoteWindowsCmdToken)].join(' ')",
@@ -3478,6 +3492,21 @@ for (const marker of [
 }
 if (cliProbes.includes("args: ['/d', '/s', '/c', shellLine]")) {
   fail('Windows .cmd probes must not use cmd.exe /s because it can preserve quotes around bare commands like gcloud.cmd.');
+}
+if (cliProbes.includes('function unique(values: Array<string | undefined>): string[]')) {
+  fail('cliProbes must use the shared case-insensitive string list helper.');
+}
+for (const marker of [
+  "import { uniqueCaseInsensitiveStrings } from './stringLists'",
+  'function gitBashCandidatePaths',
+  'uniqueCaseInsensitiveStrings([',
+]) {
+  if (!terminalProfiles.includes(marker)) {
+    fail(`Missing terminal profile marker: ${marker}`);
+  }
+}
+if (terminalProfiles.includes('function unique(values: Array<string | undefined>): string[]')) {
+  fail('terminalProfiles must use the shared case-insensitive string list helper.');
 }
 
 for (const marker of [

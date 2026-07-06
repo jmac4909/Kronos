@@ -263,6 +263,7 @@ const webviewHtml = require('../out/services/webviewHtml.js');
 const webviewFormat = require('../out/services/webviewFormat.js');
 const countLabels = require('../out/services/countLabels.js');
 const textFormat = require('../out/services/textFormat.js');
+const stringLists = require('../out/services/stringLists.js');
 const fileNames = require('../out/services/fileNames.js');
 const sessionStore = require('../out/services/sessionStore.js');
 const worktreeRegistry = require('../out/services/worktreeRegistry.js');
@@ -3410,15 +3411,30 @@ test('CLI probes normalize failures and invalid Claude agent output', () => {
 
   assert.deepEqual(cliProbes.readClaudeAgents({ commandRunner: () => '{bad json' }), []);
   assert.deepEqual(cliProbes.readClaudeAgents({ commandRunner: () => JSON.stringify({ id: 'not-an-array' }) }), []);
+  assert.deepEqual(
+    stringLists.uniqueCaseInsensitiveStrings(['gcloud.cmd', 'GCLOUD.CMD', undefined, 'custom.cmd', 'Custom.cmd']),
+    ['gcloud.cmd', 'custom.cmd'],
+  );
 
   const source = readSourceFixture('src', 'services', 'cliProbes.ts');
+  const stringListsSource = readSourceFixture('src', 'services', 'stringLists.ts');
+  for (const marker of [
+    'export function uniqueCaseInsensitiveStrings(values: Array<string | undefined>): string[]',
+    'const seen = new Set<string>()',
+    'const key = value.toLowerCase()',
+  ]) {
+    assert.ok(stringListsSource.includes(marker), marker);
+  }
   for (const marker of [
     'catch (e: unknown)',
     "import { unknownErrorMessage } from './errorUtils'",
+    "import { uniqueCaseInsensitiveStrings } from './stringLists'",
+    'uniqueCaseInsensitiveStrings([',
     "unknownErrorMessage(e, 'CLI probe failed')",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
+  assert.equal(source.includes('function unique(values: Array<string | undefined>): string[]'), false);
   for (const marker of [
     'catch (e: any)',
     'e?.message',
@@ -3586,6 +3602,16 @@ test('terminal profiles prefer Windows Git Bash and avoid PowerShell gcloud shim
   assert.equal(linuxClaudeTerminal.shellPath, '/custom/bash');
   assert.deepEqual(linuxClaudeTerminal.shellArgs, ['--login']);
   assert.equal(linuxClaudeTerminal.cwd, '/repo/app');
+
+  const source = readSourceFixture('src', 'services', 'terminalProfiles.ts');
+  for (const marker of [
+    "import { uniqueCaseInsensitiveStrings } from './stringLists'",
+    'uniqueCaseInsensitiveStrings([',
+    'function gitBashCandidatePaths',
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
+  assert.equal(source.includes('function unique(values: Array<string | undefined>): string[]'), false);
 });
 
 test('combined verification plans merge real MR branches with safe fallbacks', () => {

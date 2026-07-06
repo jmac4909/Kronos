@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 
+import { uniqueCaseInsensitiveStrings } from './stringLists';
+
 interface KronosTerminalOptions {
   name: string;
   cwd?: string;
@@ -32,28 +34,12 @@ function joinWindowsPath(base: string, suffix: string): string {
   return `${base.replace(/[\\/]+$/, '')}\\${suffix}`;
 }
 
-function unique(values: Array<string | undefined>): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    if (!value) {
-      continue;
-    }
-    const key = value.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      result.push(value);
-    }
-  }
-  return result;
-}
-
 function gitBashCandidatePaths(env: NodeJS.ProcessEnv = process.env): string[] {
   const programFiles = envValue(env, ['ProgramFiles', 'PROGRAMFILES']) || 'C:\\Program Files';
   const programFilesX86 = envValue(env, ['ProgramFiles(x86)', 'PROGRAMFILES(X86)']) || 'C:\\Program Files (x86)';
   const localAppData = envValue(env, ['LocalAppData', 'LOCALAPPDATA']);
 
-  return unique([
+  return uniqueCaseInsensitiveStrings([
     envValue(env, ['GIT_BASH_PATH']),
     envValue(env, ['BASH_PATH']),
     joinWindowsPath(programFiles, 'Git\\bin\\bash.exe'),

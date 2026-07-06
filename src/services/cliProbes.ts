@@ -2,6 +2,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { unknownErrorMessage } from './errorUtils';
+import { uniqueCaseInsensitiveStrings } from './stringLists';
 
 interface CliProbeCommandOptions {
   timeoutMs: number;
@@ -45,29 +46,13 @@ function envValue(env: NodeJS.ProcessEnv, keys: string[]): string | undefined {
   return undefined;
 }
 
-function unique(values: Array<string | undefined>): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    if (!value) {
-      continue;
-    }
-    const key = value.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      result.push(value);
-    }
-  }
-  return result;
-}
-
 function gcloudCandidateCommands(env: NodeJS.ProcessEnv = process.env): string[] {
   const cloudSdkRoot = envValue(env, ['CLOUDSDK_ROOT_DIR', 'GCLOUD_ROOT_DIR']);
   const localAppData = envValue(env, ['LocalAppData', 'LOCALAPPDATA']);
   const programFiles = envValue(env, ['ProgramFiles', 'PROGRAMFILES']) || 'C:\\Program Files';
   const programFilesX86 = envValue(env, ['ProgramFiles(x86)', 'PROGRAMFILES(X86)']) || 'C:\\Program Files (x86)';
 
-  return unique([
+  return uniqueCaseInsensitiveStrings([
     envValue(env, ['GCLOUD_PATH']),
     cloudSdkRoot ? path.win32.join(cloudSdkRoot, 'bin', 'gcloud.cmd') : undefined,
     localAppData ? path.win32.join(localAppData, 'Google', 'Cloud SDK', 'google-cloud-sdk', 'bin', 'gcloud.cmd') : undefined,
