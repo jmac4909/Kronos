@@ -234,6 +234,7 @@ const jiraBoardPanelView = require('../out/services/jiraBoardPanelView.js');
 const runStatus = require('../out/services/runStatus.js');
 const runProgress = require('../out/services/runProgress.js');
 const runOperatorSummary = require('../out/services/runOperatorSummary.js');
+const runSignals = require('../out/services/runSignals.js');
 const runRecords = require('../out/services/runRecords.js');
 const activeRunDisplay = require('../out/services/activeRunDisplay.js');
 const queueActiveRun = require('../out/services/queueActiveRun.js');
@@ -6674,6 +6675,7 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "import { isFreshActiveRun } from '../services/runStatus'",
     "import { runProgressSummary } from '../services/runProgress'",
     "import { buildRunOperatorSummary, type RunOperatorSummary, type RunOperatorTone } from '../services/runOperatorSummary'",
+    "import { runSignalText } from '../services/runSignals'",
     "import { isAttentionRunStatus, runAttentionDetail } from '../services/runAttention'",
     "import { appendRunRecoveryActions, appendRunWarnings, runEventRecords } from '../services/runMetadata'",
     'createWebviewNonce',
@@ -6720,7 +6722,9 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     'const statusClass = escapeClass(status)',
     "const started = formatDateTimeLabel(run.startedAt, 'Unknown')",
     'const runEvents = arrayFromUnknown(run.events)',
-    'const lastEvent = runEvents.length ? recordFromUnknown(runEvents[runEvents.length - 1]) : undefined',
+    'const eventSignal = latestRunEventSignal(runEvents)',
+    'function latestRunEventSignal(events: unknown[]): string',
+    'function visibleProgressEvents(events: ProgressEvent[]): ProgressEvent[]',
     'const missingVariables = arrayFromUnknown(rawMissingVariables).map(item => trimmedStringFromUnknown(item)).filter(Boolean)',
     'const operatorSummary = buildRunOperatorSummary(run)',
     'buildRunCenterOperatorBoard',
@@ -7187,6 +7191,13 @@ test('run attention summarizes actionable failure reasons', () => {
     failureKind: 'auth',
   });
   assert.equal(authFailure, 'Auth or credential issue');
+  assert.equal(runAttention.runAttentionDetail({
+    status: 'failed',
+    events: [
+      { label: 'Reviewer summary · last 156m', detail: '.allowedTools) ? permissions.allowedTools.length' },
+      { label: 'Running unit tests', detail: 'Jenkins build failed' },
+    ],
+  }), 'Jenkins build failed');
   assert.equal(runAttention.isAttentionRunStatus('failed'), true);
   assert.equal(runAttention.isAttentionRunStatus('needs_human'), true);
   assert.equal(runAttention.isAttentionRunStatus('cancelled'), true);
@@ -7210,6 +7221,7 @@ test('run attention summarizes actionable failure reasons', () => {
   }
   const runAttentionSource = readSourceFixture('src', 'services', 'runAttention.ts');
   assert.ok(runAttentionSource.includes("import { compactSingleLineText } from './textFormat'"));
+  assert.ok(runAttentionSource.includes("import { runSignalText } from './runSignals'"));
   assert.ok(runAttentionSource.includes("import { isFailedTerminalRunStatus } from './runStatus'"));
   assert.ok(runAttentionSource.includes("import { recordsFromUnknown, recordFromUnknown } from './records'"));
   assert.ok(runAttentionSource.includes('return isFailedTerminalRunStatus(status)'));
@@ -7218,6 +7230,29 @@ test('run attention summarizes actionable failure reasons', () => {
   assert.equal(runAttentionSource.includes('ATTENTION_RUN_STATUSES'), false);
   assert.equal(runAttentionSource.includes('if (!Array.isArray(events)) { return undefined; }'), false);
   assert.equal(runAttentionSource.includes("replace(/\\s+/g, ' ').trim()"), false, 'runAttention should use shared compact text helper');
+});
+
+test('run signals filter low-value orchestration chatter', () => {
+  assert.equal(runSignals.runSignalText('Reviewer summary · last 156m'), '');
+  assert.equal(runSignals.runSignalText('checked 4:01:37 AM'), '');
+  assert.equal(runSignals.runSignalText('I could not auto-switch you because tmux currently shows no attached client.'), '');
+  assert.equal(runSignals.runSignalText('.allowedTools) ? permissions.allowedTools.length'), '');
+  assert.equal(runSignals.runSignalText('Run /review on my current changes'), '');
+  assert.equal(runSignals.runSignalText('Summarize recent commits'), '');
+  assert.equal(runSignals.runSignalText('Running tests'), 'Running tests');
+
+  const source = readSourceFixture('src', 'services', 'runSignals.ts');
+  for (const marker of [
+    "import { compactSingleLineText } from './textFormat'",
+    'export function runSignalText(value: unknown, maxLength = 96): string',
+    'export function isLowValueRunSignal(value: string): boolean',
+    '/^Reviewer summary\\b/i.test(compact)',
+    '/^checked\\s+\\d/i.test(compact)',
+    "/\\.allowedTools\\b/.test(compact)",
+    '/^Run \\/review on my current changes\\.?$/i.test(compact)',
+  ]) {
+    assert.ok(source.includes(marker), marker);
+  }
 });
 
 test('run completion notifications route review-ready and attention outcomes', () => {
@@ -7813,7 +7848,9 @@ test('run operator summary highlights progress, files, readiness, and blockers',
       { type: 'tool', label: 'Writing src/new.ts', timestamp: '2026-07-02T00:03:00.000Z' },
       { type: 'thinking', label: 'Checking the failing test path', detail: 'Running tests', timestamp: '2026-07-02T00:04:00.000Z' },
       { type: 'thinking', label: 'Reviewer summary', detail: '.allowedTools) ? permissions.allowedTools.length', timestamp: '2026-07-02T00:05:00.000Z' },
+      { type: 'thinking', label: 'Reviewer summary · last 156m', detail: 'checked 4:01:37 AM', timestamp: '2026-07-02T00:05:05.000Z' },
       { type: 'text', label: 'I could not auto-switch you because tmux currently shows no attached client.', timestamp: '2026-07-02T00:05:10.000Z' },
+      { type: 'text', label: 'Run /review on my current changes', timestamp: '2026-07-02T00:05:20.000Z' },
     ],
   }, new Date('2026-07-02T00:05:30.000Z'));
   assert.equal(running.tone, 'info');
@@ -7852,7 +7889,7 @@ test('run operator summary highlights progress, files, readiness, and blockers',
     "import { effectiveRunStatus, isActiveRunStatus, isFailedTerminalRunStatus, isSuccessfulRunStatus } from './runStatus'",
     "import { recordsFromUnknown, recordFromUnknown, recordString } from './records'",
     "import { runAttentionDetail } from './runAttention'",
-    "import { compactSingleLineText } from './textFormat'",
+    "import { runSignalText } from './runSignals'",
     'export function buildRunOperatorSummary',
     "if (isFailedTerminalRunStatus(status) || readinessStatus === 'blocked')",
     "if (isSuccessfulRunStatus(status) || readinessStatus === 'ready')",
@@ -7861,15 +7898,14 @@ test('run operator summary highlights progress, files, readiness, and blockers',
     'function eventFiles',
     "return recordsFromUnknown(record['events'])",
     'function runNextStep',
-    'function signalText',
-    'function isLowValueSignal',
-    'const compact = compactSingleLineText(value, 96)',
-    '/^Reviewer summary$/i.test(value)',
-    "/\\.allowedTools\\b/.test(value)",
+    "const detail = runSignalText(recordString(event, 'detail'))",
+    "const label = runSignalText(recordString(event, 'label'))",
   ]) {
     assert.ok(source.includes(marker), marker);
   }
   assert.equal(source.includes('function compactText'), false, 'runOperatorSummary should use shared compact text helper');
+  assert.equal(source.includes('function signalText'), false);
+  assert.equal(source.includes('function isLowValueSignal'), false);
   assert.equal(source.includes("['failed', 'cancelled', 'needs_human'].includes(status)"), false);
   assert.equal(source.includes('filter(isRecord)'), false);
 });
@@ -12176,6 +12212,9 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
     'Discussions: ${esc(discussionCount ||',
     'const timeline = buildTicketTimeline({',
     '...(input.runs !== undefined ? { runs: input.runs } : {})',
+    'const TICKET_TIMELINE_EVENT_LIMIT = 8',
+    'const visibleEvents = events.slice(0, TICKET_TIMELINE_EVENT_LIMIT)',
+    'class="timeline-more"',
     '<h3>Agent Timeline</h3>',
     "kronosActionPanelScript(input.nonce, 'Kronos Ticket Detail', input.actionScriptUri)",
   ]) {
@@ -12233,6 +12272,16 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
   assert.match(html, /Remove Queue/);
   assert.match(html, /Agent Timeline/);
   assert.match(html, /Run completed: verify-local/);
+  const longTimelineHtml = ticketPanelView.buildTicketTimelineHtml(Array.from({ length: 9 }, (_, idx) => ({
+    id: `e-${idx}`,
+    source: 'run',
+    severity: 'info',
+    title: `Event ${idx}`,
+    detail: `Detail ${idx}`,
+  })));
+  assert.match(longTimelineHtml, /Event 0/);
+  assert.match(longTimelineHtml, /1 older event hidden/);
+  assert.doesNotMatch(longTimelineHtml, /Event 8/);
   assert.match(html, /href="https:\/\/gitlab\.example\/mr\/7\?x=1&amp;name=%22bad%22"/);
   assert.match(html, /href="https:\/\/jenkins\.example\/job\?x=1&amp;name=%22bad%22"/);
   assert.doesNotMatch(html, /href="javascript:/);

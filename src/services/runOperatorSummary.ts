@@ -3,8 +3,8 @@ import { recordsFromUnknown, recordFromUnknown, recordString } from './records';
 import { runAttentionDetail } from './runAttention';
 import { runStatusDisplayLabel } from './runLabels';
 import { runProgressSummary } from './runProgress';
+import { runSignalText } from './runSignals';
 import { effectiveRunStatus, isActiveRunStatus, isFailedTerminalRunStatus, isSuccessfulRunStatus } from './runStatus';
-import { compactSingleLineText } from './textFormat';
 
 export type RunOperatorTone = 'good' | 'warn' | 'bad' | 'info' | 'neutral';
 
@@ -147,27 +147,12 @@ function latestMeaningfulSignal(events: Array<Record<string, unknown>>): string 
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const event = events[i];
     if (!event) { continue; }
-    const detail = signalText(recordString(event, 'detail'));
+    const detail = runSignalText(recordString(event, 'detail'));
     if (detail) { return detail; }
-    const label = signalText(recordString(event, 'label'));
+    const label = runSignalText(recordString(event, 'label'));
     if (label) { return label; }
   }
   return '';
-}
-
-function signalText(value: string): string {
-  const compact = compactSingleLineText(value, 96);
-  return isLowValueSignal(compact) ? '' : compact;
-}
-
-function isLowValueSignal(value: string): boolean {
-  if (!value) { return true; }
-  if (/^Session complete/i.test(value) || /^Complete - /i.test(value)) { return true; }
-  if (/^Reviewer summary$/i.test(value)) { return true; }
-  if (/^checked\s+\d/i.test(value)) { return true; }
-  if (/tmux currently shows no attached client/i.test(value)) { return true; }
-  if (/\.allowedTools\b/.test(value)) { return true; }
-  return false;
 }
 
 function shortDateTime(value: unknown): string {

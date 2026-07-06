@@ -65,6 +65,7 @@ const runStatus = readSource('src/services/runStatus.ts');
 const runRecords = readSource('src/services/runRecords.ts');
 const runProgress = readSource('src/services/runProgress.ts');
 const runOperatorSummary = readSource('src/services/runOperatorSummary.ts');
+const runSignals = readSource('src/services/runSignals.ts');
 const runActionHelpers = readSource('src/services/runActionHelpers.ts');
 const activeRunDisplay = readSource('src/services/activeRunDisplay.ts');
 const runCompletionNotification = readSource('src/services/runCompletionNotification.ts');
@@ -1864,6 +1865,9 @@ for (const marker of [
   "import { ticketStringArray, ticketStringField } from './ticketFields'",
   'const timeline = buildTicketTimeline({',
   '...(input.runs !== undefined ? { runs: input.runs } : {})',
+  'const TICKET_TIMELINE_EVENT_LIMIT = 8',
+  'const visibleEvents = events.slice(0, TICKET_TIMELINE_EVENT_LIMIT)',
+  'class="timeline-more"',
   '<h3>Agent Timeline</h3>',
   'const projectList = ticketStringArray(ticket.projects)',
   'const mr = ticket.mr',
@@ -2280,6 +2284,7 @@ for (const marker of [
   "import { isFreshActiveRun } from '../services/runStatus'",
   "import { runProgressSummary } from '../services/runProgress'",
   "import { buildRunOperatorSummary, type RunOperatorSummary, type RunOperatorTone } from '../services/runOperatorSummary'",
+  "import { runSignalText } from '../services/runSignals'",
   "import { isAttentionRunStatus, runAttentionDetail } from '../services/runAttention'",
   "function buildProgressHtml(project: string, skill: string, ticket: string, events: ProgressEvent[], run?: KronosRun)",
   'const attentionDetail = run && isAttentionRunStatus(run.status) ? runAttentionDetail(run) :',
@@ -2355,7 +2360,9 @@ for (const marker of [
   'const statusClass = escapeClass(status)',
   "const started = formatDateTimeLabel(run.startedAt, 'Unknown')",
   'const runEvents = arrayFromUnknown(run.events)',
-  'const lastEvent = runEvents.length ? recordFromUnknown(runEvents[runEvents.length - 1]) : undefined',
+  'const eventSignal = latestRunEventSignal(runEvents)',
+  'function latestRunEventSignal(events: unknown[]): string',
+  'function visibleProgressEvents(events: ProgressEvent[]): ProgressEvent[]',
   'const missingVariables = arrayFromUnknown(rawMissingVariables).map(item => trimmedStringFromUnknown(item)).filter(Boolean)',
   'const operatorSummary = buildRunOperatorSummary(run)',
   'buildRunCenterOperatorBoard',
@@ -4749,7 +4756,7 @@ for (const [name, source, marker] of [
 }
 for (const [name, source, marker] of [
   ['src/services/runAttention.ts', runAttention, "import { compactSingleLineText } from './textFormat'"],
-  ['src/services/runOperatorSummary.ts', runOperatorSummary, "import { compactSingleLineText } from './textFormat'"],
+  ['src/services/runSignals.ts', runSignals, "import { compactSingleLineText } from './textFormat'"],
   ['src/views/ReviewTreeProvider.ts', reviewTreeProvider, "import { compactSingleLineText } from '../services/textFormat'"],
 ]) {
   if (!source.includes(marker)) {
@@ -4759,17 +4766,25 @@ for (const [name, source, marker] of [
 if (!runAttention.includes('return compactSingleLineText(runAttentionDetail(run), maxLength)')) {
   fail('runAttentionLine should use shared compact text helper.');
 }
-if (!runOperatorSummary.includes('const compact = compactSingleLineText(value, 96)')) {
-  fail('runOperatorSummary should use shared compact text helper.');
-}
 for (const marker of [
-  'function signalText',
-  'function isLowValueSignal',
-  '/^Reviewer summary$/i.test(value)',
-  "/\\.allowedTools\\b/.test(value)",
+  'export function runSignalText(value: unknown, maxLength = 96): string',
+  'export function isLowValueRunSignal(value: string): boolean',
+  'const compact = compactSingleLineText(value, 180)',
+  '/^Reviewer summary\\b/i.test(compact)',
+  '/^checked\\s+\\d/i.test(compact)',
+  "/\\.allowedTools\\b/.test(compact)",
+  '/^Run \\/review on my current changes\\.?$/i.test(compact)',
 ]) {
-  if (!runOperatorSummary.includes(marker)) {
+  if (!runSignals.includes(marker)) {
     fail(`Missing run operator signal filter marker: ${marker}`);
+  }
+}
+for (const [name, source, marker] of [
+  ['src/services/runAttention.ts', runAttention, "import { runSignalText } from './runSignals'"],
+  ['src/services/runOperatorSummary.ts', runOperatorSummary, "import { runSignalText } from './runSignals'"],
+]) {
+  if (!source.includes(marker)) {
+    fail(`${name} must use shared run signal filtering.`);
   }
 }
 if (!runAttention.includes("import { isFailedTerminalRunStatus } from './runStatus'")) {

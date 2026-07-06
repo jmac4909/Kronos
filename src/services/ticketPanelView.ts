@@ -11,6 +11,7 @@ import { escapeClass, escapeHtml, kronosWebviewBaseCss, safeHttpHref } from './w
 import { formatWebviewDate, formatWebviewDateTime } from './webviewFormat';
 
 type TicketTimelineRuns = Parameters<typeof buildTicketTimeline>[0]['runs'];
+const TICKET_TIMELINE_EVENT_LIMIT = 8;
 
 export interface TicketPanelRenderInput {
   queue?: QueueState | null;
@@ -286,7 +287,9 @@ export function buildTicketGateHtml(gate: EvidenceGateResult): string {
 
 export function buildTicketTimelineHtml(events: TimelineEvent[]): string {
   if (events.length === 0) { return ''; }
-  const rows = events.map(event => {
+  const visibleEvents = events.slice(0, TICKET_TIMELINE_EVENT_LIMIT);
+  const remaining = events.length - visibleEvents.length;
+  const rows = visibleEvents.map(event => {
     const at = formatWebviewDateTime(event.at, 'No timestamp');
     const href = safeHttpHref(event.url);
     const link = href ? ` <a href="${href}" class="link">Open</a>` : '';
@@ -297,5 +300,6 @@ export function buildTicketTimelineHtml(events: TimelineEvent[]): string {
       ${event.detail ? `<div class="timeline-detail">${escapeHtml(event.detail)}${artifact}</div>` : ''}
     </div>`;
   }).join('');
-  return `<div class="section"><h3>Agent Timeline</h3><div class="timeline">${rows}</div></div>`;
+  const more = remaining > 0 ? `<div class="timeline-more">${escapeHtml(`${remaining} older event${remaining === 1 ? '' : 's'} hidden`)}</div>` : '';
+  return `<div class="section"><h3>Agent Timeline</h3><div class="timeline">${rows}${more}</div></div>`;
 }

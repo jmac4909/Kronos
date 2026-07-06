@@ -1,6 +1,7 @@
 import { classifyRunFailure, type RunFailureKind } from './postRunReadiness';
 import { recordsFromUnknown, recordFromUnknown } from './records';
 import { runStatusDisplayLabel } from './runLabels';
+import { runSignalText } from './runSignals';
 import { isFailedTerminalRunStatus } from './runStatus';
 import { compactSingleLineText } from './textFormat';
 
@@ -107,7 +108,9 @@ function firstRunAttentionReason(record: Record<string, unknown>): { value: stri
     { value: latestEventField(record['events'], 'label'), source: 'eventLabel' },
   ];
   for (const candidate of candidates) {
-    const value = runText(candidate.value);
+    const value = candidate.source === 'eventDetail' || candidate.source === 'eventLabel'
+      ? runSignalText(candidate.value, 140)
+      : runText(candidate.value);
     if (value) { return { value, source: candidate.source }; }
   }
   return undefined;

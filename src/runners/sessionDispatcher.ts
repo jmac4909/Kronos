@@ -23,6 +23,7 @@ import { unknownErrorMessage } from '../services/errorUtils';
 import { isFreshActiveRun } from '../services/runStatus';
 import { runProgressSummary } from '../services/runProgress';
 import { buildRunOperatorSummary, type RunOperatorSummary, type RunOperatorTone } from '../services/runOperatorSummary';
+import { runSignalText } from '../services/runSignals';
 import { isAttentionRunStatus, runAttentionDetail } from '../services/runAttention';
 import { appendRunRecoveryActions, appendRunWarnings, runEventRecords } from '../services/runMetadata';
 import { sortedRunCenterRuns } from '../services/runCenterSort';
@@ -1344,12 +1345,15 @@ function buildProgressHtml(project: string, skill: string, ticket: string, event
     if (e.label.startsWith('Reading ')) {
       filesRead.add(e.label.replace(/^Reading /, ''));
     }
-    if (e.type === 'thinking') { lastThinking = e.label; }
+    if (e.type === 'thinking') {
+      const signal = runSignalText(e.label, 120);
+      if (signal) { lastThinking = signal; }
+    }
   }
 
   const { isDone, statusColor, statusText } = statusPresentation;
 
-  const eventRows = events.slice(-20).map(e => {
+  const eventRows = visibleProgressEvents(events).map(e => {
     const icon = e.type === 'tool' ? '&#128295;' : e.type === 'text' ? '&#128172;' : e.type === 'thinking' ? '&#128161;' : e.type === 'done' ? '&#10003;' : e.type === 'error' ? '&#10007;' : '&#8226;';
     const time = formatTimeLabel(e.timestamp);
     return `<div class="event ${e.type}"><span class="time">${time}</span><span class="event-icon">${icon}</span><strong>${escapeHtml(e.label)}</strong>${e.detail ? `<div class="detail">${escapeHtml(e.detail)}</div>` : ''}</div>`;
@@ -1474,6 +1478,13 @@ function renderRunFilePreview(label: string, files: string[]): string {
   return `<div class="file-preview"><span><strong>${escapeHtml(label)}:</strong> ${visible}${escapeHtml(remaining)}</span></div>`;
 }
 
+function visibleProgressEvents(events: ProgressEvent[]): ProgressEvent[] {
+  return events.filter(event => {
+    if (event.type !== 'text' && event.type !== 'thinking') { return true; }
+    return Boolean(runSignalText(event.detail || event.label, 150));
+  }).slice(-20);
+}
+
 function runCenterActionButton(action: string, label: string, runId?: string, primary = false): string {
   const classes = `run-action${primary ? ' primary' : ''}`;
   const runAttr = runId ? ` data-run-id="${escapeAttr(runId)}"` : '';
@@ -1547,7 +1558,6 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
     const ended = run.endedAt ? formatDateTimeLabel(run.endedAt, 'Unknown') : '';
     const started = formatDateTimeLabel(run.startedAt, 'Unknown');
     const runEvents = arrayFromUnknown(run.events);
-    const lastEvent = runEvents.length ? recordFromUnknown(runEvents[runEvents.length - 1]) : undefined;
     const promptMeta = isRecord(run.promptMetadata) ? run.promptMetadata : undefined;
     const promptName = stringOrDefault(promptMeta?.['name'], '');
     const promptLabel = promptName
@@ -1571,11 +1581,11 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
       ? `ref ${currentRef}${currentCommit ? ` @ ${currentCommit.substring(0, 12)}` : ''}`
       : '';
     const needsAttention = status === 'failed' || status === 'needs_human' || status === 'cancelled';
-    const eventLabel = lastEvent ? stringOrDefault(lastEvent.label, '') : '';
+    const eventSignal = latestRunEventSignal(runEvents);
     const attentionDetail = needsAttention ? runAttentionDetail(run) : '';
-    const eventCell = attentionDetail && attentionDetail !== eventLabel
-      ? `${eventLabel ? `${escapeHtml(eventLabel)}<br>` : ''}<span class="failure">${escapeHtml(attentionDetail)}</span>`
-      : escapeHtml(eventLabel || attentionDetail || operatorSummary.latestSignal);
+    const eventCell = attentionDetail && eventSignal && attentionDetail !== eventSignal
+      ? `${escapeHtml(eventSignal)}<br><span class="failure">${escapeHtml(attentionDetail)}</span>`
+      : escapeHtml(attentionDetail || eventSignal || operatorSummary.latestSignal);
     const actionCell = interactive ? `<td class="action-cell">${runCenterActionButtons(run)}</td>` : '';
     return `<tr class="${rowClass}"${runId ? ` data-run-id="${escapeAttr(runId)}"` : ''}${focused ? ' data-focused-run="true"' : ''}>
       <td><span class="kronos-pill status ${statusClass}">${escapeHtml(status)}</span></td>
@@ -1654,6 +1664,17 @@ function buildRunCenterHtml(runs: KronosRun[], nonce?: string, actionScriptUri?:
     ${rows}
   </table></div>`}
 </div>${nonce ? runCenterScript(nonce, actionScriptUri) : ''}</body></html>`;
+}
+
+function latestRunEventSignal(events: unknown[]): string {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = recordFromUnknown(events[i]);
+    const detail = runSignalText(event['detail']);
+    if (detail) { return detail; }
+    const label = runSignalText(event['label']);
+    if (label) { return label; }
+  }
+  return '';
 }
 
 function focusedRunSort(a: KronosRun, b: KronosRun, focusRunId: string): number {
