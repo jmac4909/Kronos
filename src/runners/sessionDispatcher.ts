@@ -359,7 +359,18 @@ export function openSavedSession(session: SavedSession): void {
 }
 
 function renderProgressPanel(panel: vscode.WebviewPanel, project: string, skill: string, ticket: string, events: ProgressEvent[], run?: KronosRun): void {
+  panel.title = progressPanelTitle(project, skill, events, run);
   panel.webview.html = withWebviewCsp(buildProgressHtml(project, skill, ticket, events, run));
+}
+
+export function progressPanelTitle(project: string, skill: string, events: ProgressEvent[], run?: Pick<KronosRun, 'status'>): string {
+  const statusPresentation = progressStatusPresentation(events, run);
+  const icon = statusPresentation.statusText === 'Complete'
+    ? '$(check)'
+    : statusPresentation.statusText === 'Working...'
+    ? '$(sync~spin)'
+    : '$(error)';
+  return `${icon} Kronos: ${project} (${skill})`;
 }
 
 function createRun(project: string, projectPath: string, skill: string, ticket: string, model: string, prompt: string, cwd: string, promptMetadata?: PromptRunMetadata): KronosRun {

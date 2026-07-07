@@ -298,6 +298,7 @@ function buildVerifyLocalReplaySteps(target: VerifyLocalPromptTarget): string {
     ? `${target.environment.promptValue} at ${target.environment.url}`
     : target.environment.promptValue;
   const remoteFixConfirmation = target.branch.checkout === 'remote' && target.mode.mode === 'confirm-fix-works';
+  const fixVerdictInstruction = 'For fix verification, report two separate sections with before/after evidence: (1) code review of the fix - whether the selected branch/MR addresses the root cause, and (2) TEST/DEV environment status - whether that fix is deployed in the selected environment. If the code fix is present but TEST still runs old behavior or is not deployed, use the verdict "FIX VERIFIED IN CODE, AWAITING DEPLOYMENT" and do not call the fix failed or label the overall result "DEFECT REPRODUCED."';
   return [
     '1. Find the original request, tracking ID, payload, or reproduction path from the Jira ticket, linked artifacts, or payload/application logs. If it cannot be found, stop and report exactly what is missing.',
     `2. Checkout/use the operator-selected branch target: ${target.branch.branch}.`,
@@ -307,18 +308,22 @@ function buildVerifyLocalReplaySteps(target: VerifyLocalPromptTarget): string {
       : target.mode.mode === 'confirm-defect-exists'
       ? '4. Confirm whether the reported defect reproduces. Compare actual behavior with the expected behavior from the ticket and capture commands, payloads, responses, logs, and artifacts.'
       : '4. Confirm whether the fix works. Replay the same request, compare behavior against the defect evidence/baseline, and prove the reported failure no longer occurs.',
-    '5. Report a clear verdict: reproduced, not reproduced, fixed, not fixed, or blocked. Include before/after evidence and any unresolved risks.',
+    target.mode.mode === 'confirm-fix-works'
+      ? `5. ${fixVerdictInstruction}`
+      : '5. Report a clear verdict: reproduced, not reproduced, fixed, not fixed, or blocked. Include before/after evidence and any unresolved risks.',
   ].join('\n');
 }
 
 function buildVerifyLocalCompletionPolicy(target: VerifyLocalPromptTarget): string {
   if (target.branch.checkout === 'remote' && target.mode.mode === 'confirm-fix-works') {
-    return 'Remote fix confirmation is authoritative for this run. If the selected TEST/DEV/custom environment proves the defect no longer reproduces, report success and stop. Do not build, start, or test the app locally after remote success. Local testing is allowed only if the remote replay fails, is inconclusive, or the operator explicitly chose local-only verification.';
+    return 'Remote fix confirmation is authoritative for this run. If the selected TEST/DEV/custom environment proves the defect no longer reproduces, report success and stop. If TEST/DEV still shows old behavior, distinguish code verdict from deployment verdict: use "FIX VERIFIED IN CODE, AWAITING DEPLOYMENT" when the selected branch/MR fixes the root cause but the remote environment is not updated. Do not build, start, or test the app locally after remote success. Local testing is allowed only if the remote replay fails, is inconclusive, or the operator explicitly chose local-only verification.';
   }
   if (target.branch.checkout === 'remote') {
     return 'Remote verification is authoritative for this run. Do not build, start, or test the app locally unless the remote replay fails, is inconclusive, or the operator explicitly starts a local-only follow-up.';
   }
-  return 'Run only the operator-selected local verification path. Do not add remote or extra local workflows beyond what is needed for the selected branch, environment, and mode.';
+  return target.mode.mode === 'confirm-fix-works'
+    ? 'Run only the operator-selected verification path. Separate the code verdict from the environment/deployment verdict. If the selected branch/MR fixes the root cause but TEST still runs old behavior, report "FIX VERIFIED IN CODE, AWAITING DEPLOYMENT" instead of "DEFECT REPRODUCED." Do not add extra local or remote workflows beyond what is needed for the selected branch, environment, and mode.'
+    : 'Run only the operator-selected local verification path. Do not add remote or extra local workflows beyond what is needed for the selected branch, environment, and mode.';
 }
 
 function compactText(value: string, maxLength: number): string {

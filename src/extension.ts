@@ -134,8 +134,10 @@ import { countLabel } from './services/countLabels';
 import { ticketStringArray } from './services/ticketFields';
 import {
   RUN_ACTION_QUICK_PICK_ITEMS,
+  STALE_FINISHED_ARCHIVE_HOURS,
   buildRunQuickPickItems,
   isFinishedArchiveRun,
+  isStaleFinishedArchiveRun,
   isResumableRun,
   isRetryableRun,
   resolveRunArtifactFile,
@@ -160,7 +162,7 @@ import {
 } from './services/commandPayloads';
 import { openReviewTicketEntries, reviewBranchTickets as buildReviewBranchTickets } from './services/reviewWork';
 import { decideReviewMonitorAction, reviewDeployMonitorActionHandled, reviewMergeRequestNotificationKey, reviewTerminalMergeRequestActionKey, type ReviewDeployMonitorResult, type ReviewMonitorDecision, type ReviewTerminalMergeRequestAction } from './services/reviewMonitor';
-import { REVIEW_SEEN_KEYS_STORAGE_KEY, normalizeReviewSeenKeys, planNewReviewNotification } from './services/reviewNotifications';
+import { REVIEW_MR_NOTIFICATION_KEYS_STORAGE_KEY, REVIEW_SEEN_KEYS_STORAGE_KEY, normalizeReviewSeenKeys, planNewReviewNotification } from './services/reviewNotifications';
 import { decideQueueRemoval } from './services/queueRemovalPolicy';
 import { deployMonitorAttentionIssue, deployMonitorHandoffCheckName, hasDeployMonitorHandoffIssue, hasHandledDeployMonitorRun, resolveDeployMonitorProject } from './services/deployMonitorHandoff';
 import { actionButton, kronosActionPanelScript, normalizeActionPanelMessage, operatorCommandRow, type ActionPanelMessage } from './services/operatorPanel';
@@ -227,6 +229,7 @@ const REVIEW_POLL_FAILURE_NOTIFICATION_MS = 15 * 60 * 1000;
 const reviewPollFailureNotifications = new Map<string, number>();
 const reviewMergeRequestNotifications = new Set<string>();
 const reviewTerminalMergeRequestActions = new Set<string>();
+let reviewMergeRequestNotificationState: vscode.Memento | undefined;
 const OPTIONAL_SCRIPT_PANEL_WARNING = 'Kronos integration scripts are not installed. Run Kronos: Doctor for setup details.';
 let lastSpecBeanstalkResult: SpecBeanstalkSummary | undefined;
 let lastReviewPollAt: string | undefined;
@@ -330,26 +333,44 @@ function runNotificationCommandAction(
   });
 }
 
-async function openReviewView(revealReviewView?: () => Promise<boolean>): Promise<void> {
+type ReviewViewReveal = (ticketKey?: string) => Promise<boolean>;
+
+async function openReviewView(targetTicketKey?: string, revealReviewView?: ReviewViewReveal): Promise<void> {
   const errors: string[] = [];
+  let opened = false;
   try {
     await vscode.commands.executeCommand('workbench.view.extension.kronos');
+    opened = true;
   } catch (e: unknown) {
     errors.push(unknownErrorMessage(e, 'Could not reveal Kronos activity view.'));
   }
   try {
+    await vscode.commands.executeCommand('workbench.views.service.openView', 'kronosReview');
+    opened = true;
+  } catch (e: unknown) {
+    errors.push(unknownErrorMessage(e, 'Could not open Kronos Review view.'));
+  }
+  if (revealReviewView) {
+    try {
+      if (await revealReviewView(targetTicketKey)) { return; }
+    } catch (e: unknown) {
+      errors.push(unknownErrorMessage(e, 'Could not reveal Kronos Review item.'));
+    }
+  }
+  try {
     await vscode.commands.executeCommand('kronosReview.focus');
+    if (revealReviewView) {
+      try {
+        if (await revealReviewView(targetTicketKey)) { return; }
+      } catch (e: unknown) {
+        errors.push(unknownErrorMessage(e, 'Could not reveal focused Kronos Review item.'));
+      }
+    }
     return;
   } catch (e: unknown) {
     errors.push(unknownErrorMessage(e, 'Could not focus Kronos Review.'));
   }
-  if (revealReviewView) {
-    try {
-      if (await revealReviewView()) { return; }
-    } catch (e: unknown) {
-      errors.push(unknownErrorMessage(e, 'Could not reveal first Kronos Review item.'));
-    }
-  }
+  if (opened) { return; }
   try {
     await vscode.commands.executeCommand('workbench.action.focusSideBar');
     return;
@@ -383,6 +404,25 @@ function reviewSeenKeysStore(globalState: vscode.Memento): ReviewSeenKeysStore {
     get: () => normalizeReviewSeenKeys(globalState.get<unknown>(REVIEW_SEEN_KEYS_STORAGE_KEY)),
     update: keys => globalState.update(REVIEW_SEEN_KEYS_STORAGE_KEY, normalizeReviewSeenKeys([...keys]) || []),
   };
+}
+
+function seedReviewMergeRequestNotifications(globalState: vscode.Memento): void {
+  reviewMergeRequestNotificationState = globalState;
+  reviewMergeRequestNotifications.clear();
+  for (const key of normalizeReviewSeenKeys(globalState.get<unknown>(REVIEW_MR_NOTIFICATION_KEYS_STORAGE_KEY)) || []) {
+    reviewMergeRequestNotifications.add(key);
+  }
+}
+
+function rememberReviewMergeRequestNotification(notificationKey: string): boolean {
+  if (reviewMergeRequestNotifications.has(notificationKey)) { return false; }
+  reviewMergeRequestNotifications.add(notificationKey);
+  const persistedKeys = normalizeReviewSeenKeys([...reviewMergeRequestNotifications]) || [];
+  const update = reviewMergeRequestNotificationState?.update(REVIEW_MR_NOTIFICATION_KEYS_STORAGE_KEY, persistedKeys);
+  void update?.then(undefined, (e: unknown) => {
+    console.warn(unknownErrorMessage(e, 'Failed to persist MR review notification keys.'));
+  });
+  return true;
 }
 
 async function runCommandProgress(
@@ -958,6 +998,15 @@ async function archiveFinishedRuns(): Promise<void> {
   );
   if (confirm !== 'Archive Finished') { return; }
 
+  const { archived, failed } = archiveFinishedRunRecords(runs);
+  if (failed > 0) {
+    vscode.window.showWarningMessage(`Archived ${countLabel(archived, 'finished run')}; ${failed} failed. See developer console for details.`);
+    return;
+  }
+  vscode.window.showInformationMessage(`Archived ${countLabel(archived, 'finished run')}.`);
+}
+
+function archiveFinishedRunRecords(runs: KronosRun[]): { archived: number; failed: number } {
   let archived = 0;
   let failed = 0;
   for (const run of runs) {
@@ -969,12 +1018,28 @@ async function archiveFinishedRuns(): Promise<void> {
       console.warn(unknownErrorMessage(e, `Failed to archive ${run.id}.`));
     }
   }
+  return { archived, failed };
+}
 
-  if (failed > 0) {
-    vscode.window.showWarningMessage(`Archived ${countLabel(archived, 'finished run')}; ${failed} failed. See developer console for details.`);
+async function promptForStaleRunCenterArchive(now = new Date()): Promise<void> {
+  const staleRuns = staleFinishedArchiveRuns(now);
+  if (staleRuns.length === 0) { return; }
+  const action = await vscode.window.showWarningMessage(
+    `Run Center has ${countLabel(staleRuns.length, 'finished run')} older than ${STALE_FINISHED_ARCHIVE_HOURS} hours.`,
+    'Archive Stale Runs',
+    'Later',
+  );
+  if (action !== 'Archive Stale Runs') { return; }
+  const result = archiveFinishedRunRecords(staleRuns);
+  if (result.failed > 0) {
+    vscode.window.showWarningMessage(`Archived ${countLabel(result.archived, 'stale run')}; ${result.failed} failed. See developer console for details.`);
     return;
   }
-  vscode.window.showInformationMessage(`Archived ${countLabel(archived, 'finished run')}.`);
+  vscode.window.showInformationMessage(`Archived ${countLabel(result.archived, 'stale run')}.`);
+}
+
+function staleFinishedArchiveRuns(now = new Date()): KronosRun[] {
+  return listRuns().filter(run => isStaleFinishedArchiveRun(run, now));
 }
 
 async function pauseSelectedRun(run: KronosRun): Promise<void> {
@@ -1217,6 +1282,7 @@ function openInteractiveRunCenter(state: KronosState, extensionUri?: vscode.Uri,
     onPanelOpened: (panel, viewType, title) => recordSmokePanel(viewType, title, panel),
     onAction: request => executeRunCenterAction(state, request),
   });
+  void promptForStaleRunCenterArchive();
 }
 
 async function executeRunCenterAction(state: KronosState, request: RunCenterActionRequest): Promise<void> {
@@ -1436,8 +1502,9 @@ export function activate(context: vscode.ExtensionContext) {
   const queueTree = new QueueTreeProvider(state);
   const sessionTree = new SessionTreeProvider(state);
   const taskTree = new TaskTreeProvider(state);
+  seedReviewMergeRequestNotifications(context.globalState);
   const reviewTree = new ReviewTreeProvider(state, reviewSeenKeysStore(context.globalState));
-  let revealReviewView: (() => Promise<boolean>) | undefined;
+  let revealReviewView: ReviewViewReveal | undefined;
   const notifiedReviewKeys = new Set<string>();
   const ticketTree = new TicketTreeProvider(state);
 
@@ -1495,11 +1562,12 @@ export function activate(context: vscode.ExtensionContext) {
         : undefined;
     };
     if (id === 'kronosReview') {
-      revealReviewView = async () => {
-        const first = (reviewTree.getChildren() as Array<vscode.TreeItem & { ticketKey?: string }>)
-          .find(item => Boolean(item.ticketKey));
+      revealReviewView = async (ticketKey?: string) => {
+        const items = reviewTree.getChildren() as Array<vscode.TreeItem & { ticketKey?: string }>;
+        const target = ticketKey ? items.find(item => item.ticketKey === ticketKey) : undefined;
+        const first = target || items.find(item => Boolean(item.ticketKey));
         if (!first) { return false; }
-        await (view as vscode.TreeView<vscode.TreeItem>).reveal(first, { select: true, focus: true });
+        await (view as vscode.TreeView<vscode.TreeItem>).reveal(first, { select: true, focus: true, expand: true });
         return true;
       };
       view.message = reviewPollTreeMessage();
@@ -1660,8 +1728,9 @@ export function activate(context: vscode.ExtensionContext) {
       );
     }),
 
-    vscode.commands.registerCommand('kronos.openReview', async () => {
-      await openReviewView(revealReviewView);
+    vscode.commands.registerCommand('kronos.openReview', async (target: unknown) => {
+      const targetTicketKey = resolveTicketKey(target) || optionalTrimmedStringFromUnknown(target);
+      await openReviewView(targetTicketKey, revealReviewView);
     }),
 
     vscode.commands.registerCommand('kronos.openExternalUrl', async (url: string) => {
@@ -5377,13 +5446,12 @@ async function pollReviewMergeRequests(state: KronosState, shouldContinue: () =>
         }
       } else if (decision.kind === 'blocked') {
         if (!shouldContinue()) { return finishReviewPollResult(result); }
-        notifyReviewMonitorDecision(decision);
+        notifyReviewMonitorDecision(candidate.ticketKey, decision);
       } else if (decision.kind === 'notify') {
         if (!shouldContinue()) { return finishReviewPollResult(result); }
         const notificationKey = reviewMergeRequestNotificationKey(candidate.ticketKey, update);
-        if (reviewMergeRequestNotifications.has(notificationKey)) { continue; }
-        reviewMergeRequestNotifications.add(notificationKey);
-        notifyReviewMonitorDecision(decision);
+        if (!rememberReviewMergeRequestNotification(notificationKey)) { continue; }
+        notifyReviewMonitorDecision(candidate.ticketKey, decision);
       }
     } catch (e: unknown) {
       if (!shouldContinue()) { return finishReviewPollResult(result); }
@@ -5472,7 +5540,7 @@ function notifyReviewMergeRequestPollFailure(ticketKey: string, error: unknown):
   });
 }
 
-function notifyReviewMonitorDecision(decision: ReviewMonitorDecision): void {
+function notifyReviewMonitorDecision(ticketKey: string, decision: ReviewMonitorDecision): void {
   if (!decision.message) { return; }
   const actions = decision.url ? ['Open MR', 'Open Review'] : ['Open Review'];
   const selection = decision.severity === 'warning'
@@ -5484,7 +5552,7 @@ function notifyReviewMonitorDecision(decision: ReviewMonitorDecision): void {
       return;
     }
     if (action === 'Open Review') {
-      return vscode.commands.executeCommand('kronos.openReview');
+      return vscode.commands.executeCommand('kronos.openReview', { ticketKey });
     }
     return undefined;
   }).then(undefined, (e: unknown) => {

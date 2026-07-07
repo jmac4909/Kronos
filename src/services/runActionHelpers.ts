@@ -6,6 +6,7 @@ import { unknownErrorMessage } from './errorUtils';
 import { isFreshActiveRun } from './runStatus';
 import { isAttentionRunStatus, runAttentionDetail, runAttentionLine } from './runAttention';
 import { formatDateTimeLabel } from './dateLabels';
+import { toValidDate } from './dateValues';
 import { recordsFromUnknown } from './records';
 
 export interface RunActionRecord {
@@ -15,6 +16,7 @@ export interface RunActionRecord {
   ticket?: string;
   status?: unknown;
   startedAt?: unknown;
+  endedAt?: unknown;
   cwd?: string;
   projectPath?: string;
   worktreePath?: string;
@@ -53,6 +55,7 @@ export const RUN_ACTION_QUICK_PICK_ITEMS: RunActionQuickPickItem[] = [
 ];
 
 export const FINISHED_ARCHIVE_STATUSES = new Set(['completed', 'waiting_for_review', 'failed', 'cancelled']);
+export const STALE_FINISHED_ARCHIVE_HOURS = 24;
 
 export type RunArtifactPathResult =
   | { ok: true; filePath: string }
@@ -94,6 +97,12 @@ export function isResumableRun(run: RunActionRecord): boolean {
 
 export function isFinishedArchiveRun(run: RunActionRecord): boolean {
   return typeof run.status === 'string' && FINISHED_ARCHIVE_STATUSES.has(run.status);
+}
+
+export function isStaleFinishedArchiveRun(run: RunActionRecord, now = new Date(), staleHours = STALE_FINISHED_ARCHIVE_HOURS): boolean {
+  if (!isFinishedArchiveRun(run)) { return false; }
+  const completedAt = toValidDate(run.endedAt || run.startedAt)?.getTime();
+  return completedAt !== undefined && completedAt <= now.getTime() - staleHours * 60 * 60 * 1000;
 }
 
 export function resolveRunWorkspace(run: RunActionRecord): string | null {

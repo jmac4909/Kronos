@@ -864,6 +864,10 @@ test('verify-local prompt targeting preserves operator branch, environment, mode
   assert.match(vars.VERIFY_TRACKING_HINTS, /corr-9999/);
   assert.match(vars.VERIFY_REPLAY_STEPS, /Find the original request/);
   assert.match(vars.VERIFY_REPLAY_STEPS, /reported failure no longer occurs/);
+  assert.match(vars.VERIFY_REPLAY_STEPS, /code review of the fix/);
+  assert.match(vars.VERIFY_REPLAY_STEPS, /TEST\/DEV environment status/);
+  assert.match(vars.VERIFY_REPLAY_STEPS, /FIX VERIFIED IN CODE, AWAITING DEPLOYMENT/);
+  assert.match(vars.VERIFY_COMPLETION_POLICY, /Separate the code verdict from the environment\/deployment verdict/);
   const promptText = verifyLocalPlan.buildVerifyLocalPromptText('Base prompt', vars);
   assert.match(promptText, /Kronos verify-local targeting/);
   assert.match(promptText, /before\/after evidence/);
@@ -876,6 +880,7 @@ test('verify-local prompt targeting preserves operator branch, environment, mode
   assert.match(remoteVars.VERIFY_BRANCH_CHECKOUT, /do not choose, checkout, or infer a source branch/);
   assert.match(remoteVars.VERIFY_REPLAY_STEPS, /report fixed, and stop without building or starting the app locally/);
   assert.match(remoteVars.VERIFY_COMPLETION_POLICY, /Remote fix confirmation is authoritative/);
+  assert.match(remoteVars.VERIFY_COMPLETION_POLICY, /FIX VERIFIED IN CODE, AWAITING DEPLOYMENT/);
   assert.match(remoteVars.VERIFY_COMPLETION_POLICY, /Do not build, start, or test the app locally after remote success/);
   assert.match(remoteVars.VERIFY_COMPLETION_POLICY, /remote replay fails, is inconclusive, or the operator explicitly chose local-only verification/);
   const remotePromptText = verifyLocalPlan.buildVerifyLocalPromptText('Base prompt', remoteVars);
@@ -5168,6 +5173,15 @@ test('run action helpers resolve safe artifacts and quick-pick labels', () => {
   assert.equal(runActionHelpers.isFinishedArchiveRun({ status: 'completed' }), true);
   assert.equal(runActionHelpers.isFinishedArchiveRun({ status: 'waiting_for_review' }), true);
   assert.equal(runActionHelpers.isFinishedArchiveRun({ status: 'running' }), false);
+  assert.equal(runActionHelpers.STALE_FINISHED_ARCHIVE_HOURS, 24);
+  assert.equal(runActionHelpers.isStaleFinishedArchiveRun(
+    { status: 'completed', endedAt: '2026-07-01T00:00:00.000Z' },
+    new Date('2026-07-02T00:00:01.000Z'),
+  ), true);
+  assert.equal(runActionHelpers.isStaleFinishedArchiveRun(
+    { status: 'needs_human', endedAt: '2026-07-01T00:00:00.000Z' },
+    new Date('2026-07-03T00:00:00.000Z'),
+  ), false);
   assert.equal(countLabels.countLabel(1, 'tool'), '1 tool');
   assert.equal(countLabels.countLabel(2, 'tool'), '2 tools');
   assert.equal(countLabels.countLabel(2, 'changed', 'changed'), '2 changed');
@@ -5181,6 +5195,9 @@ test('run action helpers resolve safe artifacts and quick-pick labels', () => {
 
   const runActionSource = readSourceFixture('src', 'services', 'runActionHelpers.ts');
   const extensionSource = readSourceFixture('src', 'extension.ts');
+  assert.ok(runActionSource.includes("import { toValidDate } from './dateValues'"));
+  assert.ok(runActionSource.includes('export const STALE_FINISHED_ARCHIVE_HOURS = 24'));
+  assert.ok(runActionSource.includes('export function isStaleFinishedArchiveRun'));
   assert.equal(runActionSource.includes('function runCountLabel'), false, 'runActionHelpers should not keep a countLabel wrapper');
   assert.equal(extensionSource.includes('runCountLabel('), false, 'extension should use the shared count label helper directly');
   assert.ok(extensionSource.includes("countLabel(runs.length, 'finished run')"));
@@ -5383,6 +5400,7 @@ test('review tree persists seen review keys across reloads', async () => {
 
 test('review notification helpers normalize seen keys and plan new-item toasts', () => {
   assert.equal(reviewNotifications.REVIEW_SEEN_KEYS_STORAGE_KEY, 'kronos.review.seenKeys.v1');
+  assert.equal(reviewNotifications.REVIEW_MR_NOTIFICATION_KEYS_STORAGE_KEY, 'kronos.review.mrNotificationKeys.v1');
   assert.equal(reviewNotifications.normalizeReviewSeenKeys(undefined), undefined);
   assert.deepEqual(reviewNotifications.normalizeReviewSeenKeys('bad'), []);
   assert.deepEqual(reviewNotifications.normalizeReviewSeenKeys([' K-2 ', 'K-1', '', 42, 'K-2']), ['K-1', 'K-2']);
@@ -7137,6 +7155,9 @@ test('dispatcher treats post-completion errors as attention outcomes', async () 
       statusColor: '#4caf50',
       statusText: 'Complete',
     });
+    assert.equal(dispatcher.progressPanelTitle('app', 'verify-local', errorThenDone), '$(check) Kronos: app (verify-local)');
+    assert.equal(dispatcher.progressPanelTitle('app', 'implement', [{ type: 'text', label: 'Starting', detail: '', timestamp: new Date() }]), '$(sync~spin) Kronos: app (implement)');
+    assert.equal(dispatcher.progressPanelTitle('app', 'verify-local', doneThenError), '$(error) Kronos: app (verify-local)');
   });
 });
 
@@ -7265,6 +7286,11 @@ test('dispatcher records branch and permission metadata for persisted runs', () 
     "const input = recordFromUnknown(block['input'])",
     'for (const pe of parseStreamEvents(JSON.parse(trimmed)))',
     "export function progressStatusPresentation(events: ProgressEvent[], run?: Pick<KronosRun, 'status'>)",
+    "export function progressPanelTitle(project: string, skill: string, events: ProgressEvent[], run?: Pick<KronosRun, 'status'>): string",
+    "panel.title = progressPanelTitle(project, skill, events, run)",
+    "'$(sync~spin)'",
+    "'$(check)'",
+    "'$(error)'",
     'const statusPresentation = progressStatusPresentation(events, run)',
     "statusText: 'Needs Attention'",
     'const sessionStart = progressDateOr(session.startedAt, new Date())',
@@ -11117,6 +11143,25 @@ test('post-run readiness distinguishes process completion from handoff readiness
     run: { id: 'run-1', skill: 'verify-local', status: 'completed' },
     ticket: ticket({ next_action: 'await_review', projects: ['app'] }),
   }), true);
+  assert.equal(postRunReadiness.shouldRecordRunCompletionEvidence({
+    run: { id: 'run-implement-approved', skill: 'implement', status: 'completed' },
+    ticket: ticket({ next_action: 'verify', projects: ['app'], mr: { iid: 14, state: 'opened', review_status: 'approved', url: 'https://gitlab.example/14' } }),
+  }), true);
+  const loopInterruptedVerifyRun = {
+    id: 'run-loop-after-report',
+    skill: 'verify-local',
+    status: 'needs_human',
+    exitCode: 1,
+    failureReason: 'Stopped after 4 repeated tool events: Running: curl https://test.example/replay.',
+    events: [
+      { label: 'Verification report', detail: 'Final verification report: defect no longer reproduces; fix verified in TEST.' },
+      { label: 'Possible tool loop detected', detail: 'Stopped after 4 repeated tool events.' },
+    ],
+  };
+  assert.equal(postRunReadiness.shouldRecordRunCompletionEvidence({
+    run: loopInterruptedVerifyRun,
+    ticket: ticket({ next_action: 'verify', projects: ['app'] }),
+  }), true);
 
   const resolutionTickets = {
     'K-READY': ticket({ next_action: 'await_review', projects: ['app'] }),
@@ -11261,6 +11306,13 @@ test('post-run readiness distinguishes process completion from handoff readiness
   }));
   assert.equal(cleanupBlockedCompletionCheck.result, 'pass');
   assert.match(cleanupBlockedCompletionCheck.summary, /run-cleanup-needs-human needs_human exit 0/);
+  const loopInterruptedVerifyCheck = postRunReadiness.buildRunCompletionEvidenceCheck(loopInterruptedVerifyRun, ticket({
+    next_action: 'verify',
+    projects: ['app'],
+  }));
+  assert.equal(loopInterruptedVerifyCheck.name, 'Kronos verify-local result');
+  assert.equal(loopInterruptedVerifyCheck.result, 'warn');
+  assert.match(loopInterruptedVerifyCheck.summary, /run-loop-after-report needs_human exit 1/);
 
   const notReady = postRunReadiness.evaluatePostRunReadiness({
     run: { status: 'completed' },
@@ -11354,6 +11406,7 @@ test('post-run readiness distinguishes process completion from handoff readiness
     "if (skill === 'verify-local')",
     "runString(record['skill']) === 'implement'",
     "input.ticket.next_action === 'await_review'",
+    "if (skill === 'implement')",
     'hasRunCompletionEvidence(input.ticket, runId)',
     'function completionEvidenceRunId(record: Record<string, unknown>): string',
     'function hasRunCompletionEvidence(ticket: Ticket, runId: string): boolean',
@@ -11381,6 +11434,9 @@ test('post-run readiness distinguishes process completion from handoff readiness
     'export function classifyRunFailure(run: unknown): RunFailureKind',
     "import { arrayFromUnknown, optionalFiniteNumberFromUnknown, optionalTrimmedStringFromUnknown, recordFromUnknown } from './records'",
     'function runCompletedForEvidence(record: Record<string, unknown>): boolean',
+    'function runCleanForEvidence(record: Record<string, unknown>, exitCode: number | undefined): boolean',
+    'function verifyLocalLoopInterruptedAfterFinalSummary(record: Record<string, unknown>): boolean',
+    'Possible tool loop detected|Stopped after',
     'function runString(value: unknown): string',
     'function runText(value: unknown): string | undefined',
     'function runFailureReason(record: Record<string, unknown>): string',
@@ -12059,6 +12115,9 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     "vscode.Uri.joinPath(extensionUri, 'media', scriptFile)",
     'function executeRunCenterAction',
     'async function archiveFinishedRuns',
+    'function staleFinishedArchiveRuns(now = new Date()): KronosRun[]',
+    'async function promptForStaleRunCenterArchive(now = new Date()): Promise<void>',
+    'STALE_FINISHED_ARCHIVE_HOURS',
     'export const FINISHED_ARCHIVE_STATUSES',
     'No completed, review-ready, failed, or cancelled Kronos runs to archive.',
     'Active, paused, and needs-human runs stay visible.',
@@ -12073,22 +12132,27 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'view.message = reviewPollTreeMessage()',
     "vscode.commands.registerCommand('kronos.pollReviewMergeRequests'",
     'ensureInitialIntegrationManifest()',
-    "import { REVIEW_SEEN_KEYS_STORAGE_KEY, normalizeReviewSeenKeys, planNewReviewNotification } from './services/reviewNotifications'",
+    "import { REVIEW_MR_NOTIFICATION_KEYS_STORAGE_KEY, REVIEW_SEEN_KEYS_STORAGE_KEY, normalizeReviewSeenKeys, planNewReviewNotification } from './services/reviewNotifications'",
     'function reviewSeenKeysStore(globalState: vscode.Memento): ReviewSeenKeysStore',
+    'function seedReviewMergeRequestNotifications(globalState: vscode.Memento): void',
+    'function rememberReviewMergeRequestNotification(notificationKey: string): boolean',
+    'reviewMergeRequestNotificationState?.update(REVIEW_MR_NOTIFICATION_KEYS_STORAGE_KEY, persistedKeys)',
     'new ReviewTreeProvider(state, reviewSeenKeysStore(context.globalState))',
     'reviewTree.getNewReviewCount()',
-    'let revealReviewView: (() => Promise<boolean>) | undefined',
+    'let revealReviewView: ReviewViewReveal | undefined',
     'view.badge = count > 0',
-    'await (view as vscode.TreeView<vscode.TreeItem>).reveal(first, { select: true, focus: true })',
+    'await (view as vscode.TreeView<vscode.TreeItem>).reveal(first, { select: true, focus: true, expand: true })',
     'reviewTree.onDidChangeNewReviewCount(updateReviewBadge)',
     'reviewTree.onDidChangeNewReviewCount(() => notifyNewReviewItems(reviewTree, notifiedReviewKeys))',
     'reviewTree.markVisibleReviewItemsSeen()',
     'function runNotificationCommandAction',
-    'async function openReviewView(revealReviewView?: () => Promise<boolean>): Promise<void>',
+    'async function openReviewView(targetTicketKey?: string, revealReviewView?: ReviewViewReveal): Promise<void>',
+    "'workbench.views.service.openView'",
     "'workbench.view.extension.kronos'",
     "'workbench.action.focusSideBar'",
     "vscode.commands.registerCommand('kronos.openReview'",
-    'await openReviewView(revealReviewView)',
+    'const targetTicketKey = resolveTicketKey(target) || optionalTrimmedStringFromUnknown(target)',
+    'await openReviewView(targetTicketKey, revealReviewView)',
     'function notifyNewReviewItems(reviewTree: ReviewTreeProvider, notifiedReviewKeys: Set<string>): void',
     'planNewReviewNotification(reviewTree.getNewReviewItems(), notifiedReviewKeys)',
     'notifiedReviewKeys.clear()',
@@ -12159,20 +12223,20 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'const deployResult = await startDeployMonitorForMergedTicket(state, candidate.ticketKey, update.ticket)',
     'if (reviewDeployMonitorActionHandled(deployResult))',
     "decision.kind === 'blocked'",
-    'notifyReviewMonitorDecision(decision)',
+    'notifyReviewMonitorDecision(candidate.ticketKey, decision)',
     'const notificationKey = reviewMergeRequestNotificationKey(candidate.ticketKey, update)',
-    'if (reviewMergeRequestNotifications.has(notificationKey)) { continue; }',
-    'reviewMergeRequestNotifications.add(notificationKey)',
+    'if (!rememberReviewMergeRequestNotification(notificationKey)) { continue; }',
     'notifyReviewMergeRequestPollFailure(candidate.ticketKey, e)',
     'function notifyReviewMergeRequestPollFailure(ticketKey: string, error: unknown): void',
     'MR status polling failed:',
     'function rememberReviewTerminalMergeRequestAction',
     'reviewTerminalMergeRequestActionKey(update.ticketKey, update.ticket.mr?.iid, update.action)',
     'reviewTerminalMergeRequestActionKey(ticketKey, ticket.mr?.iid, action)',
-    'function notifyReviewMonitorDecision(decision: ReviewMonitorDecision): void',
+    'function notifyReviewMonitorDecision(ticketKey: string, decision: ReviewMonitorDecision): void',
     "const actions = decision.url ? ['Open MR', 'Open Review'] : ['Open Review']",
     "action === 'Open MR' && decision.url",
     'openExternalHttpUrl(decision.url)',
+    "vscode.commands.executeCommand('kronos.openReview', { ticketKey })",
     "import { openReviewTicketEntries, reviewBranchTickets as buildReviewBranchTickets } from './services/reviewWork'",
     'return openReviewTicketEntries(state.state?.tickets)',
     'function reviewBranchTickets(state: KronosState)',

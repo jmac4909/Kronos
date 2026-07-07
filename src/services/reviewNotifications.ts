@@ -1,6 +1,7 @@
 import { arrayFromUnknown, optionalTrimmedStringFromUnknown } from './records';
 
 export const REVIEW_SEEN_KEYS_STORAGE_KEY = 'kronos.review.seenKeys.v1';
+export const REVIEW_MR_NOTIFICATION_KEYS_STORAGE_KEY = 'kronos.review.mrNotificationKeys.v1';
 
 export interface ReviewNotificationItem {
   ticketKey: string;

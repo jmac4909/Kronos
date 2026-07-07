@@ -118,6 +118,9 @@ export function shouldRecordRunCompletionEvidence(input: { run: unknown; ticket?
   if (skill === 'verify-local') {
     return true;
   }
+  if (skill === 'implement') {
+    return true;
+  }
   return runCompletedForEvidence(record)
     && runString(record['skill']) === 'implement'
     && input.ticket.next_action === 'await_review';
@@ -145,7 +148,7 @@ export function buildRunCompletionEvidenceText(run: unknown, ticket?: Ticket): s
 export function buildRunCompletionEvidenceCheck(run: unknown, ticket?: Ticket): RunCompletionEvidenceCheck {
   const context = runCompletionEvidenceContext(run, ticket);
   const strongSignal = positiveTestCount(context.testCount) || isPassingBuildStatus(context.build?.status) || isPassingSonar(context.sonarStatus);
-  const cleanRun = runCompletedForEvidence(context.record) && (context.exitCode === undefined || context.exitCode === 0);
+  const cleanRun = runCleanForEvidence(context.record, context.exitCode);
   const isVerifyLocal = context.skill === 'verify-local';
   const summaryParts = [
     `run ${context.runId} ${context.status}${context.exitCode === undefined ? '' : ` exit ${context.exitCode}`}`,
@@ -402,7 +405,27 @@ export function classifyRunFailure(run: unknown): RunFailureKind {
 
 function runCompletedForEvidence(record: Record<string, unknown>): boolean {
   const status = runString(record['status']);
-  return isSuccessfulRunStatus(status) || (status === 'needs_human' && terminalRunOutcome(record) === 'completed');
+  return isSuccessfulRunStatus(status)
+    || (status === 'needs_human' && terminalRunOutcome(record) === 'completed')
+    || verifyLocalLoopInterruptedAfterFinalSummary(record);
+}
+
+function runCleanForEvidence(record: Record<string, unknown>, exitCode: number | undefined): boolean {
+  return runCompletedForEvidence(record)
+    && (exitCode === undefined || exitCode === 0 || verifyLocalLoopInterruptedAfterFinalSummary(record));
+}
+
+function verifyLocalLoopInterruptedAfterFinalSummary(record: Record<string, unknown>): boolean {
+  if (runString(record['skill']) !== 'verify-local') { return false; }
+  if (runString(record['status']) !== 'needs_human') { return false; }
+  const text = [
+    record['failureReason'],
+    record['error'],
+    ...runEventDetails(record['events']),
+  ].map(runText).filter((line): line is string => Boolean(line)).join('\n');
+  if (!/Possible tool loop detected|Stopped after \d+ repeated/i.test(text)) { return false; }
+  if (!/final (summary|report)|verification (summary|report)|verdict|result/i.test(text)) { return false; }
+  return /defect no longer reproduces|fix (?:verified|works|confirmed)|reported failure no longer occurs|pass(?:ed|ing)?|success/i.test(text);
 }
 
 function completionEvidenceRunId(record: Record<string, unknown>): string {
