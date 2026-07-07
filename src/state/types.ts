@@ -80,6 +80,8 @@ export interface TicketEvidence {
   updated_at?: string;
   notes?: TicketEvidenceNote[];
   acceptance_criteria?: TicketAcceptanceCriterion[];
+  acceptance_criteria_status?: 'extracted' | 'none';
+  acceptance_criteria_extracted_at?: string;
   checks?: TicketEvidenceCheck[];
   environment_results?: Record<string, TicketEnvironmentResult>;
   risk_notes?: TicketEvidenceRiskNote[];

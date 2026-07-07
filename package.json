@@ -78,6 +78,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "kronos.openReview",
+        "title": "Kronos: Open Review",
+        "icon": "$(open-preview)"
+      },
+      {
         "command": "kronos.refreshProject",
         "title": "Kronos: Refresh Project",
         "icon": "$(refresh)"

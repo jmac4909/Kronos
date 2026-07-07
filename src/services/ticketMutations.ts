@@ -11,10 +11,10 @@ import {
 } from '../state/types';
 import { STATE_FILE, readStateFile, validateStateFileShape, writeJsonFileAtomic } from './stateStore';
 import { isReviewReadyAction } from './actionSemantics';
-import { setAcceptanceCriteriaChecked } from './acceptanceCriteria';
+import { existingAcceptanceCriterion, extractAcceptanceCriteria, setAcceptanceCriteriaChecked } from './acceptanceCriteria';
 import { decideEvidenceHandoff } from './evidenceGatePolicy';
 import { mergeRequestCommentsFromRecord, sortMergeRequestCommentsByCreated } from './mergeRequestComments';
-import { isRecord, optionalTrimmedStringFromUnknown } from './records';
+import { isRecord, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records';
 import { ticketStringArray } from './ticketFields';
 
 type EvidenceNoteKind = TicketEvidenceNote['kind'];
@@ -70,6 +70,26 @@ interface MergeRequestStatusInput {
   ticketKey: string;
   status: Partial<MergeRequest>;
   now?: Date;
+}
+
+interface AcceptanceCriteriaExtractionOptions {
+  replaceExisting?: boolean;
+  now?: Date;
+}
+
+export interface AcceptanceCriteriaExtractionResult {
+  ticketKey: string;
+  status: NonNullable<TicketEvidence['acceptance_criteria_status']>;
+  criteriaCount: number;
+  changed: boolean;
+}
+
+export interface AcceptanceCriteriaAutoExtractionSummary {
+  inspected: number;
+  extracted: number;
+  none: number;
+  unchanged: number;
+  changed: boolean;
 }
 
 export interface MergeRequestStatusUpdate {
@@ -136,6 +156,51 @@ export function recordTicketEnvironmentResult(ticketKey: string, input: TicketEn
   });
 }
 
+export function extractTicketAcceptanceCriteria(
+  ticketKey: string,
+  options: AcceptanceCriteriaExtractionOptions = {},
+): AcceptanceCriteriaExtractionResult {
+  return mutateStateWithResult('extract-acceptance-criteria', state => {
+    const ticket = requireTicket(state, ticketKey);
+    return applyTicketAcceptanceCriteriaExtraction(ticketKey, ticket, options);
+  });
+}
+
+export function autoExtractAcceptanceCriteriaForTickets(
+  options: Pick<AcceptanceCriteriaExtractionOptions, 'now'> = {},
+): AcceptanceCriteriaAutoExtractionSummary {
+  const state = readStateFile();
+  if (!state) {
+    return { inspected: 0, extracted: 0, none: 0, unchanged: 0, changed: false };
+  }
+  validateStateFileShape(state);
+  const summary: AcceptanceCriteriaAutoExtractionSummary = {
+    inspected: 0,
+    extracted: 0,
+    none: 0,
+    unchanged: 0,
+    changed: false,
+  };
+  for (const [ticketKey, ticket] of Object.entries(state.tickets)) {
+    summary.inspected += 1;
+    const extractionOptions: AcceptanceCriteriaExtractionOptions = { replaceExisting: false };
+    if (options.now) { extractionOptions.now = options.now; }
+    const result = applyTicketAcceptanceCriteriaExtraction(ticketKey, ticket, extractionOptions);
+    if (result.status === 'extracted') { summary.extracted += 1; }
+    if (result.status === 'none') { summary.none += 1; }
+    if (result.changed) {
+      summary.changed = true;
+    } else {
+      summary.unchanged += 1;
+    }
+  }
+  if (summary.changed) {
+    validateStateFileShape(state);
+    writeJsonFileAtomic(STATE_FILE, state, 'auto-extract-acceptance-criteria');
+  }
+  return summary;
+}
+
 export function replaceTicketAcceptanceCriteria(
   ticketKey: string,
   criteria: TicketAcceptanceCriterion[],
@@ -145,7 +210,7 @@ export function replaceTicketAcceptanceCriteria(
     const ticket = requireTicket(state, ticketKey);
     const evidence = ensureEvidence(ticket);
     evidence.acceptance_criteria = criteria;
-    evidence.updated_at = isoNow(now);
+    setAcceptanceCriteriaStatus(evidence, criteria.length > 0 ? 'extracted' : 'none', isoNow(now), true);
   });
 }
 
@@ -304,16 +369,90 @@ export function previewLinkMergeRequestToTicket(state: KronosState, input: LinkM
   };
 }
 
+function applyTicketAcceptanceCriteriaExtraction(
+  ticketKey: string,
+  ticket: Ticket,
+  options: AcceptanceCriteriaExtractionOptions,
+): AcceptanceCriteriaExtractionResult {
+  const now = options.now || new Date();
+  const at = isoNow(now);
+  const evidence = ensureEvidence(ticket);
+  const existingCriteria = recordsFromUnknown(evidence.acceptance_criteria)
+    .map(existingAcceptanceCriterion)
+    .filter((criterion): criterion is NonNullable<ReturnType<typeof existingAcceptanceCriterion>> => Boolean(criterion));
+  const extracted = extractAcceptanceCriteria(ticket.description, existingCriteria);
+  const existingCount = existingCriteria.length;
+  const shouldReplaceCriteria = extracted.length > 0 && (options.replaceExisting !== false || existingCount === 0);
+  let changed = false;
+
+  if (shouldReplaceCriteria) {
+    changed = setAcceptanceCriteria(evidence, extracted) || changed;
+    changed = setAcceptanceCriteriaStatus(evidence, 'extracted', at, changed) || changed;
+    return { ticketKey, status: 'extracted', criteriaCount: extracted.length, changed };
+  }
+
+  if (existingCount > 0) {
+    changed = setAcceptanceCriteriaStatus(evidence, 'extracted', at, false) || changed;
+    return { ticketKey, status: 'extracted', criteriaCount: existingCount, changed };
+  }
+
+  changed = clearAcceptanceCriteria(evidence) || changed;
+  changed = setAcceptanceCriteriaStatus(evidence, 'none', at, changed) || changed;
+  return { ticketKey, status: 'none', criteriaCount: 0, changed };
+}
+
+function setAcceptanceCriteria(evidence: TicketEvidence, criteria: TicketAcceptanceCriterion[]): boolean {
+  if (JSON.stringify(evidence.acceptance_criteria || []) === JSON.stringify(criteria)) {
+    return false;
+  }
+  evidence.acceptance_criteria = criteria;
+  return true;
+}
+
+function clearAcceptanceCriteria(evidence: TicketEvidence): boolean {
+  if (evidence.acceptance_criteria === undefined) {
+    return false;
+  }
+  delete evidence.acceptance_criteria;
+  return true;
+}
+
+function setAcceptanceCriteriaStatus(
+  evidence: TicketEvidence,
+  status: NonNullable<TicketEvidence['acceptance_criteria_status']>,
+  at: string,
+  criteriaChanged: boolean,
+): boolean {
+  const statusChanged = evidence.acceptance_criteria_status !== status;
+  const timestampMissing = !evidence.acceptance_criteria_extracted_at;
+  if (!statusChanged && !timestampMissing && !criteriaChanged) {
+    return false;
+  }
+  evidence.acceptance_criteria_status = status;
+  if (statusChanged || timestampMissing || criteriaChanged) {
+    evidence.acceptance_criteria_extracted_at = at;
+  }
+  evidence.updated_at = at;
+  return true;
+}
+
 function mutateState(action: string, mutate: (state: KronosState) => void): KronosState {
+  return mutateStateWithResult(action, state => {
+    mutate(state);
+    return state;
+  });
+}
+
+function mutateStateWithResult<T>(action: string, mutate: (state: KronosState) => T): T {
   const state = readStateFile();
   if (!state) {
     throw new Error('No readable Kronos state found.');
   }
   validateStateFileShape(state);
-  mutate(state);
+  const result = mutate(state);
   validateStateFileShape(state);
   writeJsonFileAtomic(STATE_FILE, state, action);
-  return state;
+  return result;
 }
 
 function cloneTicket(ticket: Ticket): Ticket {

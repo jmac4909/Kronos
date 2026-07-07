@@ -98,7 +98,7 @@ function createVscodeTestModule() {
       ThemeColor,
       ThemeIcon,
       MarkdownString,
-      TreeItemCollapsibleState: { None: 0 },
+      TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
       ViewColumn: { One: 1 },
       window: {
         createWebviewPanel() {
@@ -181,6 +181,7 @@ const regexp = require('../out/services/regexp.js');
 const pathUtils = require('../out/services/pathUtils.js');
 const jsonFiles = require('../out/services/jsonFiles.js');
 const evidenceStore = require('../out/services/evidenceStore.js');
+const evidenceDataRuntime = require('../out/services/evidenceData.js');
 const evidenceCommandInputs = require('../out/services/evidenceCommandInputs.js');
 const evidenceHandoff = require('../out/services/evidenceHandoff.js');
 const evidencePublisher = require('../out/services/evidencePublisher.js');
@@ -1458,6 +1459,8 @@ test('ticket mutation helpers centralize evidence, acceptance, and MR state writ
   assert.deepEqual(target.evidence.acceptance_criteria, [
     { id: 'ac-new', text: 'Replacement AC', checked: true },
   ]);
+  assert.equal(target.evidence.acceptance_criteria_status, 'extracted');
+  assert.equal(target.evidence.acceptance_criteria_extracted_at, '2026-07-01T01:20:00.000Z');
   assert.equal(target.mr.iid, 99);
   assert.ok(target.projects.includes('api'));
   assert.deepEqual(target.projects, ['app', 'api']);
@@ -4696,7 +4699,7 @@ test('record guard helper centralizes unknown object narrowing', () => {
     ['errorUtils.ts', "import { isRecord } from './records'"],
     ['evidenceData.ts', "import { isRecord, recordsFromUnknown, recordValuesFromUnknown, trimmedStringFromUnknown } from './records'"],
     ['integrationAdapters.ts', "import { arrayFromUnknown, isRecord, optionalFiniteNumberFromUnknown, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records'"],
-    ['ticketMutations.ts', "import { isRecord, optionalTrimmedStringFromUnknown } from './records'"],
+    ['ticketMutations.ts', "import { isRecord, optionalTrimmedStringFromUnknown, recordsFromUnknown } from './records'"],
     ['queuePlanner.ts', "import { arrayFromUnknown, isRecord } from './records'"],
     ['runStatus.ts', "import { isRecord, recordsFromUnknown } from './records'"],
     ['runRecords.ts', "import { isRecord, recordsFromUnknown, recordString } from './records'"],
@@ -6413,6 +6416,54 @@ test('dispatcher listRuns backfills terminal run readiness from current ticket s
   });
   assert.equal(unresolved.status, 'needs_human');
   assert.match(unresolved.summary, /could not resolve current ticket state/);
+});
+
+test('post-run evidence captures verify-local results with targeting metadata', () => {
+  const run = {
+    id: 'run-verify-local',
+    project: 'app',
+    skill: 'verify-local',
+    ticket: 'K-VERIFY',
+    status: 'completed',
+    exitCode: 0,
+    promptMetadata: {
+      verifyBranch: 'feature/K-VERIFY',
+      verifyEnvironment: 'local (mock)',
+      verifyMode: 'confirm-fix-works',
+    },
+    events: [
+      { type: 'text', label: 'Verification report', detail: 'Defect no longer reproduces', timestamp: '2026-07-07T12:00:00.000Z' },
+    ],
+  };
+  const currentTicket = ticket({ next_action: 'verify' });
+
+  assert.equal(postRunReadiness.shouldRecordRunCompletionEvidence({ run, ticket: currentTicket }), true);
+  const note = postRunReadiness.buildRunCompletionEvidenceText(run, currentTicket);
+  assert.match(note, /Kronos verify-local run run-verify-local completed/);
+  assert.match(note, /Verification branch: feature\/K-VERIFY/);
+  assert.match(note, /Verification environment: local \(mock\)/);
+  assert.match(note, /Verification mode: confirm-fix-works/);
+
+  const check = postRunReadiness.buildRunCompletionEvidenceCheck(run, currentTicket);
+  assert.equal(check.name, 'Kronos verify-local result');
+  assert.equal(check.result, 'warn');
+  assert.equal(check.environment, 'local (mock)');
+  assert.match(check.summary, /branch feature\/K-VERIFY/);
+  assert.match(check.summary, /mode confirm-fix-works/);
+
+  const duplicateTicket = ticket({
+    next_action: 'verify',
+    evidence: {
+      checks: [{
+        id: 'check-existing',
+        at: '2026-07-07T12:00:00.000Z',
+        name: 'Kronos verify-local result',
+        result: 'warn',
+        command: 'kronos run run-verify-local',
+      }],
+    },
+  });
+  assert.equal(postRunReadiness.shouldRecordRunCompletionEvidence({ run, ticket: duplicateTicket }), false);
 });
 
 test('run store limit selects newest records before repairing active runs', () => {
@@ -10342,6 +10393,31 @@ Then the request is accepted`;
   assert.equal(updated[3].checked, true);
 });
 
+test('ticket mutations auto-extract acceptance criteria and record no-found status', () => {
+  fs.writeFileSync(stateStore.STATE_FILE, JSON.stringify(baseState({
+    'K-AC': ticket({ description: 'Acceptance Criteria\n- User can retry checkout after timeout' }),
+    'K-NONE': ticket({ description: 'No acceptance section in this ticket.' }),
+    'K-EXISTING': ticket({
+      description: 'Acceptance Criteria\n- Fresh text from Jira',
+      evidence: { acceptance_criteria: [{ id: 'manual-1', text: 'Manual criterion', checked: true, source: 'manual' }] },
+    }),
+  }), null, 2));
+
+  const first = ticketMutations.autoExtractAcceptanceCriteriaForTickets({ now: new Date('2026-07-07T12:00:00.000Z') });
+  assert.deepEqual(first, { inspected: 3, extracted: 2, none: 1, unchanged: 0, changed: true });
+
+  const state = stateStore.readStateFile();
+  assert.equal(evidenceDataRuntime.evidenceAcceptanceCriteriaStatus(state.tickets['K-AC']), 'extracted');
+  assert.deepEqual(state.tickets['K-AC'].evidence.acceptance_criteria.map(item => item.text), ['User can retry checkout after timeout']);
+  assert.equal(state.tickets['K-NONE'].evidence.acceptance_criteria_status, 'none');
+  assert.equal(state.tickets['K-NONE'].evidence.acceptance_criteria_extracted_at, '2026-07-07T12:00:00.000Z');
+  assert.deepEqual(state.tickets['K-EXISTING'].evidence.acceptance_criteria, [{ id: 'manual-1', text: 'Manual criterion', checked: true, source: 'manual' }]);
+  assert.equal(state.tickets['K-EXISTING'].evidence.acceptance_criteria_status, 'extracted');
+
+  const second = ticketMutations.autoExtractAcceptanceCriteriaForTickets({ now: new Date('2026-07-07T12:05:00.000Z') });
+  assert.deepEqual(second, { inspected: 3, extracted: 2, none: 1, unchanged: 3, changed: false });
+});
+
 test('evidence command input helpers build mutation inputs from prompt values', () => {
   assert.deepEqual(evidenceCommandInputs.EVIDENCE_NOTE_KIND_OPTIONS.map(item => item.label), ['note', 'test', 'risk', 'decision']);
   assert.deepEqual(evidenceCommandInputs.EVIDENCE_CHECK_ENVIRONMENT_OPTIONS.map(item => item.label), ['local', 'develop', 'test', 'prod', 'n/a']);
@@ -10865,7 +10941,7 @@ test('post-run readiness distinguishes process completion from handoff readiness
   assert.equal(postRunReadiness.shouldRecordRunCompletionEvidence({
     run: { id: 'run-1', skill: 'verify-local', status: 'completed' },
     ticket: ticket({ next_action: 'await_review', projects: ['app'] }),
-  }), false);
+  }), true);
 
   const resolutionTickets = {
     'K-READY': ticket({ next_action: 'await_review', projects: ['app'] }),
@@ -11067,9 +11143,10 @@ test('post-run readiness distinguishes process completion from handoff readiness
     'function ticketKeyAppearsInStrings(ticketKey: string, values: string[]): boolean',
     "import { escapeRegExp } from './regexp'",
     'const ticketKey = optionalTrimmedStringFromUnknown(input.ticketKey)',
+    "if (skill === 'verify-local')",
     "runString(record['skill']) === 'implement'",
     "input.ticket.next_action === 'await_review'",
-    '!hasRunCompletionEvidence(input.ticket, runId)',
+    'hasRunCompletionEvidence(input.ticket, runId)',
     'function completionEvidenceRunId(record: Record<string, unknown>): string',
     'function hasRunCompletionEvidence(ticket: Ticket, runId: string): boolean',
     'function evidenceCheckMatchesRunCompletion(check: object, runId: string, command: string): boolean',
@@ -11079,6 +11156,9 @@ test('post-run readiness distinguishes process completion from handoff readiness
     'export function buildRunCompletionEvidenceText',
     'export function buildRunCompletionEvidenceCheck',
     'function runCompletionEvidenceContext(run: unknown, ticket?: Ticket): RunCompletionEvidenceContext',
+    'function runCompletionEvidenceCheckName(skill: string): string',
+    'function runCompletionEvidenceTargetLines(context: RunCompletionEvidenceContext): string[]',
+    'function runCompletionEvidenceTargetSummaryParts(context: RunCompletionEvidenceContext): string[]',
     'interface RunCompletionEvidenceCheck',
     'function mergeRequestChangedFileCount(ticket?: Ticket): number | undefined',
     'normalizeChangedFiles(files).length',
@@ -11787,11 +11867,14 @@ test('extension webviews use shared UI shell and board filtering affordances', (
     'reviewTree.onDidChangeNewReviewCount(() => notifyNewReviewItems(reviewTree, notifiedReviewKeys))',
     'reviewTree.markVisibleReviewItemsSeen()',
     'function runNotificationCommandAction',
+    'async function openReviewView(): Promise<void>',
+    "'workbench.view.extension.kronos'",
+    "vscode.commands.registerCommand('kronos.openReview'",
     'function notifyNewReviewItems(reviewTree: ReviewTreeProvider, notifiedReviewKeys: Set<string>): void',
     'planNewReviewNotification(reviewTree.getNewReviewItems(), notifiedReviewKeys)',
     'notifiedReviewKeys.clear()',
     'if (!plan.message) { return; }',
-    "'kronosReview.focus'",
+    "'kronos.openReview'",
     'void selection.then(action => {',
     'void vscode.commands.executeCommand(command).then(undefined, (e: unknown) => {',
     'unknownErrorMessage(e, failureFallback)',
@@ -12732,6 +12815,7 @@ test('extension evidence command handlers normalize payloads and unknown errors'
     "unknownErrorMessage(e, 'Failed to add ticket evidence.')",
     "unknownErrorMessage(e, 'Failed to add evidence check.')",
     "unknownErrorMessage(e, 'Failed to record environment result.')",
+    'extractTicketAcceptanceCriteria(ticketKey',
     "unknownErrorMessage(e, 'Failed to extract acceptance criteria.')",
     "unknownErrorMessage(e, 'Failed to update acceptance criteria.')",
     'EVIDENCE_NOTE_KIND_OPTIONS',
@@ -13105,6 +13189,7 @@ test('ticket detail rendering uses typed tickets and evidence records', () => {
     'if (!isRecord(record)) { return fallback; }',
     'return trimmedStringFromUnknown(record[key], fallback)',
     "return isRecord(record) && record['checked'] === true",
+    'export function evidenceAcceptanceCriteriaStatus(ticket: Ticket)',
     'recordsFromUnknown(ticket.evidence?.notes)',
     'recordsFromUnknown(ticket.evidence?.acceptance_criteria)',
     'recordsFromUnknown(ticket.evidence?.checks)',
@@ -13256,7 +13341,7 @@ test('tree providers share action labels and icons', () => {
   for (const marker of [
     "import { actionDisplayLabel as actionToLabel } from '../services/actionCatalog'",
     "import { buildStatusKind } from '../services/buildStatus'",
-    "import { evidenceAcceptanceCriteria, evidenceRecordCount } from '../services/evidenceData'",
+    "import { evidenceAcceptanceCriteria, evidenceAcceptanceCriteriaStatus, evidenceRecordCount } from '../services/evidenceData'",
     "import { ticketStringArray } from '../services/ticketFields'",
     "import { ticketActionIcon } from './actionIcons'",
     'this.iconPath = ticketActionIcon(action)',
@@ -13561,6 +13646,32 @@ test('action icon helpers preserve ticket and queue icon semantics', async () =>
     assert.deepEqual(actionIcons.ticketActionIcon('unknown'), new ThemeIcon('circle-outline', new ThemeColor('disabledForeground')));
     assert.deepEqual(actionIcons.queueActionIcon('unknown'), new ThemeIcon('circle-outline'));
     assert.equal(Object.prototype.hasOwnProperty.call(actionIcons, 'themeIcon'), false);
+  });
+});
+
+test('ticket tree shows subtle hint when AC parser found nothing', async () => {
+  const vscodeStub = createVscodeTestModule();
+  await withPatchedModuleLoad(request => request === 'vscode' ? vscodeStub.vscode : undefined, async () => {
+    const ticketTreePath = require.resolve('../out/views/TicketTreeProvider.js');
+    delete require.cache[ticketTreePath];
+    const { TicketTreeProvider } = require(ticketTreePath);
+    const provider = new TicketTreeProvider({
+      state: baseState({
+        'K-NOAC': ticket({
+          next_action: 'implement',
+          evidence: { acceptance_criteria_status: 'none' },
+        }),
+        'K-UNKNOWN': ticket({ next_action: 'implement' }),
+      }),
+      onDidChange: () => ({ dispose() {} }),
+    });
+    const items = provider.getChildren();
+    const noAcItem = items.find(item => item.ticketKey === 'K-NOAC');
+    const unknownItem = items.find(item => item.ticketKey === 'K-UNKNOWN');
+    assert.match(noAcItem.description, /no AC found/);
+    assert.match(noAcItem.tooltip.value, /parser found no extractable criteria/);
+    assert.equal(/no AC found/.test(unknownItem.description), false);
+    provider.dispose();
   });
 });
 

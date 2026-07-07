@@ -7,6 +7,7 @@ import { ScriptRunOptions } from '../services/scriptClient';
 import { DiscoverProjectsResult, MorningBriefResult, addAdhocTask, completeAdhocTask, discoverProjectsJson, readMorningBriefJson, refreshKronosState, registerProject, runStateScript } from '../services/stateScriptAdapter';
 import { readClaudeAgents } from '../services/cliProbes';
 import { unknownErrorMessage } from '../services/errorUtils';
+import { autoExtractAcceptanceCriteriaForTickets } from '../services/ticketMutations';
 
 interface KronosStateLoadIssue {
   target: 'state.json' | 'queue.json';
@@ -126,7 +127,11 @@ export class KronosState {
   }
 
   async refresh(project?: string): Promise<void> {
-    await this.runAndReload(() => refreshKronosState(project));
+    await this.runAndReload(() => {
+      const result = refreshKronosState(project);
+      autoExtractAcceptanceCriteriaForTickets();
+      return result;
+    });
   }
 
   renderPrompt(name: string, vars: Record<string, string> = {}, projectPath?: string): RenderedPrompt | null {

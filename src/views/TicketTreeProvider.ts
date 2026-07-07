@@ -3,7 +3,7 @@ import { KronosState } from '../state/KronosState';
 import { Ticket } from '../state/types';
 import { actionDisplayLabel as actionToLabel } from '../services/actionCatalog';
 import { buildStatusKind } from '../services/buildStatus';
-import { evidenceAcceptanceCriteria, evidenceRecordCount } from '../services/evidenceData';
+import { evidenceAcceptanceCriteria, evidenceAcceptanceCriteriaStatus, evidenceRecordCount } from '../services/evidenceData';
 import { mergeRequestReviewStatusLabel } from '../services/mergeRequestLabels';
 import { ticketStringArray } from '../services/ticketFields';
 import { TicketFilter, TicketGroupBy, describeTicketFilter, filterTickets, groupTicketEntries, hasTicketFilter } from '../services/ticketFilters';
@@ -177,13 +177,15 @@ class TicketItem extends vscode.TreeItem {
     }
 
     const statusLabel = actionToLabel(action);
-    this.description = `[${statusLabel}] ${ticket.summary}`;
+    const noAcceptanceCriteria = ticketNeedsAcceptanceCriteriaHint(ticket);
+    this.description = `[${statusLabel}] ${ticket.summary}${noAcceptanceCriteria ? ' - no AC found' : ''}`;
 
     this.tooltip = new vscode.MarkdownString(
       `**${ticketKey}**: ${ticket.summary}\n\n` +
       `Type: ${ticket.type} | Priority: ${ticket.priority}\n\n` +
       `Status: ${ticket.jira_status} (${statusLabel})\n\n` +
       `Projects: ${projTag}` +
+      (noAcceptanceCriteria ? '\n\nAcceptance criteria: parser found no extractable criteria.' : '') +
       (ticket.description ? `\n\n${ticket.description.substring(0, 200)}` : '')
     );
 
@@ -195,6 +197,13 @@ class TicketItem extends vscode.TreeItem {
       this.iconPath = ticketActionIcon(action);
     }
   }
+}
+
+const ACCEPTANCE_CRITERIA_HINT_ACTIONS = new Set(['implement', 'in_progress', 'fix_build', 'verify', 'await_review', 'deploy_monitor', 'done']);
+
+function ticketNeedsAcceptanceCriteriaHint(ticket: Ticket): boolean {
+  return ACCEPTANCE_CRITERIA_HINT_ACTIONS.has(ticket.next_action)
+    && evidenceAcceptanceCriteriaStatus(ticket) === 'none';
 }
 
 function formatGroupLabel(label: string, groupBy: TicketGroupBy): string {

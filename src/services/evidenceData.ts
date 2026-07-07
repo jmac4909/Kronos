@@ -2,6 +2,7 @@ import { Ticket } from '../state/types';
 import { isRecord, recordsFromUnknown, recordValuesFromUnknown, trimmedStringFromUnknown } from './records';
 
 type EvidenceRecord = object;
+export type EvidenceAcceptanceCriteriaStatus = 'extracted' | 'none';
 
 export function evidenceNotes(ticket: Ticket): EvidenceRecord[] {
   return recordsFromUnknown(ticket.evidence?.notes);
@@ -9,6 +10,11 @@ export function evidenceNotes(ticket: Ticket): EvidenceRecord[] {
 
 export function evidenceAcceptanceCriteria(ticket: Ticket): EvidenceRecord[] {
   return recordsFromUnknown(ticket.evidence?.acceptance_criteria);
+}
+
+export function evidenceAcceptanceCriteriaStatus(ticket: Ticket): EvidenceAcceptanceCriteriaStatus | undefined {
+  const status = ticket.evidence?.acceptance_criteria_status;
+  return status === 'extracted' || status === 'none' ? status : undefined;
 }
 
 export function evidenceChecks(ticket: Ticket): EvidenceRecord[] {

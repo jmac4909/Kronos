@@ -36,7 +36,7 @@ interface PostRunReadinessRunPatch {
 
 interface RunCompletionEvidenceCheck {
   name: string;
-  result: 'pass' | 'warn';
+  result: 'pass' | 'fail' | 'warn' | 'unknown';
   environment: string;
   command?: string;
   summary: string;
@@ -46,8 +46,10 @@ interface RunCompletionEvidenceCheck {
 interface RunCompletionEvidenceContext {
   record: Record<string, unknown>;
   runId: string;
+  skill: string;
   status: string;
   exitCode: number | undefined;
+  promptMetadata: Record<string, unknown>;
   progress: ReturnType<typeof runProgressSummary>;
   mr: Ticket['mr'] | undefined;
   build: Ticket['build'] | undefined;
@@ -109,19 +111,27 @@ export function shouldRecordRunCompletionEvidence(input: { run: unknown; ticket?
   if (!input.ticket) { return false; }
   const record = recordFromUnknown(input.run);
   const runId = completionEvidenceRunId(record);
+  const skill = runString(record['skill']);
+  if (!runCompletedForEvidence(record) || hasRunCompletionEvidence(input.ticket, runId)) {
+    return false;
+  }
+  if (skill === 'verify-local') {
+    return true;
+  }
   return runCompletedForEvidence(record)
     && runString(record['skill']) === 'implement'
-    && input.ticket.next_action === 'await_review'
-    && !hasRunCompletionEvidence(input.ticket, runId);
+    && input.ticket.next_action === 'await_review';
 }
 
 export function buildRunCompletionEvidenceText(run: unknown, ticket?: Ticket): string {
   const context = runCompletionEvidenceContext(run, ticket);
   const exitCode = context.exitCode === undefined ? '' : `, exit ${context.exitCode}`;
+  const workflow = runCompletionEvidenceWorkflow(context.skill);
   const lines = [
-    `Kronos implement run ${context.runId} completed.`,
+    `Kronos ${workflow} run ${context.runId} completed.`,
     `Run result: ${context.status}${exitCode}.`,
     `Progress: ${context.progress.label}.`,
+    ...runCompletionEvidenceTargetLines(context),
     `Files changed: ${context.progress.filesChanged} from run events; ${context.mrChangedFiles === undefined ? 'MR file list not captured' : `${context.mrChangedFiles} in MR`}.`,
     `Test count: ${context.testCount === undefined ? 'not captured in run metadata' : context.testCount}.`,
     `SonarQube: ${context.sonarStatus || 'not captured in ticket state'}.`,
@@ -135,8 +145,10 @@ export function buildRunCompletionEvidenceCheck(run: unknown, ticket?: Ticket): 
   const context = runCompletionEvidenceContext(run, ticket);
   const strongSignal = positiveTestCount(context.testCount) || isPassingBuildStatus(context.build?.status) || isPassingSonar(context.sonarStatus);
   const cleanRun = runCompletedForEvidence(context.record) && (context.exitCode === undefined || context.exitCode === 0);
+  const isVerifyLocal = context.skill === 'verify-local';
   const summaryParts = [
     `run ${context.runId} ${context.status}${context.exitCode === undefined ? '' : ` exit ${context.exitCode}`}`,
+    ...runCompletionEvidenceTargetSummaryParts(context),
     `${context.progress.filesChanged} changed file${context.progress.filesChanged === 1 ? '' : 's'} from run events`,
     context.testCount === undefined ? 'test count not captured' : `${context.testCount} test${context.testCount === 1 ? '' : 's'}`,
     context.sonarStatus ? `SonarQube ${context.sonarStatus}` : 'SonarQube not captured',
@@ -144,11 +156,11 @@ export function buildRunCompletionEvidenceCheck(run: unknown, ticket?: Ticket): 
     context.build ? `build ${context.build.status} #${context.build.number}` : 'build not captured',
   ];
   return {
-    name: 'Kronos implement completion',
-    result: cleanRun && strongSignal ? 'pass' : 'warn',
-    environment: 'kronos',
+    name: runCompletionEvidenceCheckName(context.skill),
+    result: isVerifyLocal ? (cleanRun ? 'warn' : 'fail') : cleanRun && strongSignal ? 'pass' : 'warn',
+    environment: runCompletionEvidenceEnvironment(context),
     command: runCompletionEvidenceCommand(context.runId),
-    confidence: strongSignal ? 'high' : 'medium',
+    confidence: strongSignal || (isVerifyLocal && cleanRun) ? 'high' : 'medium',
     summary: summaryParts.join('; '),
   };
 }
@@ -156,11 +168,14 @@ export function buildRunCompletionEvidenceCheck(run: unknown, ticket?: Ticket): 
 function runCompletionEvidenceContext(run: unknown, ticket?: Ticket): RunCompletionEvidenceContext {
   const record = recordFromUnknown(run);
   const exitCode = Number(record['exitCode']);
+  const skill = runString(record['skill']);
   return {
     record,
     runId: runString(record['id']) || 'unknown run',
+    skill,
     status: runString(record['status']) || 'unknown',
     exitCode: Number.isFinite(exitCode) ? exitCode : undefined,
+    promptMetadata: recordFromUnknown(record['promptMetadata']),
     progress: runProgressSummary(run),
     mr: ticket?.mr || undefined,
     build: ticket?.build || undefined,
@@ -168,6 +183,37 @@ function runCompletionEvidenceContext(run: unknown, ticket?: Ticket): RunComplet
     sonarStatus: ticketSonarStatus(ticket),
     testCount: firstNumberField(record, ['testCount', 'tests', 'testsPassed', 'passedTests']),
   };
+}
+
+function runCompletionEvidenceWorkflow(skill: string): string {
+  return skill === 'verify-local' ? 'verify-local' : 'implement';
+}
+
+function runCompletionEvidenceCheckName(skill: string): string {
+  return skill === 'verify-local' ? 'Kronos verify-local result' : 'Kronos implement completion';
+}
+
+function runCompletionEvidenceEnvironment(context: RunCompletionEvidenceContext): string {
+  const environment = runString(context.promptMetadata['verifyEnvironment']);
+  return environment || (context.skill === 'verify-local' ? 'verify-local' : 'kronos');
+}
+
+function runCompletionEvidenceTargetLines(context: RunCompletionEvidenceContext): string[] {
+  if (context.skill !== 'verify-local') { return []; }
+  return [
+    `Verification branch: ${runString(context.promptMetadata['verifyBranch']) || 'not captured'}.`,
+    `Verification environment: ${runCompletionEvidenceEnvironment(context)}.`,
+    `Verification mode: ${runString(context.promptMetadata['verifyMode']) || 'not captured'}.`,
+  ];
+}
+
+function runCompletionEvidenceTargetSummaryParts(context: RunCompletionEvidenceContext): string[] {
+  if (context.skill !== 'verify-local') { return []; }
+  return [
+    `branch ${runString(context.promptMetadata['verifyBranch']) || 'not captured'}`,
+    `environment ${runCompletionEvidenceEnvironment(context)}`,
+    `mode ${runString(context.promptMetadata['verifyMode']) || 'not captured'}`,
+  ];
 }
 
 export function evaluatePostRunReadiness(input: {
@@ -333,7 +379,8 @@ function hasRunCompletionEvidence(ticket: Ticket, runId: string): boolean {
 }
 
 function evidenceCheckMatchesRunCompletion(check: object, runId: string, command: string): boolean {
-  if (evidenceString(check, 'name') !== 'Kronos implement completion') { return false; }
+  const name = evidenceString(check, 'name');
+  if (!name.startsWith('Kronos ') || (!name.includes('completion') && !name.includes('result'))) { return false; }
   if (runId === 'unknown run') { return true; }
   return evidenceString(check, 'command') === command
     || evidenceString(check, 'summary').includes(`run ${runId}`);
@@ -342,8 +389,8 @@ function evidenceCheckMatchesRunCompletion(check: object, runId: string, command
 function evidenceNoteMatchesRunCompletion(note: object, runId: string): boolean {
   const text = evidenceString(note, 'text');
   return runId === 'unknown run'
-    ? text.startsWith('Kronos implement run unknown run completed.')
-    : text.startsWith(`Kronos implement run ${runId} completed.`);
+    ? /^Kronos (implement|verify-local) run unknown run completed\./.test(text)
+    : new RegExp(`^Kronos (implement|verify-local) run ${escapeRegExp(runId)} completed\\.`).test(text);
 }
 
 function runCompletionEvidenceCommand(runId: string): string {

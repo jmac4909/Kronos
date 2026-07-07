@@ -68,7 +68,7 @@ import {
   ticketFilterPromptFields,
 } from './services/ticketFilters';
 import { buildRunResumePrompt, readRunLogTail } from './services/runRecovery';
-import { addTicketEvidenceCheck, addTicketEvidenceNote, addTicketRunCompletionEvidence, linkMergeRequestToTicket, previewLinkMergeRequestToTicket, reconcileTerminalMergeRequestState, recordTicketEnvironmentResult, replaceTicketAcceptanceCriteria, updateTicketAcceptanceCriteria, updateTicketMergeRequestStatus } from './services/ticketMutations';
+import { addTicketEvidenceCheck, addTicketEvidenceNote, addTicketRunCompletionEvidence, extractTicketAcceptanceCriteria, linkMergeRequestToTicket, previewLinkMergeRequestToTicket, reconcileTerminalMergeRequestState, recordTicketEnvironmentResult, updateTicketAcceptanceCriteria, updateTicketMergeRequestStatus } from './services/ticketMutations';
 import { addPlanToQueue as addPlanToQueueState, addTicketToQueue, linkTicketToProject, recordPlanQueueDecision, removeTicketFromQueue as removeTicketFromQueueState, reorderQueueItem, selectNextQueueItem, unlinkTicketFromProject } from './services/queueMutations';
 import { removeProject as removeProjectFromState, setProjectConfigValue, setProjectIntegrationConfig, setScanDirs, writeProjectSetupConfig } from './services/projectMutations';
 import { DoctorCheck, runDoctorChecks as collectDoctorChecks, runDoctorReachabilityChecks as collectDoctorReachabilityChecks } from './services/doctorChecks';
@@ -330,6 +330,15 @@ function runNotificationCommandAction(
   });
 }
 
+async function openReviewView(): Promise<void> {
+  try {
+    await vscode.commands.executeCommand('workbench.view.extension.kronos');
+  } catch (e: unknown) {
+    console.warn(unknownErrorMessage(e, 'Could not reveal Kronos activity view.'));
+  }
+  await vscode.commands.executeCommand('kronosReview.focus');
+}
+
 function notifyNewReviewItems(reviewTree: ReviewTreeProvider, notifiedReviewKeys: Set<string>): void {
   const plan = planNewReviewNotification(reviewTree.getNewReviewItems(), notifiedReviewKeys);
   notifiedReviewKeys.clear();
@@ -343,7 +352,7 @@ function notifyNewReviewItems(reviewTree: ReviewTreeProvider, notifiedReviewKeys
       'Open Review'
     ),
     'Open Review',
-    'kronosReview.focus',
+    'kronos.openReview',
     'Failed to open Kronos Review.'
   );
 }
@@ -1620,6 +1629,10 @@ export function activate(context: vscode.ExtensionContext) {
       );
     }),
 
+    vscode.commands.registerCommand('kronos.openReview', async () => {
+      await openReviewView();
+    }),
+
     vscode.commands.registerCommand('kronos.openExternalUrl', async (url: string) => {
       openExternalHttpUrl(String(url || ''));
     }),
@@ -2282,6 +2295,15 @@ export function activate(context: vscode.ExtensionContext) {
         .filter((criterion): criterion is ExistingAcceptanceCriterion => Boolean(criterion));
       const extracted = extractAcceptanceCriteria(ticket.description, existingCriteria);
       if (extracted.length === 0) {
+        try {
+          const result = extractTicketAcceptanceCriteria(ticketKey, { replaceExisting: false });
+          if (result.changed) {
+            state.reloadAndNotify();
+          }
+        } catch (e: unknown) {
+          vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to update acceptance criteria status.'));
+          return;
+        }
         vscode.window.showWarningMessage(`${ticketKey} has no obvious acceptance criteria in its description.`);
         return;
       }
@@ -2297,9 +2319,9 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       try {
-        replaceTicketAcceptanceCriteria(ticketKey, extracted);
+        const result = extractTicketAcceptanceCriteria(ticketKey, { replaceExisting: true });
         state.reloadAndNotify();
-        vscode.window.showInformationMessage(`Extracted ${countLabel(extracted.length, 'acceptance criterion item')} for ${ticketKey}.`);
+        vscode.window.showInformationMessage(`Extracted ${countLabel(result.criteriaCount, 'acceptance criterion item')} for ${ticketKey}.`);
       } catch (e: unknown) {
         vscode.window.showErrorMessage(unknownErrorMessage(e, 'Failed to extract acceptance criteria.'));
       }
@@ -3225,6 +3247,9 @@ export function activate(context: vscode.ExtensionContext) {
         onComplete: refreshAfterDispatch(state, projectName),
         customPrompt: prompt.text,
         promptMetadata: prompt.metadata,
+        parallel: true,
+        worktreeBranch: remoteBranchRef(getProjectBaseBranch(state, projectName)),
+        worktreeCheckout: 'ref',
       });
     }),
 
@@ -3300,7 +3325,14 @@ export function activate(context: vscode.ExtensionContext) {
       });
       if (!feedback) { return; }
 
-      const branch = ticket?.mr ? `${ticketKey}` : undefined;
+      let branch = ticket?.mr ? `${ticketKey}` : undefined;
+      if (ticket?.mr) {
+        try {
+          branch = await gitlabAdapter.mergeRequestBranch(state, ticketKey);
+        } catch (e: unknown) {
+          console.warn(unknownErrorMessage(e, `Could not resolve MR branch for ${ticketKey}.`));
+        }
+      }
       const canContinue = await confirmSafetyGate({
         operationId: 'kronos.rejectReview',
         title: 'Send Review Back to Agent',
@@ -3317,12 +3349,16 @@ export function activate(context: vscode.ExtensionContext) {
 
       const continuePrompt = loadPromptForDispatch(state, 'continue-work', { TICKET_KEY: ticketKey, BRANCH: branch || ticketKey, FEEDBACK: feedback }, projectPath);
 
-      await startClaudeDispatch(projectPath, 'implement', ticketKey, {
+      const dispatchOptions: DispatchOptions = {
         onComplete: refreshAfterDispatch(state, projectName, ticketKey),
         customPrompt: continuePrompt.text,
         promptMetadata: continuePrompt.metadata,
         appendSystemPrompt: getImplementPrompt(state),
-      });
+        parallel: true,
+        worktreeCheckout: 'branch',
+      };
+      if (branch) { dispatchOptions.worktreeBranch = remoteBranchRef(branch); }
+      await startClaudeDispatch(projectPath, 'implement', ticketKey, dispatchOptions);
     }),
 
     vscode.commands.registerCommand('kronos.linkMrToTicket', async (treeItem: unknown) => {
@@ -5371,7 +5407,7 @@ function notifyReviewMergeRequestPollFailure(ticketKey: string, error: unknown):
   );
   void selection.then(action => {
     if (action === 'Open Review') {
-      return vscode.commands.executeCommand('kronosReview.focus');
+      return vscode.commands.executeCommand('kronos.openReview');
     } else if (action === 'Run Doctor') {
       return vscode.commands.executeCommand('kronos.doctor');
     }
@@ -5393,7 +5429,7 @@ function notifyReviewMonitorDecision(decision: ReviewMonitorDecision): void {
       return;
     }
     if (action === 'Open Review') {
-      return vscode.commands.executeCommand('kronosReview.focus');
+      return vscode.commands.executeCommand('kronos.openReview');
     }
     return undefined;
   }).then(undefined, (e: unknown) => {
