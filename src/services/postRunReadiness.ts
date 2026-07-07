@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as path from 'path';
 
 import { Ticket } from '../state/types';
 import { isHandoffAction } from './actionSemantics';
@@ -62,11 +63,33 @@ interface RunCompletionEvidenceContext {
   testCount: number | undefined;
   logText: string;
   sessionReport: string | undefined;
+  replayRequests: ReplayRequestEvidence[];
+  traceFlow: TraceFlowEntry[];
 }
 
 interface PostRunTicketResolution {
   ticketKey?: string;
   ticket?: Ticket;
+}
+
+interface ReplayRequestEvidence {
+  command: string;
+  bodyFile?: string;
+  bodyText?: string;
+  bodyOmittedReason?: string;
+  bodyReference?: ReplayBodyReference;
+}
+
+interface ReplayBodyReference {
+  fullMatch: string;
+  option: string;
+  fileReference: string;
+}
+
+interface TraceFlowEntry {
+  component: string;
+  direction: 'REQUEST' | 'RESPONSE';
+  detail: string;
 }
 
 export function resolvePostRunTicket(input: {
@@ -144,6 +167,8 @@ export function buildRunCompletionEvidenceText(run: unknown, ticket?: Ticket): s
     `Progress: ${context.progress.label}.`,
     ...runCompletionEvidenceTargetLines(context),
     ...runCompletionEvidenceTrackingLines(context),
+    ...runCompletionEvidenceReplayLines(context),
+    ...runCompletionEvidenceTraceFlowLines(context),
     `Files changed: ${context.progress.filesChanged} from run events; ${context.mrChangedFiles === undefined ? 'MR file list not captured' : `${context.mrChangedFiles} in MR`}.`,
     `Test count: ${context.testCount === undefined ? 'not captured in run metadata' : context.testCount}.`,
     `SonarQube: ${context.sonarStatus || 'not captured in ticket state'}.`,
@@ -186,6 +211,7 @@ function runCompletionEvidenceContext(run: unknown, ticket?: Ticket): RunComplet
   const skill = runString(record['skill']);
   const logText = readRunCompletionLogText(record);
   const sessionReport = runCompletionSessionReport(record, logText);
+  const sourceText = runCompletionEvidenceSourceText(record, logText, sessionReport);
   return {
     record,
     runId: runString(record['id']) || 'unknown run',
@@ -201,6 +227,8 @@ function runCompletionEvidenceContext(run: unknown, ticket?: Ticket): RunComplet
     testCount: firstNumberField(record, ['testCount', 'tests', 'testsPassed', 'passedTests']),
     logText,
     sessionReport,
+    replayRequests: replayRequestsFromContext(record, logText, sourceText),
+    traceFlow: traceFlowEntriesFromText(sourceText),
   };
 }
 
@@ -245,6 +273,38 @@ function runCompletionEvidenceTrackingSummaryParts(context: RunCompletionEvidenc
   return ids.length ? [`tracking IDs ${ids.join(', ')}`] : [];
 }
 
+function runCompletionEvidenceReplayLines(context: RunCompletionEvidenceContext): string[] {
+  if (context.skill !== 'verify-local' || context.replayRequests.length === 0) { return []; }
+  const lines: string[] = [];
+  context.replayRequests.forEach((request, index) => {
+    const label = context.replayRequests.length === 1 ? 'Replay request:' : `Replay request ${index + 1}:`;
+    const bodyLabel = request.bodyFile && request.bodyText
+      ? ` body inlined from ${path.basename(request.bodyFile)}`
+      : '';
+    lines.push(`${label}${bodyLabel}`);
+    lines.push(...fencedCodeBlock('bash', replayRequestCommandBlock(request)));
+    if (request.bodyFile && request.bodyOmittedReason) {
+      lines.push(`Replay request body (${path.basename(request.bodyFile)}): ${request.bodyOmittedReason}.`);
+    }
+  });
+  return lines;
+}
+
+function runCompletionEvidenceTraceFlowLines(context: RunCompletionEvidenceContext): string[] {
+  if (context.skill !== 'verify-local' || context.traceFlow.length === 0) { return []; }
+  const ids = runCompletionEvidenceTrackingIds(context);
+  const header = ids.length
+    ? `Trace lookup flow for ${ids.join(', ')}:`
+    : 'Trace lookup flow:';
+  return [
+    header,
+    ...context.traceFlow.map(entry => {
+      const detail = entry.detail ? `: ${entry.detail}` : '';
+      return `- ${entry.component} ${entry.direction}${detail}`;
+    }),
+  ];
+}
+
 function runCompletionEvidenceTrackingIds(context: RunCompletionEvidenceContext): string[] {
   if (context.skill !== 'verify-local') { return []; }
   const verifiedIds = trackingIdsFromText([
@@ -264,6 +324,431 @@ function runCompletionEvidenceTrackingIds(context: RunCompletionEvidenceContext)
     .flatMap(line => trackingIdsFromText(line))
     .filter(Boolean);
   return [...new Set(ids)].slice(0, 12);
+}
+
+function runCompletionEvidenceSourceText(record: Record<string, unknown>, logText: string, sessionReport: string | undefined): string {
+  return [
+    sessionReport,
+    ...claudeLogTextFragments(logText),
+    logText,
+    runEventDetails(record['events']).join('\n'),
+  ].filter(Boolean).join('\n');
+}
+
+function replayRequestsFromContext(record: Record<string, unknown>, logText: string, sourceText: string): ReplayRequestEvidence[] {
+  const commands = uniqueStrings([
+    ...curlCommandsFromClaudeLog(logText),
+    ...curlCommandsFromText(sourceText),
+  ].filter(replayCurlCommandLooksRelevant));
+  return commands.slice(0, 4).map(command => replayRequestEvidence(record, command));
+}
+
+function curlCommandsFromClaudeLog(logText: string): string[] {
+  if (!logText.trim()) { return []; }
+  const commands: string[] = [];
+  for (const line of logText.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{')) { continue; }
+    try {
+      const payload = recordFromUnknown(JSON.parse(trimmed));
+      if (payload['type'] !== 'assistant') { continue; }
+      const message = recordFromUnknown(payload['message']);
+      for (const block of arrayFromUnknown(message['content'])) {
+        const blockRecord = recordFromUnknown(block);
+        if (blockRecord['type'] !== 'tool_use') { continue; }
+        const input = recordFromUnknown(blockRecord['input']);
+        const command = runString(input['command']).trim();
+        if (/\bcurl\b/i.test(command)) {
+          commands.push(command);
+        }
+      }
+    } catch {
+      // Ignore non-JSON log lines; stdout is a mixed stream on some Claude versions.
+    }
+  }
+  return commands;
+}
+
+function curlCommandsFromText(text: string): string[] {
+  const commands: string[] = [];
+  const lines = text.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = commandLineFromText(lines[index] || '');
+    if (!/^curl\b/i.test(line)) { continue; }
+    const commandLines = [line];
+    while (/\\\s*$/.test(commandLines[commandLines.length - 1] || '') && index + 1 < lines.length) {
+      index += 1;
+      commandLines.push(commandLineFromText(lines[index] || ''));
+    }
+    commands.push(commandLines.join('\n').trim());
+  }
+  return commands;
+}
+
+function commandLineFromText(line: string): string {
+  return line.trim().replace(/^\$\s+/, '').replace(/^>\s?/, '').trim();
+}
+
+function replayCurlCommandLooksRelevant(command: string): boolean {
+  if (!/\bcurl\b/i.test(command)) { return false; }
+  if (/\/trace-lookup\b/i.test(command)) { return false; }
+  return commandHasRequestBodyOption(command)
+    || /\bX-Tracking-?Id\b|tracking[-_\s]?id|\breplay\b|replay-[A-Za-z0-9._-]+\.json\b/i.test(command);
+}
+
+function commandHasRequestBodyOption(command: string): boolean {
+  return /(?:^|\s)(?:--data(?:-raw|-binary|-ascii|-urlencode)?|--json|-d)(?:\s|=)/i.test(command);
+}
+
+function replayRequestEvidence(record: Record<string, unknown>, command: string): ReplayRequestEvidence {
+  const bodyReference = replayBodyReferenceFromCommand(command);
+  const body = bodyReference ? readReplayBodyFile(record, bodyReference.fileReference) : undefined;
+  const evidence: ReplayRequestEvidence = { command };
+  if (bodyReference) { evidence.bodyReference = bodyReference; }
+  if (body?.filePath) { evidence.bodyFile = body.filePath; }
+  if (body?.text) { evidence.bodyText = body.text; }
+  if (body?.omittedReason) { evidence.bodyOmittedReason = body.omittedReason; }
+  return evidence;
+}
+
+function replayBodyReferenceFromCommand(command: string): ReplayBodyReference | undefined {
+  const match = /(--data(?:-raw|-binary|-ascii|-urlencode)?|--json|-d)(?:\s+|=)(?:"@([^"]+)"|'@([^']+)'|@(\S+))/i.exec(command);
+  const fileReference = normalizeReplayBodyReference(match?.[2] || match?.[3] || match?.[4]);
+  if (!match || !fileReference) { return undefined; }
+  return {
+    fullMatch: match[0],
+    option: match[1] || '--data-binary',
+    fileReference,
+  };
+}
+
+function normalizeReplayBodyReference(value: string | undefined): string {
+  return String(value || '').replace(/[;,)]+$/g, '').trim();
+}
+
+function readReplayBodyFile(record: Record<string, unknown>, fileReference: string): { filePath: string; text?: string; omittedReason?: string } | undefined {
+  const filePath = resolveReplayBodyFile(record, fileReference);
+  if (!filePath) { return undefined; }
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) { return undefined; }
+    const maxBytes = 128 * 1024;
+    if (stat.size > maxBytes) {
+      return {
+        filePath,
+        omittedReason: `not embedded because the request body is ${stat.size} bytes (limit ${maxBytes})`,
+      };
+    }
+    return { filePath, text: fs.readFileSync(filePath, 'utf8') };
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveReplayBodyFile(record: Record<string, unknown>, fileReference: string): string | undefined {
+  const reference = fileReference.trim();
+  if (!reference || reference.includes('\0') || /^-/.test(reference) || /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(reference)) {
+    return undefined;
+  }
+  const roots = replayBodySearchRoots(record);
+  const candidates = path.isAbsolute(reference)
+    ? [reference]
+    : roots.map(root => path.resolve(root, reference));
+  for (const candidate of uniqueStrings(candidates)) {
+    try {
+      if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) { continue; }
+      if (roots.some(root => safePathInside(candidate, root))) {
+        return candidate;
+      }
+    } catch {
+      // Ignore missing or unreadable candidate paths.
+    }
+  }
+  return undefined;
+}
+
+function replayBodySearchRoots(record: Record<string, unknown>): string[] {
+  const branch = recordFromUnknown(record['branch']);
+  const promptMetadata = recordFromUnknown(record['promptMetadata']);
+  const logPath = runString(record['logPath']);
+  return uniqueStrings([
+    record['cwd'],
+    record['worktreePath'],
+    record['projectPath'],
+    record['workspacePath'],
+    branch['worktreePath'],
+    branch['path'],
+    promptMetadata['workspacePath'],
+    promptMetadata['projectPath'],
+    promptMetadata['worktreePath'],
+    logPath ? path.dirname(logPath) : '',
+    RUNS_DIR,
+  ].map(existingSafeDirectory).filter((value): value is string => Boolean(value)));
+}
+
+function existingSafeDirectory(value: unknown): string | undefined {
+  const directory = runString(value);
+  if (!directory || !path.isAbsolute(directory)) { return undefined; }
+  try {
+    if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) { return undefined; }
+    const realDirectory = fs.realpathSync(directory);
+    if (realDirectory === path.parse(realDirectory).root) { return undefined; }
+    return realDirectory;
+  } catch {
+    return undefined;
+  }
+}
+
+function safePathInside(filePath: string, directoryPath: string): boolean {
+  try {
+    return isExistingRealPathInside(filePath, directoryPath);
+  } catch {
+    return false;
+  }
+}
+
+function replayRequestCommandBlock(request: ReplayRequestEvidence): string {
+  if (!request.bodyText || !request.bodyReference) {
+    return request.command.trim();
+  }
+  const delimiter = replayHereDocDelimiter(request.bodyText);
+  const command = request.command
+    .replace(request.bodyReference.fullMatch, `${request.bodyReference.option} @-`)
+    .trimEnd();
+  const body = request.bodyText.endsWith('\n') ? request.bodyText : `${request.bodyText}\n`;
+  return `${command} <<'${delimiter}'\n${body}${delimiter}`;
+}
+
+function replayHereDocDelimiter(body: string): string {
+  let delimiter = 'KRONOS_REPLAY_BODY';
+  let suffix = 1;
+  while (body.includes(delimiter)) {
+    delimiter = `KRONOS_REPLAY_BODY_${suffix}`;
+    suffix += 1;
+  }
+  return delimiter;
+}
+
+function fencedCodeBlock(language: string, content: string): string[] {
+  const fence = markdownFenceFor(content);
+  return [`${fence}${language}`, content, fence];
+}
+
+function markdownFenceFor(content: string): string {
+  const matches = content.match(/`{3,}/g) || [];
+  const length = Math.max(3, ...matches.map(match => match.length + 1));
+  return '`'.repeat(length);
+}
+
+function traceFlowEntriesFromText(text: string): TraceFlowEntry[] {
+  const entries: TraceFlowEntry[] = [];
+  const seen = new Set<string>();
+  for (const line of text.split(/\r?\n/)) {
+    addTraceFlowEntry(entries, seen, traceFlowEntryFromLine(line));
+  }
+  for (const value of jsonValuesFromText(text)) {
+    collectTraceFlowEntriesFromUnknown(value, entries, seen, 0);
+  }
+  return entries.slice(0, 40);
+}
+
+function jsonValuesFromText(text: string): unknown[] {
+  const values: unknown[] = [];
+  for (const match of text.matchAll(/```(?:json)?\s*\n([\s\S]*?)```/gi)) {
+    const parsed = parseJsonValue(match[1] || '');
+    if (parsed !== undefined) { values.push(parsed); }
+  }
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!/^[{[]/.test(trimmed)) { continue; }
+    const parsed = parseJsonValue(trimmed);
+    if (parsed !== undefined) { values.push(parsed); }
+  }
+  return values;
+}
+
+function parseJsonValue(text: string): unknown | undefined {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function collectTraceFlowEntriesFromUnknown(value: unknown, entries: TraceFlowEntry[], seen: Set<string>, depth: number): void {
+  if (depth > 8 || value === undefined || value === null) { return; }
+  if (typeof value === 'string') {
+    for (const line of value.split(/\r?\n/)) {
+      addTraceFlowEntry(entries, seen, traceFlowEntryFromLine(line));
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach(item => collectTraceFlowEntriesFromUnknown(item, entries, seen, depth + 1));
+    return;
+  }
+  const record = recordFromUnknown(value);
+  if (Object.keys(record).length === 0) { return; }
+  addTraceFlowEntry(entries, seen, traceFlowEntryFromRecord(record));
+  for (const child of Object.values(record)) {
+    collectTraceFlowEntriesFromUnknown(child, entries, seen, depth + 1);
+  }
+}
+
+function traceFlowEntryFromRecord(record: Record<string, unknown>): TraceFlowEntry | undefined {
+  const componentText = traceRecordFieldString(record, ['component', 'service', 'serviceName', 'api', 'route', 'endpoint', 'operation', 'name', 'target', 'system'])
+    || JSON.stringify(record).slice(0, 4000);
+  const directionText = traceRecordFieldString(record, ['direction', 'type', 'eventType', 'messageType', 'kind', 'phase'])
+    || JSON.stringify(record).slice(0, 4000);
+  const component = traceComponentFromText(componentText);
+  const direction = traceDirectionFromText(directionText);
+  if (!component || !direction) { return undefined; }
+  return {
+    component,
+    direction,
+    detail: traceDetailFromRecord(record),
+  };
+}
+
+function traceFlowEntryFromLine(line: string): TraceFlowEntry | undefined {
+  const normalized = line.replace(/\u001b\[[0-9;]*m/g, '').trim();
+  if (!normalized || !/(REQUEST|RESPONSE)/i.test(normalized)) { return undefined; }
+  const component = traceComponentFromText(normalized);
+  const direction = traceDirectionFromText(normalized);
+  if (!component || !direction) { return undefined; }
+  return {
+    component,
+    direction,
+    detail: traceDetailFromLine(normalized),
+  };
+}
+
+function addTraceFlowEntry(entries: TraceFlowEntry[], seen: Set<string>, entry: TraceFlowEntry | undefined): void {
+  if (!entry) { return; }
+  const key = `${entry.component}|${entry.direction}|${entry.detail}`;
+  if (seen.has(key)) { return; }
+  seen.add(key);
+  entries.push(entry);
+}
+
+function traceComponentFromText(text: string): string | undefined {
+  if (/\bepaRouter\b|\bepa\s+router\b/i.test(text)) { return 'epaRouter'; }
+  if (/\bidentifysubscriberrelation\b|\bidentify subscriber relation\b/i.test(text)) { return 'identifysubscriberrelation'; }
+  if (/\bmembervalidation\b|\bmember validation\b/i.test(text)) { return 'membervalidation'; }
+  if (/\bauthorization\b/i.test(text)) { return 'authorization'; }
+  if (/\bMHK\b/i.test(text)) { return 'MHK'; }
+  if (/\bCarelon\b/i.test(text)) { return 'Carelon'; }
+  return undefined;
+}
+
+function traceDirectionFromText(text: string): TraceFlowEntry['direction'] | undefined {
+  const request = /\bREQUEST\b/i.exec(text);
+  const response = /\bRESPONSE\b/i.exec(text);
+  if (!request && !response) { return undefined; }
+  if (request && response) {
+    return request.index <= response.index ? 'REQUEST' : 'RESPONSE';
+  }
+  return request ? 'REQUEST' : 'RESPONSE';
+}
+
+function traceDetailFromLine(line: string): string {
+  const direction = /\b(?:REQUEST|RESPONSE)\b/i.exec(line);
+  const detail = direction ? line.slice(direction.index + direction[0].length) : line;
+  return compactTraceDetail(detail.replace(/^[\s:|>\-]+/, ''));
+}
+
+function traceDetailFromRecord(record: Record<string, unknown>): string {
+  const method = traceRecordFieldString(record, ['method', 'httpMethod']);
+  const url = traceRecordFieldString(record, ['url', 'uri', 'path', 'endpoint']);
+  const status = traceRecordFieldString(record, ['status', 'statusCode', 'httpStatus', 'responseCode']);
+  const payload = traceRecordFieldValue(record, ['payload', 'body', 'requestBody', 'responseBody', 'request', 'response', 'message', 'data']);
+  return compactTraceDetail([
+    method,
+    url,
+    status ? `status ${status}` : '',
+    payload === undefined ? '' : compactTracePayload(payload),
+  ].filter(Boolean).join(' '));
+}
+
+function traceRecordFieldString(record: Record<string, unknown>, keys: string[]): string {
+  const value = traceRecordFieldValue(record, keys);
+  if (typeof value === 'string') { return value.trim(); }
+  if (typeof value === 'number' || typeof value === 'boolean') { return String(value); }
+  return '';
+}
+
+function traceRecordFieldValue(record: Record<string, unknown>, keys: string[]): unknown {
+  const targets = new Set(keys.map(key => key.toLowerCase()));
+  for (const [key, value] of Object.entries(record)) {
+    if (targets.has(key.toLowerCase())) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function compactTracePayload(value: unknown): string {
+  if (typeof value === 'string') {
+    return compactTraceDetail(value);
+  }
+  try {
+    return compactTraceDetail(JSON.stringify(value));
+  } catch {
+    return '';
+  }
+}
+
+function compactTraceDetail(value: string, maxLength = 1200): string {
+  const compact = value.replace(/\s+/g, ' ').trim();
+  return compact.length <= maxLength ? compact : `${compact.slice(0, maxLength - 3)}...`;
+}
+
+function claudeLogTextFragments(logText: string): string[] {
+  if (!logText.trim()) { return []; }
+  const fragments: string[] = [];
+  for (const line of logText.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{')) { continue; }
+    try {
+      const payload = recordFromUnknown(JSON.parse(trimmed));
+      if (payload['type'] === 'result') {
+        const result = runString(payload['result']);
+        if (result) { fragments.push(result); }
+      } else if (payload['type'] === 'assistant') {
+        const message = recordFromUnknown(payload['message']);
+        for (const block of arrayFromUnknown(message['content'])) {
+          collectClaudeTextFragment(block, fragments);
+        }
+      }
+    } catch {
+      // Ignore non-JSON log lines; stdout is a mixed stream on some Claude versions.
+    }
+  }
+  return fragments;
+}
+
+function collectClaudeTextFragment(value: unknown, fragments: string[]): void {
+  if (typeof value === 'string') {
+    if (value.trim()) { fragments.push(value); }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach(item => collectClaudeTextFragment(item, fragments));
+    return;
+  }
+  const record = recordFromUnknown(value);
+  const text = runString(record['text']) || runString(record['content']);
+  if (text) {
+    fragments.push(text);
+  }
+  const content = record['content'];
+  if (content !== undefined && content !== text) {
+    collectClaudeTextFragment(content, fragments);
+  }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map(value => value.trim()).filter(Boolean))];
 }
 
 function runCompletionSessionReport(record: Record<string, unknown>, logText: string): string | undefined {

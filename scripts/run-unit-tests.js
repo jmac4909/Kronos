@@ -6496,6 +6496,25 @@ test('dispatcher listRuns backfills terminal run readiness from current ticket s
 test('post-run evidence captures verify-local results with targeting metadata', () => {
   fs.mkdirSync(runStore.RUNS_DIR, { recursive: true });
   const trackingId = '550e8400-e29b-41d4-a716-446655440000';
+  const replayWorkspace = makeTempDir('kronos-replay-workspace-');
+  const replayBodyPath = path.join(replayWorkspace, 'replay-nehp-scenario1.json');
+  fs.writeFileSync(replayBodyPath, JSON.stringify({
+    scenario: 'NEHP scenario 1',
+    memberId: '123456789',
+    authorizationType: 'outpatient',
+  }, null, 2));
+  const traceLookup = [
+    'Trace lookup:',
+    `epaRouter REQUEST {"trackingId":"${trackingId}","memberId":"123456789"}`,
+    'identifysubscriberrelation REQUEST {"memberId":"123456789"}',
+    'identifysubscriberrelation RESPONSE 200 {"relation":"self"}',
+    'membervalidation REQUEST {"subscriberId":"123456789"}',
+    'membervalidation RESPONSE 200 {"active":true}',
+    'authorization REQUEST {"authorizationType":"outpatient"}',
+    'authorization RESPONSE 200 {"status":"approved"}',
+    'Carelon REQUEST {"authorizationId":"AUTH-1"}',
+    'Carelon RESPONSE 200 {"queued":true}',
+  ].join('\n');
   const verifyReport = [
     '## Final Verification Report',
     '| Area | Finding |',
@@ -6503,6 +6522,7 @@ test('post-run evidence captures verify-local results with targeting metadata', 
     '| Curl result | HTTP 200 with corrected response |',
     `| X-TrackingId | ${trackingId} |`,
     'Verdict: FIX VERIFIED IN CODE, AWAITING DEPLOYMENT',
+    traceLookup,
   ].join('\n');
   const logPath = path.join(runStore.RUNS_DIR, 'run-verify-local.log');
   fs.writeFileSync(logPath, [
@@ -6513,7 +6533,7 @@ test('post-run evidence captures verify-local results with targeting metadata', 
           type: 'tool_use',
           name: 'Bash',
           input: {
-            command: `curl -i -H 'X-TrackingId: ${trackingId}' https://test.example/replay`,
+            command: `curl -i -H 'Content-Type: application/json' -H 'X-TrackingId: ${trackingId}' --data-binary @replay-nehp-scenario1.json https://test.example/replay`,
             description: 'Replay TEST request',
           },
         }],
@@ -6533,6 +6553,7 @@ test('post-run evidence captures verify-local results with targeting metadata', 
     status: 'completed',
     exitCode: 0,
     logPath,
+    cwd: replayWorkspace,
     promptMetadata: {
       verifyBranch: 'feature/K-VERIFY',
       verifyEnvironment: 'local (mock)',
@@ -6556,6 +6577,16 @@ test('post-run evidence captures verify-local results with targeting metadata', 
   assert.match(note, /Curl result \| HTTP 200/);
   assert.match(note, /FIX VERIFIED IN CODE, AWAITING DEPLOYMENT/);
   assert.match(note, new RegExp(`Tracking IDs used: ${trackingId}`));
+  assert.match(note, /Replay request: body inlined from replay-nehp-scenario1\.json/);
+  assert.match(note, /```bash\ncurl -i -H 'Content-Type: application\/json'/);
+  assert.match(note, /--data-binary @- https:\/\/test\.example\/replay <<'KRONOS_REPLAY_BODY'/);
+  assert.match(note, /"scenario": "NEHP scenario 1"/);
+  assert.match(note, /Trace lookup flow for 550e8400-e29b-41d4-a716-446655440000:/);
+  assert.match(note, /- epaRouter REQUEST: \{"trackingId":"550e8400-e29b-41d4-a716-446655440000","memberId":"123456789"\}/);
+  assert.match(note, /- identifysubscriberrelation REQUEST: \{"memberId":"123456789"\}/);
+  assert.match(note, /- membervalidation RESPONSE: 200 \{"active":true\}/);
+  assert.match(note, /- authorization REQUEST: \{"authorizationType":"outpatient"\}/);
+  assert.match(note, /- Carelon RESPONSE: 200 \{"queued":true\}/);
   assert.doesNotMatch(note, /Replay payment failure/);
 
   const check = postRunReadiness.buildRunCompletionEvidenceCheck(run, currentTicket);
@@ -11453,6 +11484,7 @@ test('post-run readiness distinguishes process completion from handoff readiness
   for (const marker of [
     'run: unknown',
     "import * as fs from 'fs'",
+    "import * as path from 'path'",
     "import { runProgressSummary } from './runProgress'",
     "import { isExistingRealPathInside } from './pathUtils'",
     "import { RUNS_DIR } from './runStore'",
@@ -11495,6 +11527,13 @@ test('post-run readiness distinguishes process completion from handoff readiness
     'function runCompletionEvidenceTrackingLines(context: RunCompletionEvidenceContext): string[]',
     'function runCompletionEvidenceTrackingSummaryParts(context: RunCompletionEvidenceContext): string[]',
     'function runCompletionEvidenceTrackingIds(context: RunCompletionEvidenceContext): string[]',
+    'function runCompletionEvidenceReplayLines(context: RunCompletionEvidenceContext): string[]',
+    'function runCompletionEvidenceTraceFlowLines(context: RunCompletionEvidenceContext): string[]',
+    'function replayRequestsFromContext(record: Record<string, unknown>, logText: string, sourceText: string): ReplayRequestEvidence[]',
+    'function readReplayBodyFile(record: Record<string, unknown>, fileReference: string): { filePath: string; text?: string; omittedReason?: string } | undefined',
+    'function replayRequestCommandBlock(request: ReplayRequestEvidence): string',
+    'function traceFlowEntriesFromText(text: string): TraceFlowEntry[]',
+    'function claudeLogTextFragments(logText: string): string[]',
     'function runCompletionSessionReport(record: Record<string, unknown>, logText: string): string | undefined',
     'function finalReportFromEvents(value: unknown): string | undefined',
     'function finalReportFromClaudeLog(logText: string): string | undefined',
