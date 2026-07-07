@@ -874,6 +874,13 @@ test('verify-local prompt targeting preserves operator branch, environment, mode
     environment,
   });
   assert.match(remoteVars.VERIFY_BRANCH_CHECKOUT, /do not choose, checkout, or infer a source branch/);
+  assert.match(remoteVars.VERIFY_REPLAY_STEPS, /report fixed, and stop without building or starting the app locally/);
+  assert.match(remoteVars.VERIFY_COMPLETION_POLICY, /Remote fix confirmation is authoritative/);
+  assert.match(remoteVars.VERIFY_COMPLETION_POLICY, /Do not build, start, or test the app locally after remote success/);
+  assert.match(remoteVars.VERIFY_COMPLETION_POLICY, /remote replay fails, is inconclusive, or the operator explicitly chose local-only verification/);
+  const remotePromptText = verifyLocalPlan.buildVerifyLocalPromptText('Base prompt', remoteVars);
+  assert.match(remotePromptText, /Completion policy:/);
+  assert.match(remotePromptText, /report success and stop/);
 });
 
 test('verify-local repaired starter prompt includes branch, environment, mode, and replay variables', () => {
@@ -892,11 +899,14 @@ test('verify-local repaired starter prompt includes branch, environment, mode, a
     '{{VERIFY_ENVIRONMENT}}',
     '{{VERIFY_ENVIRONMENT_URL}}',
     '{{VERIFY_MODE}}',
+    '{{VERIFY_COMPLETION_POLICY}}',
     '{{VERIFY_TRACKING_HINTS}}',
     '{{VERIFY_TICKET_CONTEXT}}',
     '{{VERIFY_REPLAY_STEPS}}',
     'First find the original request/tracking ID',
     'Replay the original request against the chosen environment.',
+    'report success and stop',
+    'Only run local app verification',
     'Compare before/after behavior',
   ]) {
     assert.ok(promptText.includes(marker), marker);
@@ -7034,6 +7044,45 @@ test('dispatcher parses every assistant content block for progress metrics', asy
     assert.equal(progress.filesRead, 1);
     assert.equal(progress.filesChanged, 1);
     assert.equal(progress.elapsedSeconds, 0);
+  });
+});
+
+test('dispatcher loop detector compares full curl commands before stopping retries', async () => {
+  const vscodeStub = createVscodeTestModule();
+  await withPatchedModuleLoad(request => request === 'vscode' ? vscodeStub.vscode : undefined, async () => {
+    const dispatcherPath = require.resolve('../out/runners/sessionDispatcher.js');
+    delete require.cache[dispatcherPath];
+    const dispatcher = require(dispatcherPath);
+    const curlEvent = body => dispatcher.parseStreamEvents({
+      type: 'assistant',
+      message: {
+        content: [{
+          type: 'tool_use',
+          name: 'Bash',
+          input: {
+            command: `curl -sS -X POST https://test.example.internal/payments/replay/verify/long/shared/path?ticket=K-LOOP-16 --header 'Content-Type: application/json' --data '${body}'`,
+            description: 'Replay TEST verification payload',
+          },
+        }],
+      },
+    })[0];
+    const first = curlEvent('{"payload":"abc"}');
+    const second = curlEvent('{"payload":"abc","extra":"cde"}');
+    const third = curlEvent('{"payload":"cde"}');
+    const fourth = curlEvent('{"payload":"cde","attempt":4}');
+    assert.equal(first.label, second.label, 'visible curl labels are truncated to the same prefix');
+    assert.notEqual(first.command, second.command, 'full curl commands preserve payload arguments');
+
+    const variedPayloadDetector = dispatcher.createRunLoopDetector(4);
+    for (const event of [first, second, third, fourth]) {
+      assert.equal(variedPayloadDetector.observe(event), undefined);
+    }
+
+    const repeatedCommandDetector = dispatcher.createRunLoopDetector(4);
+    assert.equal(repeatedCommandDetector.observe(first), undefined);
+    assert.equal(repeatedCommandDetector.observe(first), undefined);
+    assert.equal(repeatedCommandDetector.observe(first), undefined);
+    assert.match(repeatedCommandDetector.observe(first), /Stopped after 4 repeated tool events/);
   });
 });
 

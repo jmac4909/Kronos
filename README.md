@@ -32,7 +32,7 @@ For extension-host testing from this repo, open the folder in VS Code and run th
 - Setup Wizard, Integration Contracts, and MR Autopilot: first-run readiness, script command contract checks, and a guarded review-loop control surface with pass-plan and preflight blockers.
 - Jira Board and Ticket Detail: filtering, modal actions, timeline, evidence ledger, links, builds, MRs, and acceptance criteria.
 - Run Center and Recovery Center: active/failed runs, archived records, logs, retry/resume/cancel paths, and unsafe worktree recovery.
-- Verify Ticket: local verification lets the operator choose a branch; remote verification targets DEV/TEST/custom as deployed and does not choose a branch. Both support before-fix reproduction and after-fix verification.
+- Verify Ticket: local verification lets the operator choose a branch; remote verification targets DEV/TEST/custom as deployed and does not choose a branch. Both support before-fix reproduction and after-fix verification. When remote TEST/DEV/custom after-fix verification proves the defect no longer reproduces, the run should report success and stop; local app startup is only for local-only runs, failed/inconclusive remote replay, or an explicit local follow-up.
 - Evidence workflow: add notes/checks, evaluate gates, export markdown, handoff packet, and publish plan.
 - Planning workflow: queue planner, backlog triage, project batch plan, release batch plan, collision report, next two hours, and overnight candidates.
 - Spec Beanstalk: convert `.xlsx` API specs into Markdown plus JSON trace artifacts inside a Java repo, then start or continue Claude implementation against that generated source of truth.

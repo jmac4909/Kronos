@@ -1283,13 +1283,14 @@ interface ProgressEvent {
   label: string;
   detail: string;
   timestamp: Date;
+  command?: string;
 }
 
 interface RunLoopDetector {
   observe(event: ProgressEvent): string | undefined;
 }
 
-function createRunLoopDetector(limit = RUN_LOOP_REPEAT_LIMIT): RunLoopDetector {
+export function createRunLoopDetector(limit = RUN_LOOP_REPEAT_LIMIT): RunLoopDetector {
   const counts = new Map<string, number>();
   return {
     observe(event: ProgressEvent): string | undefined {
@@ -1305,12 +1306,28 @@ function createRunLoopDetector(limit = RUN_LOOP_REPEAT_LIMIT): RunLoopDetector {
 
 function runLoopEventKey(event: ProgressEvent): string | undefined {
   if (event.type === 'tool' && /^(Running:|PowerShell|Bash)/i.test(event.label)) {
-    return `tool:${normalizeLoopText(event.label)}`;
+    const command = event.command || runningCommandFromLabel(event.label);
+    if (isCurlCommand(command)) {
+      return `tool:curl:${normalizeCurlLoopCommand(command)}`;
+    }
+    return `tool:${normalizeLoopText(command || event.label)}`;
   }
   if (event.type === 'error' && /(permission|not allowed|denied|needs approval|unauthorized|forbidden|command failed)/i.test(`${event.label}\n${event.detail}`)) {
     return `error:${normalizeLoopText(event.label)}`;
   }
   return undefined;
+}
+
+function runningCommandFromLabel(label: string): string {
+  return label.replace(/^Running:\s*/i, '').trim();
+}
+
+function isCurlCommand(command: string): boolean {
+  return /^curl(?:\s|$)/i.test(command.trim());
+}
+
+function normalizeCurlLoopCommand(command: string): string {
+  return command.trim();
 }
 
 function normalizeLoopText(value: string): string {
@@ -1376,8 +1393,12 @@ function parseAssistantContentBlock(rawBlock: unknown, now: Date): ProgressEvent
     } else if (name === 'Write') {
       label = `Writing ${shortenPath(streamString(input['file_path']))}`;
     } else if (name === 'Bash' || name === 'PowerShell') {
-      label = `Running: ${streamString(input['command']).substring(0, 80)}`;
+      const command = streamString(input['command']);
+      label = `Running: ${command.substring(0, 80)}`;
       detail = streamString(input['description']);
+      const event: ProgressEvent = { type: 'tool', label, detail, timestamp: now };
+      if (command) { event.command = command; }
+      return event;
     } else if (name === 'Grep') {
       label = `Searching for "${streamString(input['pattern'])}"`;
       const pathValue = streamString(input['path']);

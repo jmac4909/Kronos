@@ -158,6 +158,7 @@ export function buildVerifyLocalPromptVars(target: VerifyLocalPromptTarget): Rec
     VERIFY_ENVIRONMENT_URL: target.environment.url || 'not provided',
     VERIFY_MODE: target.mode.promptValue,
     VERIFY_MODE_DETAIL: target.mode.detail,
+    VERIFY_COMPLETION_POLICY: buildVerifyLocalCompletionPolicy(target),
     VERIFY_TRACKING_HINTS: buildVerifyLocalTrackingHints(target.ticket),
     VERIFY_TICKET_CONTEXT: buildVerifyLocalTicketContext(target.ticketKey, target.ticket),
     VERIFY_REPLAY_STEPS: buildVerifyLocalReplaySteps(target),
@@ -176,6 +177,9 @@ export function buildVerifyLocalPromptText(basePrompt: string, vars: Record<stri
     `Environment URL: ${vars.VERIFY_ENVIRONMENT_URL}`,
     `Mode: ${vars.VERIFY_MODE}`,
     vars.VERIFY_MODE_DETAIL,
+    '',
+    'Completion policy:',
+    vars.VERIFY_COMPLETION_POLICY,
     '',
     'Ticket context:',
     vars.VERIFY_TICKET_CONTEXT,
@@ -293,15 +297,28 @@ function buildVerifyLocalReplaySteps(target: VerifyLocalPromptTarget): string {
   const environment = target.environment.url
     ? `${target.environment.promptValue} at ${target.environment.url}`
     : target.environment.promptValue;
+  const remoteFixConfirmation = target.branch.checkout === 'remote' && target.mode.mode === 'confirm-fix-works';
   return [
     '1. Find the original request, tracking ID, payload, or reproduction path from the Jira ticket, linked artifacts, or payload/application logs. If it cannot be found, stop and report exactly what is missing.',
     `2. Checkout/use the operator-selected branch target: ${target.branch.branch}.`,
     `3. Replay the original request against ${environment}. Use local mocks only when the selected environment is local (mock).`,
-    target.mode.mode === 'confirm-defect-exists'
+    remoteFixConfirmation
+      ? '4. Confirm whether the fix works in the selected remote environment. If the defect no longer reproduces, capture the remote TEST/DEV evidence, report fixed, and stop without building or starting the app locally.'
+      : target.mode.mode === 'confirm-defect-exists'
       ? '4. Confirm whether the reported defect reproduces. Compare actual behavior with the expected behavior from the ticket and capture commands, payloads, responses, logs, and artifacts.'
       : '4. Confirm whether the fix works. Replay the same request, compare behavior against the defect evidence/baseline, and prove the reported failure no longer occurs.',
     '5. Report a clear verdict: reproduced, not reproduced, fixed, not fixed, or blocked. Include before/after evidence and any unresolved risks.',
   ].join('\n');
+}
+
+function buildVerifyLocalCompletionPolicy(target: VerifyLocalPromptTarget): string {
+  if (target.branch.checkout === 'remote' && target.mode.mode === 'confirm-fix-works') {
+    return 'Remote fix confirmation is authoritative for this run. If the selected TEST/DEV/custom environment proves the defect no longer reproduces, report success and stop. Do not build, start, or test the app locally after remote success. Local testing is allowed only if the remote replay fails, is inconclusive, or the operator explicitly chose local-only verification.';
+  }
+  if (target.branch.checkout === 'remote') {
+    return 'Remote verification is authoritative for this run. Do not build, start, or test the app locally unless the remote replay fails, is inconclusive, or the operator explicitly starts a local-only follow-up.';
+  }
+  return 'Run only the operator-selected local verification path. Do not add remote or extra local workflows beyond what is needed for the selected branch, environment, and mode.';
 }
 
 function compactText(value: string, maxLength: number): string {
