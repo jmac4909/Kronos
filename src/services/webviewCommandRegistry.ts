@@ -7,6 +7,7 @@ export const BOARD_MESSAGE_COMMANDS = new Set([
   'openJira',
   'openMr',
   'getComments',
+  'insertJiraContext',
   'addEvidence',
   'addEvidenceCheck',
   'recordEnvironmentResult',
@@ -125,6 +126,7 @@ export const BACKLOG_TRIAGE_MESSAGE_COMMANDS = new Set([
 
 export const TICKET_DETAIL_MESSAGE_COMMANDS = new Set([
   'startTicket',
+  'insertJiraContext',
   'addToQueue',
   'removeFromQueue',
   'linkTicket',
@@ -175,6 +177,7 @@ export const OPERATOR_COMMAND_TO_VSCODE_COMMAND = new Map<string, string>([
   ['stats', 'kronos.stats'],
   ['sessionHistory', 'kronos.sessionHistory'],
   ['viewTicket', 'kronos.viewTicket'],
+  ['insertJiraContext', 'kronos.insertJiraContext'],
   ['recordEnvironmentResult', 'kronos.recordEnvironmentResult'],
   ['extractAcceptanceCriteria', 'kronos.extractAcceptanceCriteria'],
   ['updateAcceptanceCriteria', 'kronos.updateAcceptanceCriteria'],
@@ -302,6 +305,7 @@ export const AGING_REPORT_MESSAGE_COMMANDS = new Set([
 
 export const TICKET_SCOPED_OPERATOR_COMMANDS = new Set([
   'addToQueue',
+  'insertJiraContext',
   'addEvidence',
   'addEvidenceCheck',
   'linkTicket',

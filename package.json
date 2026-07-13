@@ -363,6 +363,11 @@
         "icon": "$(open-preview)"
       },
       {
+        "command": "kronos.insertJiraContext",
+        "title": "Kronos: Insert Jira Context in Active Terminal",
+        "icon": "$(symbol-keyword)"
+      },
+      {
         "command": "kronos.addEvidence",
         "title": "Kronos: Add Evidence Note",
         "icon": "$(notebook)"
@@ -587,6 +592,10 @@
         },
         {
           "command": "kronos.viewTicket",
+          "when": "false"
+        },
+        {
+          "command": "kronos.insertJiraContext",
           "when": "false"
         },
         {

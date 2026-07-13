@@ -10,6 +10,7 @@ const REQUIRED_COMMANDS = [
   'kronos.integrationContractReport',
   'kronos.jiraBoard',
   'kronos.viewTicket',
+  'kronos.insertJiraContext',
   'kronos.evidenceGate',
   'kronos.evidenceHandoff',
   'kronos.runCenter',
@@ -172,6 +173,7 @@ function assertPanelHtml(extension, viewType) {
       ], viewType);
       assertAction(html, 'evidenceHandoff', { ticket: sharedTicket });
       assertAction(html, 'publishEvidence', { ticket: sharedTicket });
+      assertAction(html, 'insertJiraContext', { ticket: sharedTicket });
       break;
     case 'kronosEvidenceGate':
       assertHtmlContains(html, [

@@ -151,6 +151,10 @@
       actionsEl.appendChild(makeEl('span', 'modal-blocked-hint', 'Link to a project first to start or queue.'));
     }
     if (actionsEl) {
+      actionsEl.appendChild(makeButton('Insert [' + currentModalKey + ']', '', function() {
+        post('insertJiraContext', { ticket: currentModalKey });
+        closeModal();
+      }));
       actionsEl.appendChild(makeButton('Verify Local', '', function() { post('verifyLocal', { ticket: currentModalKey }); closeModal(); }));
       actionsEl.appendChild(makeButton('Verify Remote', '', function() { post('verifyRemote', { ticket: currentModalKey }); closeModal(); }));
       actionsEl.appendChild(makeButton('Add Evidence', '', function() { post('addEvidence', { ticket: currentModalKey }); closeModal(); }));

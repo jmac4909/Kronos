@@ -167,6 +167,7 @@ export function buildTicketHtml(key: string, ticket: Ticket, input: TicketPanelR
     projectList.length > 0
       ? actionButton('startTicket', 'Start Work', { ticket: key, primary: true })
       : actionButton('linkTicket', 'Link Project', { ticket: key, primary: true }),
+    ticket.source === 'jira' ? actionButton('insertJiraContext', `Insert [${key}]`, { ticket: key }) : '',
     actionButton('verifyLocal', 'Verify Local', { ticket: key }),
     actionButton('verifyRemote', 'Verify Remote', { ticket: key }),
     isQueued

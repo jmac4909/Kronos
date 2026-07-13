@@ -44,6 +44,10 @@ import { RUNS_DIR, archiveRun, listRunStoreIssues, markRunCancelled, markRunCont
 import { RecoveryInventory, RecoveryItem, buildRecoveryInventory, resolveRecoveryActionForRequest, type RecoveryInventoryInput } from './services/recoveryCenter';
 import { DispatchCollision, detectDispatchCollisions, type DispatchCollisionInput } from './services/collisionDetector';
 import { gitlabAdapter, jenkinsAdapter, jiraAdapter, sonarAdapter } from './services/integrationAdapters';
+import { isJiraRestConfigured, jiraRestClient } from './services/jiraRestClient';
+import { buildFallbackJiraTicketContext, normalizeJiraTicketContext, type JiraTicketContext } from './services/jiraTicketContext';
+import { writeJiraContextArtifacts } from './services/jiraContextStore';
+import { buildJiraContextReference, insertTerminalContextReference } from './services/terminalContextInsertion';
 import { buildRunCompletionEvidenceCheck, buildRunCompletionEvidenceText, evaluatePostRunReadiness, postRunReadinessRunPatch, resolvePostRunTicket, shouldRecordRunCompletionEvidence } from './services/postRunReadiness';
 import { existingAcceptanceCriterion, extractAcceptanceCriteria } from './services/acceptanceCriteria';
 import type { ExistingAcceptanceCriterion } from './services/acceptanceCriteria';
@@ -2201,6 +2205,75 @@ export function activate(context: vscode.ExtensionContext) {
         }, 'Kronos board action failed.');
       });
       renderBoard();
+    }),
+
+    vscode.commands.registerCommand('kronos.insertJiraContext', async (treeItem: unknown) => {
+      const ticketKey = resolveTicketKey(treeItem);
+      const ticket = ticketKey ? state.state?.tickets?.[ticketKey] : undefined;
+      if (!ticketKey || !ticket) {
+        vscode.window.showWarningMessage('Select a Jira ticket before inserting context.');
+        return;
+      }
+      if (ticket.source !== 'jira') {
+        vscode.window.showWarningMessage(`${ticketKey} is not a Jira ticket.`);
+        return;
+      }
+      const terminal = vscode.window.activeTerminal;
+      if (!terminal) {
+        vscode.window.showWarningMessage('Focus the Claude terminal that should receive the Jira reference, then try again.');
+        return;
+      }
+
+      await runCommandProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Kronos: Preparing Jira context for ${ticketKey}...`,
+        },
+        async progress => {
+          let jiraContext: JiraTicketContext | undefined;
+          const fallbackWarnings: string[] = [];
+          if (isJiraRestConfigured(process.env)) {
+            progress.report({ message: 'Fetching all Jira fields and comments...' });
+            try {
+              const snapshot = await jiraRestClient.ticketContext(ticketKey, ticket.jira_url);
+              jiraContext = normalizeJiraTicketContext(ticketKey, snapshot, { ...ticket });
+            } catch {
+              fallbackWarnings.push('Native Jira REST fetch failed; cached Kronos ticket data was used.');
+            }
+          } else {
+            fallbackWarnings.push('Native Jira REST credentials were unavailable; cached Kronos ticket data was used.');
+          }
+
+          if (!jiraContext) {
+            progress.report({ message: 'Loading cached ticket data and legacy comments...' });
+            let comments: unknown[] = [];
+            try {
+              comments = await jiraAdapter.ticketComments(state, ticketKey);
+            } catch {
+              fallbackWarnings.push('Legacy Jira comments were unavailable.');
+            }
+            jiraContext = buildFallbackJiraTicketContext(ticketKey, { ...ticket }, comments, fallbackWarnings);
+          }
+
+          progress.report({ message: 'Writing a local per-user Jira context artifact...' });
+          const artifact = writeJiraContextArtifacts(jiraContext);
+          const reference = buildJiraContextReference(ticketKey, artifact.promptPath);
+          if (vscode.window.activeTerminal !== terminal) {
+            vscode.window.showWarningMessage(`Jira context for ${ticketKey} is ready, but the active terminal changed while it was loading. Focus the intended Claude terminal and click Insert again.`);
+            return;
+          }
+          insertTerminalContextReference(terminal, reference);
+
+          const fetchedSummary = `${jiraContext.completeness.fieldCount} fields, ${jiraContext.comments.length} comments, ${jiraContext.attachments.length} attachment record${jiraContext.attachments.length === 1 ? '' : 's'}`;
+          const message = `Inserted [${ticketKey}] into ${terminal.name} without submitting it (${fetchedSummary}). Review it, then press Enter when ready.`;
+          if (jiraContext.completeness.complete) {
+            vscode.window.showInformationMessage(message);
+          } else {
+            vscode.window.showWarningMessage(`${message} The saved context is marked partial; see its warnings.`);
+          }
+        },
+        `Failed to prepare Jira context for ${ticketKey}.`
+      );
     }),
 
     vscode.commands.registerCommand('kronos.viewTicket', async (treeItem: unknown) => {

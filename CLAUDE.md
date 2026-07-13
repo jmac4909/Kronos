@@ -54,7 +54,7 @@ Edit TypeScript -> `npm run compile` -> package -> install -> reload. Or open th
 
 ### Extension (TypeScript)
 - **`src/extension.ts`** — command handlers and WebView builders for the dashboard, board, ticket detail, run center, evidence panels, recovery, prompt manager, doctor, planning reports, and metrics.
-- **`src/services/`** — service layer for state validation, queue planning, evidence, recovery, prompts, integrations, safety gates, metrics, and webview helpers.
+- **`src/services/`** — service layer for state validation, queue planning, evidence, recovery, prompts, integrations, private Jira context hydration/artifacts, safety gates, metrics, and webview helpers.
 - **`src/runners/sessionDispatcher.ts`** — dispatches Claude sessions via `claude -p`, manages worktrees, progress WebView panels, persisted run records, session stats, and stream-json parsing.
 - **`src/state/KronosState.ts`** — reads state/queue files, file watchers, script runner, prompt loader, and integration adapters.
 - **`src/state/types.ts`** — TypeScript interfaces for state schema.

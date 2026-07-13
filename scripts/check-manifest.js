@@ -115,6 +115,7 @@ const contextOnlyCommands = [
   'kronos.openProject',
   'kronos.openInClaude',
   'kronos.viewTicket',
+  'kronos.insertJiraContext',
   'kronos.addEvidence',
   'kronos.addEvidenceCheck',
   'kronos.recordEnvironmentResult',

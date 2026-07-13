@@ -30,6 +30,17 @@ export interface IntegrationContractReport {
 
 export const INTEGRATION_CONTRACT_EXPECTATIONS: IntegrationContractExpectation[] = [
   {
+    id: 'jira-rest-ticket-context',
+    script: 'native Jira REST',
+    requiresScript: false,
+    command: 'GET /rest/api/3/issue/<ticket_key> plus paginated comments',
+    purpose: 'Hydrate a private Jira context artifact for explicit insertion into an interactive terminal.',
+    requiredText: [
+      'GET /rest/api/3/issue/<ticket_key>?fields=*all&expand=names,schema',
+      'GET /rest/api/3/issue/<ticket_key>/comment?startAt=<offset>&maxResults=100&orderBy=created',
+    ],
+  },
+  {
     id: 'jira-ticket-comments',
     script: 'kronos_state.py',
     command: 'kronos_state.py --ticket-comments <ticket_key>',

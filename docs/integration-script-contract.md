@@ -11,9 +11,20 @@ Script commands must print JSON to stdout and write diagnostics to stderr. Non-z
 
 Kronos: Integration Contracts runs a local contract harness over this file and the required script bundle. It checks that the documented command/API shapes match the extension calls and that required scripts are installed; it does not call enterprise providers or require credentials.
 
-## Jira and State Commands
+## Native Jira Ticket Context API
 
-Kronos routes Jira ticket comments through `kronos_state.py`:
+The interactive `[JIRA-123]` context action hydrates the selected issue through native Jira REST using `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN`. Credentialed reads are pinned to the configured base URL, which must use HTTPS except for loopback development. It fetches the complete issue field object plus field names/schema, then paginates comments into a local per-user context snapshot. Credentials and authorization headers must never be written to the snapshot or prompt artifact.
+
+```text
+GET /rest/api/3/issue/<ticket_key>?fields=*all&expand=names,schema
+GET /rest/api/3/issue/<ticket_key>/comment?startAt=<offset>&maxResults=100&orderBy=created
+```
+
+The generated prompt includes Jira field text, all fetched comments, and attachment metadata. Attachment bodies remain metadata-only until a separately bounded and allowlisted download/extraction flow is implemented, so tickets with attachments are explicitly marked partial. Comment collection has per-response, cumulative-response, and page-count safety limits; earlier pages are retained and marked partial if a later page fails. Artifacts use `0700` directories and `0600` files on POSIX and inherit the user's profile ACL on Windows. The terminal receives only a single-line reference to the prompt artifact and Kronos never submits it automatically; if the active terminal changes during hydration, insertion is cancelled.
+
+## Jira and State Script Commands
+
+Kronos retains the script-backed Jira refresh path for the lightweight board/index state and as a legacy comment fallback. The fallback comment command is:
 
 ```text
 kronos_state.py --ticket-comments <ticket_key>

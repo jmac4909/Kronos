@@ -42,15 +42,16 @@ For mutation steps, use a scratch ticket that already exists in the reviewer's l
 2. Open Dashboard and check whether the command center and Operator Cockpit make the current day obvious: setup readiness, MR autopilot, spec traceability, contracts, quality, now, next, blocked, needs human, evidence, and recovery.
 3. Open the Jira Board. Try search, filters, grouping, a ticket modal, and a ticket detail view.
 4. In Ticket Detail, inspect timeline, acceptance criteria, linked MR/build/project fields, evidence ledger, and evidence gate.
-5. On the approved scratch ticket only, add one evidence note and one evidence check.
-6. On the approved scratch ticket only, export evidence and open the evidence handoff panel. Confirm the comment is understandable and safe to paste manually.
-7. Open Queue Planner, Backlog Triage, Next Best Action, Plan Next 2 Hours, and Overnight Candidates. Check whether each recommendation explains why it is next.
-8. Open Setup Wizard, Integration Contracts, and MR Autopilot. Confirm setup blockers, script command contracts, guarded MR polling, pass-plan counts, preflight blockers, and next-action flow are understandable.
-9. Open Spec Beanstalk. Confirm the panel makes the two modes clear: generate `.xlsx` spec artifacts into a Java repo, or start/continue Claude implementation from the generated spec, and that traceability from workbook formatting to Markdown/JSON artifacts is inspectable.
-10. Run Verify Local and Verify Remote on a safe scratch ticket if available. Confirm local asks for project, branch, environment, and before-fix vs after-fix mode; confirm remote asks for project, remote environment, and mode without offering a branch picker.
-11. Open Run Center. Inspect saved runs, logs, status labels, recovery actions, retry/resume affordances, and archive behavior.
-12. Open Recovery Center and Human Review Inbox. Confirm the highest-risk item is easy to identify.
-13. Open Kronos Doctor, Integration Manifest, Profile Manager, Prompt Manager, Prompt Smoke Tests, Prompt History, Trend Metrics, Agent Quality, and Aging Report. Confirm Agent Quality explains recurring failure themes, not just the numeric score.
+5. With a safe interactive Claude terminal focused, click `Insert [KRONOS-FB-1]`. Confirm Kronos inserts one editable reference line, does not press Enter, and leaves the terminal fully operator-controlled. Skip this step if the fixture has no configured Jira credentials.
+6. On the approved scratch ticket only, add one evidence note and one evidence check.
+7. On the approved scratch ticket only, export evidence and open the evidence handoff panel. Confirm the comment is understandable and safe to paste manually.
+8. Open Queue Planner, Backlog Triage, Next Best Action, Plan Next 2 Hours, and Overnight Candidates. Check whether each recommendation explains why it is next.
+9. Open Setup Wizard, Integration Contracts, and MR Autopilot. Confirm setup blockers, script command contracts, guarded MR polling, pass-plan counts, preflight blockers, and next-action flow are understandable.
+10. Open Spec Beanstalk. Confirm the panel makes the two modes clear: generate `.xlsx` spec artifacts into a Java repo, or start/continue Claude implementation from the generated spec, and that traceability from workbook formatting to Markdown/JSON artifacts is inspectable.
+11. Run Verify Local and Verify Remote on a safe scratch ticket if available. Confirm local asks for project, branch, environment, and before-fix vs after-fix mode; confirm remote asks for project, remote environment, and mode without offering a branch picker.
+12. Open Run Center. Inspect saved runs, logs, status labels, recovery actions, retry/resume affordances, and archive behavior.
+13. Open Recovery Center and Human Review Inbox. Confirm the highest-risk item is easy to identify.
+14. Open Kronos Doctor, Integration Manifest, Profile Manager, Prompt Manager, Prompt Smoke Tests, Prompt History, Trend Metrics, Agent Quality, and Aging Report. Confirm Agent Quality explains recurring failure themes, not just the numeric score.
 
 ## Feedback Questions
 

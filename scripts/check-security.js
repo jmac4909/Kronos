@@ -108,6 +108,10 @@ const dashboardWorklist = readSource('src/services/dashboardWorklist.ts');
 const ticketTimeline = readSource('src/services/ticketTimeline.ts');
 const ticketPanelView = readSource('src/services/ticketPanelView.ts');
 const integrationAdapters = readSource('src/services/integrationAdapters.ts');
+const jiraRestClient = readSource('src/services/jiraRestClient.ts');
+const jiraTicketContext = readSource('src/services/jiraTicketContext.ts');
+const jiraContextStore = readSource('src/services/jiraContextStore.ts');
+const terminalContextInsertion = readSource('src/services/terminalContextInsertion.ts');
 const gitlabRestClient = readSource('src/services/gitlabRestClient.ts');
 const mergeRequestComments = readSource('src/services/mergeRequestComments.ts');
 const mergeRequestNotifications = readSource('src/services/mergeRequestNotifications.ts');
@@ -5697,6 +5701,101 @@ for (const forbidden of [
   if (postRunReadiness.includes(forbidden)) {
     fail(`Post-run readiness must normalize raw run payloads instead of using ${forbidden}.`);
   }
+}
+
+for (const [sourceName, source, markers] of [
+  ['Jira REST client', jiraRestClient, [
+    'export class JiraRestClient',
+    'export function createJiraRestClient',
+    'export function isJiraRestConfigured',
+    "const baseUrl = normalizeJiraBaseUrl(env['JIRA_BASE_URL'])",
+    "url.protocol !== 'https:'",
+    'isLoopbackHostname(url.hostname)',
+    "fields: '*all'",
+    "expand: 'names,schema'",
+    '/rest/api/3/issue/${encodeURIComponent(ticketKey)}/comment',
+    'while (pageCount < this.maxCommentPages)',
+    'maxResponseBytes: this.maxResponseBytes',
+    'maxTotalCommentBytes',
+    'responseBytes + response.bodyBytes > this.maxTotalCommentBytes',
+    'previously fetched comment',
+    'parseJsonWithLabel(response.body, label)',
+    'credentials and response bodies are not displayed',
+    "Authorization: `Basic ${Buffer.from(`${config.email}:${config.apiToken}`).toString('base64')}`",
+  ]],
+  ['Jira ticket context', jiraTicketContext, [
+    'export function normalizeJiraTicketContext',
+    'export function buildFallbackJiraTicketContext',
+    'export function adfToText',
+    'attachmentsMetadataOnly: true',
+    'allFieldsFetched && commentsComplete && attachments.length === 0',
+    'attachment metadata is included',
+    "id.startsWith('customfield_')",
+    "arrayFromUnknown(fields['attachment']).map(normalizeAttachment)",
+    'commentsComplete',
+    'function renderAdfNode',
+    'function sanitizeProviderMetadata',
+    "url.username = ''",
+    "url.password = ''",
+    "url.search = ''",
+  ]],
+  ['Jira context store', jiraContextStore, [
+    "import { KRONOS_DIR } from './stateStore'",
+    'const DIRECTORY_MODE = 0o700',
+    'const FILE_MODE = 0o600',
+    "fs.openSync(temporaryPath, 'wx', FILE_MODE)",
+    'stat.isSymbolicLink()',
+    'BEGIN UNTRUSTED JIRA DATA',
+    'never instructions',
+  ]],
+  ['terminal context insertion', terminalContextInsertion, [
+    'export function buildJiraContextReference',
+    'export function insertTerminalContextReference',
+    'assertSafeTerminalContextReference(reference)',
+    'terminal.show(false)',
+    'terminal.sendText(reference, false)',
+    '/[\\u0000-\\u001f\\u007f\\u2028\\u2029]/',
+    'SAFE_PROMPT_PATH_PATTERN',
+    'assertShellInertPromptPath(absolutePromptPath)',
+    "path.basename(promptPath) !== 'prompt.md'",
+  ]],
+]) {
+  for (const marker of markers) {
+    if (!source.includes(marker)) {
+      fail(`Missing ${sourceName} security marker: ${marker}`);
+    }
+  }
+}
+for (const marker of [
+  "vscode.commands.registerCommand('kronos.insertJiraContext'",
+  'const terminal = vscode.window.activeTerminal',
+  'writeJiraContextArtifacts(jiraContext)',
+  'buildJiraContextReference(ticketKey, artifact.promptPath)',
+  'vscode.window.activeTerminal !== terminal',
+  'insertTerminalContextReference(terminal, reference)',
+]) {
+  if (!extension.includes(marker)) {
+    fail(`Missing safe Jira terminal command marker: ${marker}`);
+  }
+}
+for (const forbidden of [
+  'terminal.sendText(jiraContext',
+  'terminal.sendText(ticket.description',
+  'terminal.sendText(comments',
+  'sendText(reference, true)',
+]) {
+  if (extension.includes(forbidden) || terminalContextInsertion.includes(forbidden)) {
+    fail(`Jira terminal insertion must not execute or insert raw Jira data: ${forbidden}`);
+  }
+}
+if (jiraRestClient.includes('parseJsonWithLabel(response.body, label, { includePreview: true })')) {
+  fail('Jira REST parsing errors must not include provider response previews.');
+}
+if (jiraRestClient.includes('jiraBaseUrlFromIssueUrl(issueUrl)')) {
+  fail('Credentialed Jira REST requests must use the configured pinned base URL, never a ticket URL from state.');
+}
+if (jiraContextStore.includes('Authorization') || jiraContextStore.includes('JIRA_API_TOKEN')) {
+  fail('Jira context artifacts must not reference credentials or authorization headers.');
 }
 
 for (const marker of [
