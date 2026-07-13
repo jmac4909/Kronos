@@ -110,29 +110,39 @@ function candidateActions(candidate: MrAutopilotCandidate): string[] {
   if (candidate.recommendedAction === 'runCenter' && candidate.runId) {
     return [
       actionButton('runCenter', 'Run Center', { runId: candidate.runId, primary: true }),
+      actionButton('insertGitLabContext', 'Insert MR Context', { ticket }),
+      actionButton('insertCiContext', 'Insert CI Context', { ticket }),
       actionButton('viewTicket', 'Ticket', { ticket }),
     ];
   }
   if (candidate.recommendedAction === 'evidenceGate') {
     return [
       actionButton('evidenceGate', 'Evidence Gate', { ticket, primary: true }),
+      actionButton('insertGitLabContext', 'Insert MR Context', { ticket }),
+      actionButton('insertCiContext', 'Insert CI Context', { ticket }),
       actionButton('viewTicket', 'Ticket', { ticket }),
     ];
   }
   if (candidate.recommendedAction === 'startTicket') {
     return [
       actionButton('startTicket', 'Start Fix', { ticket, primary: true }),
+      actionButton('insertGitLabContext', 'Insert MR Context', { ticket }),
+      actionButton('insertCiContext', 'Insert CI Context', { ticket }),
       actionButton('viewTicket', 'Ticket', { ticket }),
     ];
   }
   if (candidate.recommendedAction === 'humanReview') {
     return [
       actionButton('humanReviewInbox', 'Human Review', { primary: true }),
+      actionButton('insertGitLabContext', 'Insert MR Context', { ticket }),
+      actionButton('insertCiContext', 'Insert CI Context', { ticket }),
       actionButton('viewTicket', 'Ticket', { ticket }),
     ];
   }
   return [
     actionButton('pollReviewMergeRequests', 'Poll MRs', { primary: candidate.status === 'ready' }),
+    actionButton('insertGitLabContext', 'Insert MR Context', { ticket }),
+    actionButton('insertCiContext', 'Insert CI Context', { ticket }),
     actionButton('viewTicket', 'Ticket', { ticket }),
   ];
 }

@@ -1,6 +1,10 @@
 import { JiraTicketSnapshot, normalizeJiraIssueKey } from './jiraRestClient';
 import { arrayFromUnknown, isRecord, optionalFiniteNumberFromUnknown, optionalTrimmedStringFromUnknown } from './records';
 
+const MAX_CONTEXT_TEXT_CHARS = 1024 * 1024;
+const SENSITIVE_FIELD_PATTERN = /^(?:authorization|cookie|set-cookie|credential|password|passwd|secret|token|api[_-]?key|private[_-]?key|access[_-]?token|client[_-]?secret)$/i;
+const SENSITIVE_FIELD_LABEL_PATTERN = /(?:authorization|cookie|credential|password|passwd|secret|token|api[ _-]?key|private[ _-]?key|access[ _-]?token|client[ _-]?secret)/i;
+
 export type JiraContextValue = string | number | boolean | null | JiraContextValue[] | { [key: string]: JiraContextValue };
 
 export interface JiraContextField {
@@ -166,7 +170,7 @@ export function normalizeJiraTicketContext(
     customFields,
     completeness,
   };
-  assignString(context, 'url', firstString(snapshotRecord['issueUrl'], issue['self']));
+  assignString(context, 'url', sanitizedProviderUrl(firstString(snapshotRecord['issueUrl'], issue['self'])));
   assignString(context, 'project', namedValue(fields['project']));
   assignString(context, 'issueType', namedValue(fields['issuetype']));
   assignString(context, 'status', namedValue(fields['status']));
@@ -224,7 +228,7 @@ export function buildFallbackJiraTicketContext(
       warnings: fallbackWarnings,
     },
   };
-  assignString(context, 'url', firstString(ticket['jira_url'], ticket['jiraUrl'], ticket['url']));
+  assignString(context, 'url', sanitizedProviderUrl(firstString(ticket['jira_url'], ticket['jiraUrl'], ticket['url'])));
   assignString(context, 'project', namedValue(ticket['project']));
   assignString(context, 'issueType', firstString(ticket['type'], namedValue(ticket['issuetype'])));
   assignString(context, 'status', firstString(ticket['jira_status'], namedValue(ticket['status'])));
@@ -240,16 +244,19 @@ export function buildFallbackJiraTicketContext(
 }
 
 export function adfToText(value: unknown): string {
-  if (typeof value === 'string') { return value.trim(); }
-  if (value === undefined || value === null) { return ''; }
-  if (Array.isArray(value)) {
-    return cleanAdfText(value.map(item => renderAdfNode(item)).join(''));
+  let rendered: string;
+  if (typeof value === 'string') { rendered = value.trim(); }
+  else if (value === undefined || value === null) { rendered = ''; }
+  else if (Array.isArray(value)) {
+    rendered = cleanAdfText(value.map(item => renderAdfNode(item)).join(''));
+  } else if (!isRecord(value)) {
+    rendered = String(value);
+  } else if (Array.isArray(value['content']) || typeof value['type'] === 'string') {
+    rendered = cleanAdfText(renderAdfNode(value));
+  } else {
+    rendered = readableText(normalizeContextValue(value));
   }
-  if (!isRecord(value)) { return String(value); }
-  if (Array.isArray(value['content']) || typeof value['type'] === 'string') {
-    return cleanAdfText(renderAdfNode(value));
-  }
-  return readableText(normalizeContextValue(value));
+  return redactProviderText(rendered);
 }
 
 export function normalizeContextValue(value: unknown): JiraContextValue {
@@ -263,10 +270,14 @@ function normalizeFields(
 ): JiraContextField[] {
   return Object.entries(fields).map(([id, rawValue]) => {
     const schema = schemas[id];
-    const normalizedValue = normalizeContextValue(id === 'attachment' ? sanitizeAttachmentField(rawValue) : rawValue);
+    const fieldName = optionalTrimmedStringFromUnknown(names[id]) || id;
+    const sensitiveField = SENSITIVE_FIELD_LABEL_PATTERN.test(id) || SENSITIVE_FIELD_LABEL_PATTERN.test(fieldName);
+    const normalizedValue = sensitiveField
+      ? '[REDACTED]'
+      : normalizeContextValue(id === 'attachment' ? sanitizeAttachmentField(rawValue) : rawValue);
     const field: JiraContextField = {
       id,
-      name: optionalTrimmedStringFromUnknown(names[id]) || id,
+      name: redactProviderText(fieldName),
       custom: id.startsWith('customfield_') || isCustomFieldSchema(schema),
       value: normalizedValue,
       text: readableText(normalizedValue),
@@ -280,7 +291,7 @@ function normalizeFields(
 
 function normalizeAttachment(value: unknown): JiraAttachmentContext {
   const attachment = isRecord(value) ? value : {};
-  const filename = firstString(attachment['filename'], attachment['name']) || 'attachment';
+  const filename = redactProviderText(firstString(attachment['filename'], attachment['name']) || 'attachment');
   const metadataSource = sanitizeProviderMetadata(attachment);
   const normalized: JiraAttachmentContext = {
     filename,
@@ -329,12 +340,16 @@ function sanitizeProviderMetadata(value: unknown): unknown {
     return value.map(sanitizeProviderMetadata);
   }
   if (!isRecord(value)) {
-    return value;
+    return typeof value === 'string' ? redactProviderText(value) : value;
   }
   const sanitized: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (typeof item === 'string' && (/(?:url|self|content|thumbnail)$/i.test(key) || /^(?:https?:)?\/\//i.test(item))) {
+    if (SENSITIVE_FIELD_LABEL_PATTERN.test(key)) {
+      sanitized[key] = '[REDACTED]';
+    } else if (typeof item === 'string' && (/(?:url|self|content|thumbnail)$/i.test(key) || /^(?:https?:)?\/\//i.test(item))) {
       sanitized[key] = sanitizedProviderUrl(item) || null;
+    } else if (typeof item === 'string') {
+      sanitized[key] = redactProviderText(item);
     } else {
       sanitized[key] = sanitizeProviderMetadata(item);
     }
@@ -352,6 +367,25 @@ function sanitizedProviderUrl(value: string): string | undefined {
     url.search = '';
     url.hash = '';
     return url.origin === 'https://kronos.invalid' ? url.pathname : url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function sanitizedProviderUrlInText(value: string): string | undefined {
+  if (!value) { return undefined; }
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') { return undefined; }
+    url.username = '';
+    url.password = '';
+    for (const key of [...url.searchParams.keys()]) {
+      if (SENSITIVE_FIELD_PATTERN.test(key)) {
+        url.searchParams.set(key, '[REDACTED]');
+      }
+    }
+    url.hash = '';
+    return url.toString();
   } catch {
     return undefined;
   }
@@ -398,7 +432,8 @@ function namedValue(value: unknown): string {
 
 function normalizeContextValueInternal(value: unknown, seen: WeakSet<object>, depth: number): JiraContextValue {
   if (value === null || value === undefined) { return null; }
-  if (typeof value === 'string' || typeof value === 'boolean') { return value; }
+  if (typeof value === 'string') { return redactProviderText(value); }
+  if (typeof value === 'boolean') { return value; }
   if (typeof value === 'number') { return Number.isFinite(value) ? value : String(value); }
   if (typeof value === 'bigint') { return value.toString(); }
   if (typeof value !== 'object') { return String(value); }
@@ -414,7 +449,9 @@ function normalizeContextValueInternal(value: unknown, seen: WeakSet<object>, de
     }
     const result: { [key: string]: JiraContextValue } = {};
     for (const [key, item] of Object.entries(value)) {
-      result[key] = normalizeContextValueInternal(item, seen, depth + 1);
+      result[key] = SENSITIVE_FIELD_PATTERN.test(key)
+        ? '[REDACTED]'
+        : normalizeContextValueInternal(item, seen, depth + 1);
     }
     return result;
   } finally {
@@ -521,11 +558,11 @@ function readableText(value: JiraContextValue): string {
 }
 
 function stringArray(value: unknown): string[] {
-  return uniqueStrings(arrayFromUnknown(value).map(item => firstString(item)).filter(Boolean));
+  return uniqueStrings(arrayFromUnknown(value).map(item => redactProviderText(firstString(item))).filter(Boolean));
 }
 
 function uniqueStrings(values: readonly string[]): string[] {
-  return [...new Set(values.map(value => value.trim()).filter(Boolean))];
+  return [...new Set(values.map(value => redactProviderText(value)).filter(Boolean))];
 }
 
 function firstString(...values: unknown[]): string {
@@ -544,6 +581,28 @@ function nonNegativeInteger(value: unknown): number | undefined {
 function assignString<T extends object, K extends keyof T>(target: T, key: K, value: unknown): void {
   const normalized = optionalTrimmedStringFromUnknown(value);
   if (normalized) {
-    target[key] = normalized as T[K];
+    target[key] = redactProviderText(normalized) as T[K];
   }
+}
+
+function redactProviderText(value: string): string {
+  const sanitizedUrls = String(value).replace(/\bhttps?:\/\/[^\s<>"`]+/gi, rawValue => {
+    let candidate = rawValue;
+    let trailing = '';
+    while (/[),.;!?]$/.test(candidate)) {
+      trailing = `${candidate.slice(-1)}${trailing}`;
+      candidate = candidate.slice(0, -1);
+    }
+    return `${sanitizedProviderUrlInText(candidate) || '[REDACTED URL]'}${trailing}`;
+  });
+  return sanitizedUrls
+    .replace(/-----BEGIN [^-\r\n]*(?:PRIVATE KEY|SECRET)[^-\r\n]*-----[\s\S]*?-----END [^-\r\n]*(?:PRIVATE KEY|SECRET)[^-\r\n]*-----/gi, '[REDACTED PRIVATE MATERIAL]')
+    .replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9+/_=.-]{8,}/gi, '[REDACTED AUTHORIZATION]')
+    .replace(/\b(?:glpat-|sqp_|ATATT)[A-Za-z0-9_-]{8,}\b/gi, '[REDACTED PROVIDER TOKEN]')
+    .replace(/([?&](?:token|access[_-]?token|api[_-]?key|private[_-]?token|password|secret)=)[^&#\s]+/gi, '$1[REDACTED]')
+    .replace(/((?:authorization|token|private[-_ ]?token|access[-_ ]?token|api[-_ ]?key|client[-_ ]?secret|password|passwd|secret)\s*[:=]\s*)[^\s,;]+/gi, '$1[REDACTED]')
+    .replace(/\u0000/g, '')
+    .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .slice(0, MAX_CONTEXT_TEXT_CHARS)
+    .trim();
 }

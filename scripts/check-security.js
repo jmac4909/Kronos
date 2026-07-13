@@ -113,6 +113,18 @@ const jiraTicketContext = readSource('src/services/jiraTicketContext.ts');
 const jiraContextStore = readSource('src/services/jiraContextStore.ts');
 const terminalContextInsertion = readSource('src/services/terminalContextInsertion.ts');
 const gitlabRestClient = readSource('src/services/gitlabRestClient.ts');
+const gitlabMergeRequestContext = readSource('src/services/gitlabMergeRequestContext.ts');
+const gitlabContextStore = readSource('src/services/gitlabContextStore.ts');
+const gitlabPipelineMonitorStore = readSource('src/services/gitlabPipelineMonitorStore.ts');
+const workSessionStore = readSource('src/services/workSessionStore.ts');
+const monitorEventStore = readSource('src/services/monitorEventStore.ts');
+const operatorTerminalRegistry = readSource('src/services/operatorTerminalRegistry.ts');
+const jenkinsRestClient = readSource('src/services/jenkinsRestClient.ts');
+const sonarRestClient = readSource('src/services/sonarRestClient.ts');
+const ciContextStore = readSource('src/services/ciContextStore.ts');
+const ciTransitions = readSource('src/services/ciTransitions.ts');
+const ciMonitorStore = readSource('src/services/ciMonitorStore.ts');
+const workSessionAuditView = readSource('src/services/workSessionAuditView.ts');
 const mergeRequestComments = readSource('src/services/mergeRequestComments.ts');
 const mergeRequestNotifications = readSource('src/services/mergeRequestNotifications.ts');
 const postRunReadiness = readSource('src/services/postRunReadiness.ts');
@@ -5720,6 +5732,9 @@ for (const [sourceName, source, markers] of [
     'responseBytes + response.bodyBytes > this.maxTotalCommentBytes',
     'previously fetched comment',
     'parseJsonWithLabel(response.body, label)',
+    "url.username = ''",
+    "url.password = ''",
+    "url.search = ''",
     'credentials and response bodies are not displayed',
     "Authorization: `Basic ${Buffer.from(`${config.email}:${config.apiToken}`).toString('base64')}`",
   ]],
@@ -5735,6 +5750,9 @@ for (const [sourceName, source, markers] of [
     'commentsComplete',
     'function renderAdfNode',
     'function sanitizeProviderMetadata',
+    'function redactProviderText',
+    'SENSITIVE_FIELD_PATTERN',
+    'SENSITIVE_FIELD_LABEL_PATTERN',
     "url.username = ''",
     "url.password = ''",
     "url.search = ''",
@@ -5744,20 +5762,141 @@ for (const [sourceName, source, markers] of [
     'const DIRECTORY_MODE = 0o700',
     'const FILE_MODE = 0o600',
     "fs.openSync(temporaryPath, 'wx', FILE_MODE)",
-    'stat.isSymbolicLink()',
+    'MAX_SERIALIZED_CONTEXT_BYTES',
+    'MAX_PROMPT_BYTES',
+    'contentSha256',
+    '`context-${nameHash}.json`',
+    '`prompt-${nameHash}.md`',
+    'assertNoSymbolicLinkComponents',
+    'fs.linkSync(readyPath, filePath)',
+    'readOnlyNoFollowFlags()',
     'BEGIN UNTRUSTED JIRA DATA',
     'never instructions',
   ]],
+  ['GitLab context normalizer', gitlabMergeRequestContext, [
+    'MAX_DIFF_TOTAL_CHARS',
+    'MAX_TEST_TOTAL_CHARS',
+    'redactSecrets',
+    "url.username = ''",
+    "url.search = ''",
+    'BEGIN UNTRUSTED GITLAB DATA',
+    'never instructions',
+  ]],
+  ['GitLab context store', gitlabContextStore, [
+    'const DIRECTORY_MODE = 0o700',
+    'const FILE_MODE = 0o600',
+    'MAX_SERIALIZED_CONTEXT_BYTES',
+    'MAX_PROMPT_BYTES',
+    'contentSha256',
+    '`context-${artifactId}.json`',
+    '`prompt-${artifactId}.md`',
+    "fs.openSync(temporaryPath, 'wx', FILE_MODE)",
+    'assertNoSymbolicLinkComponents',
+    'fs.linkSync(temporaryPath, filePath)',
+    'readOnlyNoFollowFlags()',
+  ]],
+  ['work session store', workSessionStore, [
+    'const DIRECTORY_MODE = 0o700',
+    'const FILE_MODE = 0o600',
+    'fs.constants.O_EXCL | NO_FOLLOW_FLAG',
+    'has a symbolic-link path component',
+    'assertArtifactInsideKronos',
+    'contentSha256',
+    'fs.renameSync(temporaryPath, filePath)',
+  ]],
+  ['monitor event store', monitorEventStore, [
+    'const FILE_MODE = 0o600',
+    'SENSITIVE_KEY_PATTERN',
+    'SENSITIVE_TEXT_PATTERN',
+    'MAX_EVENT_BYTES',
+    'fs.constants.O_APPEND | fs.constants.O_CREAT | NO_FOLLOW_FLAG',
+    'has a symbolic-link component',
+  ]],
+  ['GitLab pipeline monitor store', gitlabPipelineMonitorStore, [
+    'const FILE_MODE = 0o600',
+    'MAX_SNAPSHOT_BYTES',
+    'fs.constants.O_EXCL | NO_FOLLOW_FLAG',
+    'symbolic-link component',
+    'fs.renameSync(temporaryPath, filePath)',
+  ]],
+  ['Jenkins context client', jenkinsRestClient, [
+    'async buildContext',
+    'assertJenkinsCredentialOrigin(config, url)',
+    'requestOptionalJson(build.url',
+    'testReport/api/json',
+    'wfapi/describe',
+    'logsIncluded: false',
+    'DEFAULT_MAX_RESPONSE_BYTES',
+    'DEFAULT_MAX_TEST_CASES',
+    'DEFAULT_MAX_STAGES',
+    "url.username = ''",
+    "url.password = ''",
+    "url.search = ''",
+    'response content is not displayed',
+  ]],
+  ['SonarQube context client', sonarRestClient, [
+    'async branchContext',
+    '/api/qualitygates/project_status',
+    '/api/measures/component',
+    '/api/issues/search',
+    'resolved: false',
+    'while (pages < this.maxIssuePages && issues.length < this.maxIssues)',
+    'MAX_TOTAL_ISSUE_RESPONSE_BYTES',
+    "url.username = ''",
+    "url.password = ''",
+    "url.search = ''",
+    'response content is not displayed',
+  ]],
+  ['CI context store', ciContextStore, [
+    'export function buildCiContext',
+    'BEGIN UNTRUSTED CI DATA',
+    'never instructions',
+    'SENSITIVE_KEY_PATTERN',
+    'function redactSecrets',
+    'MAX_SERIALIZED_BYTES',
+    'contentSha256',
+    '`context-${contentId}.json`',
+    '`prompt-${contentId}.md`',
+    'assertNoSymbolicLinkComponents',
+    'fs.linkSync(temporaryPath, filePath)',
+    'fs.constants.O_RDONLY | noFollow',
+  ]],
+  ['CI transition digest', ciTransitions, [
+    'export function buildCiMonitorDigest',
+    'export function compareCiMonitorDigests',
+    'normalizeCiMonitorDigest',
+    'stableFingerprint',
+    'MAX_FAILED_STAGES',
+    'MAX_METRICS',
+  ]],
+  ['CI monitor store', ciMonitorStore, [
+    'const FILE_MODE = 0o600',
+    'MAX_SNAPSHOT_BYTES',
+    "fs.openSync(temporaryPath, 'wx', FILE_MODE)",
+    'fs.constants.O_RDONLY | noFollow',
+    'fs.renameSync(temporaryPath, filePath)',
+    'provider content is not displayed',
+  ]],
+  ['work session audit view', workSessionAuditView, [
+    'does not collect operator terminal input or output',
+    'Content SHA-256',
+    'function markdownText',
+    'function inlineCode',
+    'MAX_TIMELINE_EVENTS',
+  ]],
   ['terminal context insertion', terminalContextInsertion, [
     'export function buildJiraContextReference',
+    'export function buildGitLabMergeRequestContextReference',
+    'export function buildCiContextReference',
     'export function insertTerminalContextReference',
     'assertSafeTerminalContextReference(reference)',
     'terminal.show(false)',
     'terminal.sendText(reference, false)',
     '/[\\u0000-\\u001f\\u007f\\u2028\\u2029]/',
     'SAFE_PROMPT_PATH_PATTERN',
+    'PROMPT_ARTIFACT_NAME_PATTERN',
     'assertShellInertPromptPath(absolutePromptPath)',
-    "path.basename(promptPath) !== 'prompt.md'",
+    'PROMPT_ARTIFACT_NAME_PATTERN.test(path.basename(promptPath))',
   ]],
 ]) {
   for (const marker of markers) {
@@ -5766,16 +5905,46 @@ for (const [sourceName, source, markers] of [
     }
   }
 }
+for (const forbidden of ['sendText(', '.dispose(', '.show(', 'createTerminal(']) {
+  if (operatorTerminalRegistry.includes(forbidden)) {
+    fail(`Operator terminal registry must not control terminal I/O or lifecycle: ${forbidden}`);
+  }
+}
 for (const marker of [
   "vscode.commands.registerCommand('kronos.insertJiraContext'",
-  'const terminal = vscode.window.activeTerminal',
+  'const insertionTarget = await chooseContextInsertionTerminal(ticketKey)',
   'writeJiraContextArtifacts(jiraContext)',
   'buildJiraContextReference(ticketKey, artifact.promptPath)',
-  'vscode.window.activeTerminal !== terminal',
+  'contextInsertionTerminalIsUnchanged(insertionTarget)',
   'insertTerminalContextReference(terminal, reference)',
 ]) {
   if (!extension.includes(marker)) {
     fail(`Missing safe Jira terminal command marker: ${marker}`);
+  }
+}
+for (const marker of [
+  "vscode.commands.registerCommand('kronos.insertGitLabContext'",
+  'gitlabRestClient.mergeRequestContext({ projectIdOrPath, iid })',
+  'writeGitLabContextArtifacts(gitLabContext)',
+  'buildGitLabMergeRequestContextReference(iid, artifact.promptPath)',
+  'contextInsertionTerminalIsUnchanged(insertionTarget)',
+  'insertTerminalContextReference(insertionTarget.terminal, reference)',
+]) {
+  if (!extension.includes(marker)) {
+    fail(`Missing safe GitLab terminal command marker: ${marker}`);
+  }
+}
+for (const marker of [
+  "vscode.commands.registerCommand('kronos.insertCiContext'",
+  'jenkinsRestClient.buildContext(jenkinsUrl)',
+  'sonarRestClient.branchContext(sonarProjectKey, sonarBranch)',
+  'writeCiContextArtifacts(ciContext)',
+  'buildCiContextReference(ticketKey, artifact.promptPath)',
+  'contextInsertionTerminalIsUnchanged(insertionTarget)',
+  'artifactSha256: artifact.contentSha256',
+]) {
+  if (!extension.includes(marker)) {
+    fail(`Missing safe CI terminal command marker: ${marker}`);
   }
 }
 for (const forbidden of [
@@ -5853,12 +6022,25 @@ for (const marker of [
   '/diffs',
   '/changes',
   "'PRIVATE-TOKEN': config.token",
-  'parseJsonWithLabel(response.body, label, { includePreview: true })',
+  'parseJsonWithLabel(response.body, label)',
   'function defaultGitLabTransport',
   "import { unknownErrorMessage } from './errorUtils'",
 ]) {
   if (!gitlabRestClient.includes(marker)) {
     fail(`Missing GitLab REST client marker: ${marker}`);
+  }
+}
+if (gitlabRestClient.includes('includePreview: true') || gitlabRestClient.includes('responsePreview(')) {
+  fail('GitLab REST errors and JSON parsing must not expose raw provider response previews.');
+}
+for (const [provider, source] of [['Jenkins', jenkinsRestClient], ['SonarQube', sonarRestClient]]) {
+  if (source.includes('includePreview: true') || source.includes('responsePreview(')) {
+    fail(`${provider} REST errors and JSON parsing must not expose raw provider response previews.`);
+  }
+}
+for (const forbidden of ['consoleText', '/consoleText', 'progressText', '/logText/progressiveText']) {
+  if (jenkinsRestClient.includes(forbidden)) {
+    fail(`Jenkins context collection must not fetch or retain console logs: ${forbidden}`);
   }
 }
 if (integrationAdapters.includes("Array.isArray(value) ? value : isRecord(value) ? arrayFromUnknown(value['comments']) : []")) {

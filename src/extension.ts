@@ -45,9 +45,36 @@ import { RecoveryInventory, RecoveryItem, buildRecoveryInventory, resolveRecover
 import { DispatchCollision, detectDispatchCollisions, type DispatchCollisionInput } from './services/collisionDetector';
 import { gitlabAdapter, jenkinsAdapter, jiraAdapter, sonarAdapter } from './services/integrationAdapters';
 import { isJiraRestConfigured, jiraRestClient } from './services/jiraRestClient';
+import { gitLabProjectPathFromMergeRequestUrl, gitlabRestClient } from './services/gitlabRestClient';
+import { jenkinsRestClient, type JenkinsBuildContext } from './services/jenkinsRestClient';
+import { sonarRestClient, type SonarBranchContext } from './services/sonarRestClient';
+import { buildCiContext, writeCiContextArtifacts } from './services/ciContextStore';
 import { buildFallbackJiraTicketContext, normalizeJiraTicketContext, type JiraTicketContext } from './services/jiraTicketContext';
 import { writeJiraContextArtifacts } from './services/jiraContextStore';
-import { buildJiraContextReference, insertTerminalContextReference } from './services/terminalContextInsertion';
+import { normalizeGitLabMergeRequestContext } from './services/gitlabMergeRequestContext';
+import { writeGitLabContextArtifacts } from './services/gitlabContextStore';
+import { buildCiContextReference, buildGitLabMergeRequestContextReference, buildJiraContextReference, insertTerminalContextReference } from './services/terminalContextInsertion';
+import { createOperatorTerminalRegistry, type OperatorTerminalBinding } from './services/operatorTerminalRegistry';
+import {
+  addWorkSessionProviderBinding,
+  attachWorkSessionTerminal,
+  closeWorkSession,
+  createOrGetWorkSessionByTicket,
+  detachWorkSessionTerminal,
+  getWorkSessionByTicket,
+  listWorkSessions,
+  readWorkSession,
+  recordWorkSessionMonitoringResult,
+  recordWorkSessionContextArtifact,
+  reopenWorkSession,
+  type WorkSessionRecord,
+} from './services/workSessionStore';
+import { acknowledgeMonitorEvent, appendMonitorEvent, listMonitorEvents } from './services/monitorEventStore';
+import { buildWorkSessionAuditMarkdown } from './services/workSessionAuditView';
+import { compareGitLabPipelineDigests, normalizeGitLabPipelineDigest, type GitLabPipelineTransition } from './services/pipelineTransitions';
+import { gitLabPipelineMonitorSnapshotPath, readGitLabPipelineMonitorSnapshot, writeGitLabPipelineMonitorSnapshot } from './services/gitlabPipelineMonitorStore';
+import { buildCiMonitorDigest, compareCiMonitorDigests, normalizeCiMonitorDigest, type CiMonitorDigest, type CiMonitorTransition } from './services/ciTransitions';
+import { ciMonitorSnapshotPath, readCiMonitorSnapshot, writeCiMonitorSnapshot } from './services/ciMonitorStore';
 import { buildRunCompletionEvidenceCheck, buildRunCompletionEvidenceText, evaluatePostRunReadiness, postRunReadinessRunPatch, resolvePostRunTicket, shouldRecordRunCompletionEvidence } from './services/postRunReadiness';
 import { existingAcceptanceCriterion, extractAcceptanceCriteria } from './services/acceptanceCriteria';
 import type { ExistingAcceptanceCriterion } from './services/acceptanceCriteria';
@@ -1502,9 +1529,10 @@ export function activate(context: vscode.ExtensionContext) {
   }
   const state = new KronosState();
 
+  const operatorTerminals = createOperatorTerminalRegistry<vscode.Terminal>();
   const projectTree = new ProjectTreeProvider(state);
   const queueTree = new QueueTreeProvider(state);
-  const sessionTree = new SessionTreeProvider(state);
+  const sessionTree = new SessionTreeProvider(state, operatorTerminals);
   const taskTree = new TaskTreeProvider(state);
   seedReviewMergeRequestNotifications(context.globalState);
   const reviewTree = new ReviewTreeProvider(state, reviewSeenKeysStore(context.globalState));
@@ -1629,12 +1657,16 @@ export function activate(context: vscode.ExtensionContext) {
     stopRuntimePolling();
     const config = vscode.workspace.getConfiguration('kronos');
     const sessionPollMs = configIntervalMs(config.get<number>('sessionPollIntervalMs', 5000), 5000, 1000);
+    const managedMonitorPollMs = configIntervalSecondsMs(config.get<number>('reviewPollIntervalSec', 300), 300, 15);
     sessionTree.startPolling(sessionPollMs);
     queueTree.startPolling(sessionPollMs);
+    const managedMonitorTimer = setInterval(() => { void pollManagedWorkSessions(); }, managedMonitorPollMs);
+    void pollManagedWorkSessions();
     runtimePollingDisposables = [
       startBackgroundRefreshPoll(throttledRefresh, configIntervalSecondsMs(config.get<number>('pollIntervalSec', 300), 300, 1)),
       startReviewAutomation(state),
       startStatusBarRunRefresh(state, sessionPollMs),
+      { dispose: () => clearInterval(managedMonitorTimer) },
     ];
   };
   const notifyStateLoadIssues = () => {
@@ -1648,6 +1680,9 @@ export function activate(context: vscode.ExtensionContext) {
     );
   };
   const runStartupSideEffects = () => {
+    void restorePersistedOperatorTerminalBindings().catch(e => {
+      appendKronosLog('Could not restore operator terminal bindings after reload.', unknownErrorMessage(e, 'Terminal binding restore failed.'));
+    });
     startRuntimePolling();
     ensureInitialIntegrationManifest();
     try {
@@ -1701,9 +1736,722 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  const appendTerminalDetachedEvent = (binding: OperatorTerminalBinding, reason: string) => {
+    const workSession = readWorkSession(binding.sessionId);
+    if (!workSession) { return; }
+    appendMonitorEvent({
+      sessionId: workSession.id,
+      type: 'terminal.detached',
+      source: 'operator',
+      summary: `${workSession.ticketKey} operator terminal detached.`,
+      subject: { kind: 'work-session', id: workSession.id, ticketKey: workSession.ticketKey },
+      metadata: { reason },
+    });
+  };
+
+  const attachOperatorTerminalToSession = async (
+    workSession: WorkSessionRecord,
+    terminal: vscode.Terminal,
+  ): Promise<WorkSessionRecord> => {
+    const previous = operatorTerminals.bindingForTerminal(terminal);
+    if (previous && previous.sessionId !== workSession.id) {
+      try {
+        detachWorkSessionTerminal(previous.sessionId, previous.bindingId, 'Terminal reassigned by the operator.');
+        appendTerminalDetachedEvent(previous, 'reassigned');
+      } catch (e: unknown) {
+        appendKronosLog('Could not update the previous work-session terminal binding.', unknownErrorMessage(e, 'Unknown binding error.'));
+      }
+    }
+
+    let processId: number | undefined;
+    try {
+      processId = await terminal.processId;
+    } catch {
+      processId = undefined;
+    }
+    const input: { bindingId?: string; name: string; processId?: number } = { name: terminal.name };
+    if (previous?.sessionId === workSession.id) { input.bindingId = previous.bindingId; }
+    if (processId !== undefined) { input.processId = processId; }
+    const updated = attachWorkSessionTerminal(workSession.id, input);
+    const terminalBinding = input.bindingId
+      ? updated.terminals.find(candidate => candidate.id === input.bindingId)
+      : updated.terminals[updated.terminals.length - 1];
+    if (!terminalBinding) { throw new Error('Kronos could not persist the operator terminal binding.'); }
+    operatorTerminals.attach(terminal, { sessionId: updated.id, bindingId: terminalBinding.id });
+    appendMonitorEvent({
+      sessionId: updated.id,
+      type: 'terminal.attached',
+      source: 'operator',
+      summary: `${updated.ticketKey} operator terminal attached.`,
+      subject: { kind: 'work-session', id: updated.id, ticketKey: updated.ticketKey },
+      metadata: { terminalBindingId: terminalBinding.id },
+    });
+    sessionTree.refresh();
+    return updated;
+  };
+
+  const restorePersistedOperatorTerminalBindings = async (): Promise<void> => {
+    const live = await Promise.all(vscode.window.terminals.map(async terminal => {
+      try {
+        return { terminal, processId: await terminal.processId };
+      } catch {
+        return { terminal, processId: undefined };
+      }
+    }));
+    const claimed = new Set<vscode.Terminal>();
+    let restored = 0;
+    for (const workSession of listWorkSessions().filter(session => session.status === 'active')) {
+      for (const binding of workSession.terminals.filter(candidate => candidate.status === 'attached' && candidate.processId !== undefined)) {
+        const matches = live.filter(candidate =>
+          !claimed.has(candidate.terminal)
+          && candidate.processId === binding.processId
+          && candidate.terminal.name === binding.name
+        );
+        if (matches.length !== 1 || !matches[0]) { continue; }
+        operatorTerminals.attach(matches[0].terminal, { sessionId: workSession.id, bindingId: binding.id });
+        claimed.add(matches[0].terminal);
+        restored += 1;
+      }
+    }
+    if (restored > 0) {
+      sessionTree.refresh();
+      appendKronosLog(`Restored ${restored} operator terminal binding${restored === 1 ? '' : 's'} after extension reload.`);
+    }
+  };
+
+  const ensureWorkSessionProviderBindings = (workSession: WorkSessionRecord, ticket: Ticket): WorkSessionRecord => {
+    let updated = workSession;
+    const projectName = ticketStringArray(ticket.projects)[0];
+    const config = projectName ? recordFromUnknown(state.state?.projects[projectName]?.config) : {};
+    if (ticket.source === 'jira') {
+      const jiraBinding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
+        provider: 'jira',
+        resource: 'ticket',
+        subjectId: updated.ticketKey,
+      };
+      if (ticket.jira_url) { jiraBinding.url = ticket.jira_url; }
+      updated = addWorkSessionProviderBinding(updated.id, jiraBinding);
+    }
+    if (ticket.mr?.iid) {
+      const configuredProjectId = optionalTrimmedStringFromUnknown(config['gitlab_project_id'])
+        || (typeof config['gitlab_project_id'] === 'number' ? String(config['gitlab_project_id']) : undefined);
+      const bindingInput: Parameters<typeof addWorkSessionProviderBinding>[1] = {
+        provider: 'gitlab',
+        resource: 'merge-request',
+        subjectId: String(ticket.mr.iid),
+      };
+      if (configuredProjectId) { bindingInput.projectId = configuredProjectId; }
+      if (ticket.mr.url) { bindingInput.url = ticket.mr.url; }
+      updated = addWorkSessionProviderBinding(updated.id, bindingInput);
+    }
+    const jenkinsUrl = optionalTrimmedStringFromUnknown(config['jenkins_url']) || ticket.build?.url;
+    if (jenkinsUrl) {
+      updated = addWorkSessionProviderBinding(updated.id, {
+        id: 'jenkins-build',
+        provider: 'jenkins',
+        resource: 'build',
+        subjectId: ticket.build ? String(ticket.build.number) : 'latest',
+        url: jenkinsUrl,
+      });
+    }
+    const sonarProjectKey = optionalTrimmedStringFromUnknown(config['sonar_project_key']);
+    if (sonarProjectKey) {
+      const sonarBranch = ticket.mr?.source_branch
+        || ticket.mr?.sourceBranch
+        || ticket.mr?.branch
+        || ticket.mr?.head_branch
+        || optionalTrimmedStringFromUnknown(config['default_branch'])
+        || optionalTrimmedStringFromUnknown(config['base_branch'])
+        || getProjectBaseBranch(state, projectName);
+      updated = addWorkSessionProviderBinding(updated.id, {
+        id: 'sonar-quality-gate',
+        provider: 'sonar',
+        resource: 'quality-gate',
+        subjectId: `${sonarProjectKey}:${sonarBranch}`,
+        projectId: sonarProjectKey,
+      });
+    }
+    return updated;
+  };
+
+  const chooseLiveWorkSessionTerminal = async (sessionId: string): Promise<{
+    terminal: vscode.Terminal;
+    binding: OperatorTerminalBinding;
+  } | undefined> => {
+    const activeTerminal = vscode.window.activeTerminal;
+    if (activeTerminal) {
+      const activeBinding = operatorTerminals.bindingForTerminal(activeTerminal);
+      if (activeBinding?.sessionId === sessionId) {
+        return { terminal: activeTerminal, binding: activeBinding };
+      }
+    }
+    const bindings = operatorTerminals.listBindings(sessionId);
+    if (bindings.length === 0) { return undefined; }
+    let binding = bindings[0];
+    if (bindings.length > 1) {
+      const workSession = readWorkSession(sessionId);
+      const pick = await vscode.window.showQuickPick(bindings.map(candidate => ({
+        label: workSession?.terminals.find(terminal => terminal.id === candidate.bindingId)?.name || candidate.bindingId,
+        description: candidate.bindingId,
+        binding: candidate,
+      })), { title: 'Choose the operator terminal managed by this work session' });
+      binding = pick?.binding;
+    }
+    if (!binding) { return undefined; }
+    const resolved = operatorTerminals.resolve(sessionId, binding.bindingId);
+    return resolved.kind === 'resolved'
+      ? { terminal: resolved.terminal, binding: resolved.binding }
+      : undefined;
+  };
+
+  const chooseContextInsertionTerminal = async (ticketKey: string): Promise<{
+    terminal: vscode.Terminal;
+    workSession?: WorkSessionRecord;
+    binding?: OperatorTerminalBinding;
+  } | undefined> => {
+    const workSession = getWorkSessionByTicket(ticketKey);
+    if (workSession?.status === 'active') {
+      const selected = await chooseLiveWorkSessionTerminal(workSession.id);
+      if (!selected) { return undefined; }
+      return { terminal: selected.terminal, workSession, binding: selected.binding };
+    }
+    const terminal = vscode.window.activeTerminal;
+    return terminal ? { terminal } : undefined;
+  };
+
+  const contextInsertionTerminalIsUnchanged = (selection: {
+    terminal: vscode.Terminal;
+    binding?: OperatorTerminalBinding;
+  }): boolean => {
+    if (!selection.binding) { return vscode.window.activeTerminal === selection.terminal; }
+    const resolved = operatorTerminals.resolve(selection.binding.sessionId, selection.binding.bindingId);
+    return resolved.kind === 'resolved' && resolved.terminal === selection.terminal;
+  };
+
+  let managedWorkSessionPollInProgress = false;
+  type ManagedPollResult = { polled: number; transitions: number; failures: number; skipped: number };
+  const emptyManagedPollResult = (): ManagedPollResult => ({ polled: 0, transitions: 0, failures: 0, skipped: 0 });
+  const combineManagedPollResults = (left: ManagedPollResult, right: ManagedPollResult): ManagedPollResult => ({
+    polled: left.polled + right.polled,
+    transitions: left.transitions + right.transitions,
+    failures: left.failures + right.failures,
+    skipped: left.skipped + right.skipped,
+  });
+
+  const pollManagedGitLabSession = async (workSession: WorkSessionRecord): Promise<ManagedPollResult> => {
+    const mrBinding = [...workSession.providerBindings].reverse().find(binding =>
+      binding.provider === 'gitlab' && binding.resource === 'merge-request'
+    );
+    if (!mrBinding) { return emptyManagedPollResult(); }
+    const iid = Number(mrBinding.subjectId);
+    if (!Number.isSafeInteger(iid) || iid <= 0) {
+      appendKronosLog(`Skipped managed GitLab monitoring for ${workSession.ticketKey}.`, 'The merge-request binding has no valid IID.');
+      return { ...emptyManagedPollResult(), skipped: 1 };
+    }
+    const ticket = state.state?.tickets[workSession.ticketKey];
+    let projectIdOrPath = mrBinding.projectId || gitLabProjectPathFromMergeRequestUrl(mrBinding.url);
+    if (!projectIdOrPath && ticket) {
+      for (const projectName of ticketStringArray(ticket.projects)) {
+        const configured = state.state?.projects[projectName]?.config?.gitlab_project_id;
+        if (typeof configured === 'number' && Number.isFinite(configured) && configured > 0) {
+          projectIdOrPath = String(Math.floor(configured));
+          break;
+        }
+      }
+      projectIdOrPath = projectIdOrPath || gitLabProjectPathFromMergeRequestUrl(ticket.mr?.url);
+    }
+    if (!projectIdOrPath) {
+      appendKronosLog(`Skipped managed GitLab monitoring for ${workSession.ticketKey}.`, 'No GitLab project id or path is bound to the work session.');
+      return { ...emptyManagedPollResult(), skipped: 1 };
+    }
+
+    try {
+      const snapshot = await gitlabRestClient.mergeRequestMonitor({ projectIdOrPath, iid });
+      const digest = normalizeGitLabPipelineDigest(snapshot);
+      if (!digest) { return { ...emptyManagedPollResult(), polled: 1 }; }
+      let previous = null;
+      try {
+        previous = readGitLabPipelineMonitorSnapshot(workSession.id);
+      } catch (e: unknown) {
+        appendKronosLog(`Ignored an invalid pipeline baseline for ${workSession.ticketKey}.`, unknownErrorMessage(e, 'Invalid baseline.'));
+      }
+      const transitions = previous ? compareGitLabPipelineDigests(previous, digest) : [];
+      const snapshotPath = gitLabPipelineMonitorSnapshotPath(workSession.id);
+      if (!previous) {
+        writeGitLabPipelineMonitorSnapshot(workSession.id, digest);
+        appendMonitorEvent({
+          sessionId: workSession.id,
+          type: 'git.observed',
+          source: 'gitlab',
+          summary: `${workSession.ticketKey} pipeline baseline recorded.`,
+          subject: { kind: 'pipeline', id: String(digest.id), ticketKey: workSession.ticketKey },
+          after: { state: digest.status, fingerprint: digest.fingerprint },
+          artifactPath: snapshotPath,
+          metadata: { mergeRequestIid: iid, pipelineId: digest.id },
+        });
+        return { ...emptyManagedPollResult(), polled: 1 };
+      }
+
+      const recorded: Array<{ transition: GitLabPipelineTransition; eventId: string }> = [];
+      for (const transition of transitions) {
+        const eventInput: Parameters<typeof appendMonitorEvent>[0] = {
+          sessionId: workSession.id,
+          type: 'provider.transition',
+          source: 'gitlab',
+          summary: pipelineTransitionAuditSummary(workSession.ticketKey, transition),
+          subject: { kind: 'pipeline', id: String(transition.pipelineId), ticketKey: workSession.ticketKey },
+          after: { state: transition.currentStatus, fingerprint: transition.currentFingerprint },
+          artifactPath: snapshotPath,
+          metadata: {
+            transitionKey: transition.key,
+            transitionKind: transition.kind,
+            mergeRequestIid: iid,
+            pipelineId: transition.pipelineId,
+            failedJobCount: transition.jobs.length,
+            failedTestCount: transition.tests.failed + transition.tests.error,
+          },
+        };
+        if (transition.previousFingerprint) {
+          eventInput.before = {
+            state: transition.previousStatus || 'unknown',
+            fingerprint: transition.previousFingerprint,
+          };
+        }
+        recorded.push({ transition, eventId: appendMonitorEvent(eventInput).id });
+      }
+      if (previous.fingerprint !== digest.fingerprint) {
+        writeGitLabPipelineMonitorSnapshot(workSession.id, digest);
+      }
+      for (const item of recorded) {
+        showPipelineTransitionNotification(workSession, iid, digest.url, item.transition, item.eventId);
+      }
+      return { ...emptyManagedPollResult(), polled: 1, transitions: transitions.length };
+    } catch (e: unknown) {
+      appendKronosLog(`Managed GitLab monitoring failed for ${workSession.ticketKey}.`, unknownErrorMessage(e, 'GitLab monitoring failed.'));
+      return { ...emptyManagedPollResult(), failures: 1 };
+    }
+  };
+
+  const pollManagedCiSession = async (workSession: WorkSessionRecord): Promise<ManagedPollResult> => {
+    const bindings = [...workSession.providerBindings].reverse();
+    const jenkinsBinding = bindings.find(binding => binding.provider === 'jenkins' && binding.resource === 'build');
+    const sonarBinding = bindings.find(binding => binding.provider === 'sonar' && binding.resource === 'quality-gate');
+    if (!jenkinsBinding && !sonarBinding) { return emptyManagedPollResult(); }
+
+    let result = emptyManagedPollResult();
+    let jenkinsContext: JenkinsBuildContext | undefined;
+    let sonarContext: SonarBranchContext | undefined;
+    if (jenkinsBinding) {
+      if (!jenkinsBinding.url) {
+        result.skipped += 1;
+        appendKronosLog(`Skipped managed Jenkins monitoring for ${workSession.ticketKey}.`, 'The Jenkins binding has no job URL.');
+      } else {
+        try {
+          jenkinsContext = await jenkinsRestClient.buildContext(jenkinsBinding.url);
+          result.polled += 1;
+        } catch (e: unknown) {
+          result.failures += 1;
+          appendKronosLog(`Managed Jenkins monitoring failed for ${workSession.ticketKey}.`, unknownErrorMessage(e, 'Jenkins monitoring failed.'));
+        }
+      }
+    }
+
+    if (sonarBinding) {
+      const projectKey = sonarBinding.projectId;
+      const boundPrefix = projectKey ? `${projectKey}:` : '';
+      const branch = boundPrefix && sonarBinding.subjectId.startsWith(boundPrefix)
+        ? sonarBinding.subjectId.slice(boundPrefix.length).trim()
+        : '';
+      if (!projectKey || !branch) {
+        result.skipped += 1;
+        appendKronosLog(`Skipped managed SonarQube monitoring for ${workSession.ticketKey}.`, 'The SonarQube binding has no project key or branch.');
+      } else {
+        try {
+          sonarContext = await sonarRestClient.branchContext(projectKey, branch);
+          result.polled += 1;
+        } catch (e: unknown) {
+          result.failures += 1;
+          appendKronosLog(`Managed SonarQube monitoring failed for ${workSession.ticketKey}.`, unknownErrorMessage(e, 'SonarQube monitoring failed.'));
+        }
+      }
+    }
+    if (result.polled === 0) { return result; }
+
+    let previous = null;
+    try {
+      previous = readCiMonitorSnapshot(workSession.id);
+    } catch (e: unknown) {
+      appendKronosLog(`Ignored an invalid CI baseline for ${workSession.ticketKey}.`, unknownErrorMessage(e, 'Invalid CI baseline.'));
+    }
+    const liveInput: { jenkins?: JenkinsBuildContext; sonar?: SonarBranchContext } = {};
+    if (jenkinsContext) { liveInput.jenkins = jenkinsContext; }
+    if (sonarContext) { liveInput.sonar = sonarContext; }
+    const liveDigest = buildCiMonitorDigest(liveInput);
+    const mergedValue: { schemaVersion: 1; jenkins?: unknown; sonar?: unknown } = { schemaVersion: 1 };
+    if (liveDigest?.jenkins) { mergedValue.jenkins = liveDigest.jenkins; }
+    else if (jenkinsBinding && previous?.jenkins) { mergedValue.jenkins = previous.jenkins; }
+    if (liveDigest?.sonar) { mergedValue.sonar = liveDigest.sonar; }
+    else if (sonarBinding && previous?.sonar) { mergedValue.sonar = previous.sonar; }
+    const digest = normalizeCiMonitorDigest(mergedValue);
+    if (!digest) { return result; }
+    const snapshotPath = ciMonitorSnapshotPath(workSession.id);
+    if (!previous) {
+      writeCiMonitorSnapshot(workSession.id, digest);
+      appendMonitorEvent({
+        sessionId: workSession.id,
+        type: 'decision.recorded',
+        source: 'kronos',
+        summary: `${workSession.ticketKey} Jenkins and SonarQube monitoring baseline recorded.`,
+        subject: { kind: 'ci-monitor', id: workSession.ticketKey, ticketKey: workSession.ticketKey },
+        after: { state: ciDigestState(digest), fingerprint: digest.fingerprint },
+        artifactPath: snapshotPath,
+        metadata: { jenkinsIncluded: Boolean(digest.jenkins), sonarIncluded: Boolean(digest.sonar) },
+      });
+      return result;
+    }
+
+    const transitions = compareCiMonitorDigests(previous, digest);
+    const recorded: Array<{ transition: CiMonitorTransition; eventId: string }> = [];
+    for (const transition of transitions) {
+      const source = transition.provider === 'jenkins' ? 'jenkins' : 'sonar';
+      const subject = transition.provider === 'jenkins'
+        ? { kind: 'build', id: String(transition.buildNumber), ticketKey: workSession.ticketKey }
+        : { kind: 'quality-gate', id: `${transition.projectKey}:${transition.branch}`, ticketKey: workSession.ticketKey };
+      const beforeState = transition.provider === 'jenkins' ? transition.previousStatus : transition.previousGateStatus;
+      const afterState = transition.provider === 'jenkins' ? transition.status : transition.gateStatus;
+      const metadata: Record<string, string | number | boolean | null> = {
+        transitionKey: transition.key,
+        transitionKind: transition.kind,
+      };
+      if (transition.provider === 'jenkins') {
+        metadata['buildNumber'] = transition.buildNumber;
+        metadata['failedTestCount'] = transition.failedTestCount;
+        metadata['failedStageCount'] = transition.failedStageNames.length;
+      } else {
+        metadata['issueDelta'] = transition.issueDelta;
+        metadata['unresolvedIssueCount'] = transition.unresolvedIssueCount;
+      }
+      const event = appendMonitorEvent({
+        sessionId: workSession.id,
+        type: 'provider.transition',
+        source,
+        summary: ciTransitionAuditSummary(workSession.ticketKey, transition),
+        subject,
+        before: { state: beforeState, fingerprint: transition.previousFingerprint },
+        after: { state: afterState, fingerprint: transition.currentFingerprint },
+        artifactPath: snapshotPath,
+        metadata,
+      });
+      recorded.push({ transition, eventId: event.id });
+    }
+    if (previous.fingerprint !== digest.fingerprint) {
+      writeCiMonitorSnapshot(workSession.id, digest);
+    }
+    for (const item of recorded) {
+      showCiTransitionNotification(workSession, item.transition, item.eventId);
+    }
+    result.transitions += transitions.length;
+    return result;
+  };
+
+  const pollManagedWorkSessions = async (): Promise<ManagedPollResult> => {
+    if (managedWorkSessionPollInProgress) { return emptyManagedPollResult(); }
+    managedWorkSessionPollInProgress = true;
+    let total = emptyManagedPollResult();
+    try {
+      const sessions = listWorkSessions().filter(session => session.status === 'active' && session.monitoring.enabled);
+      for (const workSession of sessions) {
+        let sessionResult = emptyManagedPollResult();
+        sessionResult = combineManagedPollResults(sessionResult, await pollManagedGitLabSession(workSession));
+        sessionResult = combineManagedPollResults(sessionResult, await pollManagedCiSession(workSession));
+        const hasMonitorableBinding = workSession.providerBindings.some(binding =>
+          binding.provider === 'gitlab' || binding.provider === 'jenkins' || binding.provider === 'sonar'
+        );
+        const summary = hasMonitorableBinding
+          ? `Polled ${sessionResult.polled} provider context${sessionResult.polled === 1 ? '' : 's'}; ${sessionResult.failures} failed; ${sessionResult.skipped} skipped.`
+          : 'No GitLab, Jenkins, or SonarQube provider is bound to this work session.';
+        try {
+          recordWorkSessionMonitoringResult(workSession.id, {
+            polled: sessionResult.polled,
+            failures: sessionResult.failures,
+            skipped: sessionResult.skipped,
+            attemptedAt: new Date().toISOString(),
+            summary,
+          });
+        } catch (e: unknown) {
+          appendKronosLog(`Could not persist monitoring readiness for ${workSession.ticketKey}.`, unknownErrorMessage(e, 'Monitoring readiness write failed.'));
+        }
+        total = combineManagedPollResults(total, sessionResult);
+      }
+      if (total.polled > 0) { sessionTree.refresh(); }
+      return total;
+    } finally {
+      managedWorkSessionPollInProgress = false;
+    }
+  };
+
+  const showPipelineTransitionNotification = (
+    workSession: WorkSessionRecord,
+    iid: number,
+    pipelineUrl: string | undefined,
+    transition: GitLabPipelineTransition,
+    eventId: string,
+  ): void => {
+    const message = pipelineTransitionNotificationMessage(workSession.ticketKey, transition);
+    try {
+      appendMonitorEvent({
+        sessionId: workSession.id,
+        type: 'notification.shown',
+        source: 'kronos',
+        summary: message,
+        subject: { kind: 'pipeline', id: String(transition.pipelineId), ticketKey: workSession.ticketKey },
+        metadata: { transitionEventId: eventId, transitionKind: transition.kind },
+      });
+    } catch (e: unknown) {
+      appendKronosLog('Could not record a pipeline notification audit event.', unknownErrorMessage(e, 'Unknown audit error.'));
+    }
+    const actions = [...(pipelineUrl ? ['Open Pipeline'] : []), `Insert [MR-${iid}]`, 'Acknowledge'];
+    const isFailure = transition.kind === 'pipeline_failed'
+      || transition.kind === 'pipeline_canceled'
+      || transition.kind === 'blocking_jobs_failed'
+      || transition.kind === 'tests_failed';
+    const notification = isFailure
+      ? vscode.window.showWarningMessage(message, ...actions)
+      : vscode.window.showInformationMessage(message, ...actions);
+    void notification.then(async action => {
+      if (action === 'Open Pipeline' && pipelineUrl) {
+        await openExternalHttpUrl(pipelineUrl);
+      } else if (action === `Insert [MR-${iid}]`) {
+        await vscode.commands.executeCommand('kronos.insertGitLabContext', { ticketKey: workSession.ticketKey });
+      } else if (action === 'Acknowledge') {
+        acknowledgeMonitorEvent(eventId, workSession.id);
+      }
+    }, e => appendKronosLog('Pipeline notification action failed.', unknownErrorMessage(e, 'Unknown notification error.')));
+  };
+
+  const showCiTransitionNotification = (
+    workSession: WorkSessionRecord,
+    transition: CiMonitorTransition,
+    eventId: string,
+  ): void => {
+    const message = ciTransitionNotificationMessage(workSession.ticketKey, transition);
+    const subject = transition.provider === 'jenkins'
+      ? { kind: 'build', id: String(transition.buildNumber), ticketKey: workSession.ticketKey }
+      : { kind: 'quality-gate', id: `${transition.projectKey}:${transition.branch}`, ticketKey: workSession.ticketKey };
+    try {
+      appendMonitorEvent({
+        sessionId: workSession.id,
+        type: 'notification.shown',
+        source: 'kronos',
+        summary: message,
+        subject,
+        metadata: { transitionEventId: eventId, transitionKind: transition.kind },
+      });
+    } catch (e: unknown) {
+      appendKronosLog('Could not record a CI notification audit event.', unknownErrorMessage(e, 'Unknown audit error.'));
+    }
+    const openAction = transition.provider === 'jenkins' ? 'Open Jenkins' : 'Open SonarQube';
+    const actions = [...(transition.url ? [openAction] : []), `Insert [CI-${workSession.ticketKey}]`, 'Acknowledge'];
+    const isFailure = transition.kind === 'jenkins_failed'
+      || transition.kind === 'jenkins_tests_failed'
+      || transition.kind === 'jenkins_stages_failed'
+      || transition.kind === 'sonar_gate_failed'
+      || transition.kind === 'sonar_issues_increased';
+    const notification = isFailure
+      ? vscode.window.showWarningMessage(message, ...actions)
+      : vscode.window.showInformationMessage(message, ...actions);
+    void notification.then(async action => {
+      if (action === openAction && transition.url) {
+        await openExternalHttpUrl(transition.url);
+      } else if (action === `Insert [CI-${workSession.ticketKey}]`) {
+        await vscode.commands.executeCommand('kronos.insertCiContext', { ticketKey: workSession.ticketKey });
+      } else if (action === 'Acknowledge') {
+        acknowledgeMonitorEvent(eventId, workSession.id);
+      }
+    }, e => appendKronosLog('CI notification action failed.', unknownErrorMessage(e, 'Unknown notification error.')));
+  };
+
+  context.subscriptions.push(
+    vscode.window.onDidCloseTerminal(terminal => {
+      const binding = operatorTerminals.detachTerminal(terminal);
+      if (!binding) { return; }
+      try {
+        detachWorkSessionTerminal(binding.sessionId, binding.bindingId, 'Terminal closed by the operator.');
+        appendTerminalDetachedEvent(binding, 'closed-by-operator');
+      } catch (e: unknown) {
+        appendKronosLog('Could not persist a closed operator terminal binding.', unknownErrorMessage(e, 'Unknown binding error.'));
+      }
+      sessionTree.refresh();
+    }),
+    { dispose: () => operatorTerminals.clear() },
+  );
+
   // --- Commands ---
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('kronos.pollManagedWorkSessions', async () => {
+      await runCommandProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'Kronos: Polling managed GitLab, Jenkins, and SonarQube providers...' },
+        async () => {
+          const result = await pollManagedWorkSessions();
+          const skipped = result.skipped > 0 ? ` ${result.skipped} configured provider${result.skipped === 1 ? ' was' : 's were'} skipped; see Kronos output.` : '';
+          const message = `Polled ${result.polled} managed provider context${result.polled === 1 ? '' : 's'}; recorded ${result.transitions} structural transition${result.transitions === 1 ? '' : 's'}.${skipped}`;
+          if (result.failures > 0) {
+            vscode.window.showWarningMessage(`${message} ${result.failures} provider context${result.failures === 1 ? '' : 's'} could not be refreshed; see Kronos output.`);
+          } else {
+            vscode.window.showInformationMessage(message);
+          }
+        },
+        'Failed to poll managed work sessions.',
+      );
+    }),
+
+    vscode.commands.registerCommand('kronos.openWorkSessionAudit', async (item: unknown) => {
+      let sessionId = resolveWorkSessionId(item);
+      if (!sessionId) {
+        const picked = await vscode.window.showQuickPick(
+          listWorkSessions().map(session => ({
+            label: session.ticketKey,
+            description: `${session.status} · ${session.title}`,
+            sessionId: session.id,
+          })),
+          { title: 'Open a managed work-session audit trail' },
+        );
+        sessionId = picked?.sessionId;
+      }
+      const workSession = sessionId ? readWorkSession(sessionId) : null;
+      if (!workSession) {
+        vscode.window.showWarningMessage('Select a managed work session before opening its audit trail.');
+        return;
+      }
+      const events = listMonitorEvents({ sessionId: workSession.id, limit: 500 });
+      const document = await vscode.workspace.openTextDocument({
+        language: 'markdown',
+        content: buildWorkSessionAuditMarkdown(workSession, events),
+      });
+      await vscode.window.showTextDocument(document, { preview: false });
+    }),
+
+    vscode.commands.registerCommand('kronos.manageActiveTerminal', async (item: unknown) => {
+      let ticketKey = resolveTicketKey(item);
+      if (!ticketKey) {
+        const candidates = Object.entries(state.state?.tickets || {}).map(([key, ticket]) => ({
+          label: key,
+          description: ticket.summary,
+          ticketKey: key,
+        }));
+        const picked = await vscode.window.showQuickPick(candidates, {
+          title: 'Choose the ticket this operator-owned terminal is working on',
+          placeHolder: 'Kronos records metadata and context references, never terminal output.',
+        });
+        ticketKey = picked?.ticketKey;
+      }
+      const ticket = ticketKey ? state.state?.tickets[ticketKey] : undefined;
+      if (!ticketKey || !ticket) {
+        vscode.window.showWarningMessage('Select a ticket before managing an operator terminal.');
+        return;
+      }
+      const terminal = vscode.window.activeTerminal;
+      if (!terminal) {
+        vscode.window.showWarningMessage('Focus the terminal you own and want Kronos to organize, then try again.');
+        return;
+      }
+      const projectName = ticketStringArray(ticket.projects)[0];
+      const projectPath = projectName ? state.state?.projects[projectName]?.path : undefined;
+      const input: Parameters<typeof createOrGetWorkSessionByTicket>[0] = {
+        ticketKey,
+        title: ticket.summary,
+      };
+      if (projectName) { input.projectName = projectName; }
+      if (projectPath) { input.projectPath = projectPath; }
+      const existing = getWorkSessionByTicket(ticketKey);
+      let workSession = existing?.status === 'closed'
+        ? reopenWorkSession(existing.id)
+        : createOrGetWorkSessionByTicket(input);
+      const created = !existing;
+      workSession = ensureWorkSessionProviderBindings(workSession, ticket);
+      if (created) {
+        appendMonitorEvent({
+          sessionId: workSession.id,
+          type: 'session.created',
+          source: 'operator',
+          summary: `${ticketKey} work session created.`,
+          subject: { kind: 'ticket', id: ticketKey, ticketKey },
+        });
+      }
+      await attachOperatorTerminalToSession(workSession, terminal);
+      vscode.window.showInformationMessage(
+        `Kronos is organizing ${ticketKey} around ${terminal.name}. You still own the terminal; Kronos cannot read its output, submit commands, or close it.`,
+      );
+    }),
+
+    vscode.commands.registerCommand('kronos.focusWorkSessionTerminal', async (item: unknown) => {
+      const sessionId = resolveWorkSessionId(item);
+      if (!sessionId) { return; }
+      const selected = await chooseLiveWorkSessionTerminal(sessionId);
+      if (!selected) {
+        vscode.window.showWarningMessage('That work session is detached. Focus the intended terminal and choose Reattach Active Terminal.');
+        return;
+      }
+      selected.terminal.show(false);
+    }),
+
+    vscode.commands.registerCommand('kronos.reattachWorkSessionTerminal', async (item: unknown) => {
+      const sessionId = resolveWorkSessionId(item);
+      const terminal = vscode.window.activeTerminal;
+      if (!sessionId || !terminal) {
+        vscode.window.showWarningMessage('Focus the operator terminal to reattach before running this action.');
+        return;
+      }
+      let workSession = readWorkSession(sessionId);
+      if (!workSession) {
+        vscode.window.showWarningMessage('The selected Kronos work session no longer exists.');
+        return;
+      }
+      if (workSession.status === 'closed') { workSession = reopenWorkSession(workSession.id); }
+      await attachOperatorTerminalToSession(workSession, terminal);
+      vscode.window.showInformationMessage(`Reattached ${terminal.name} to ${workSession.ticketKey} without reading or controlling the terminal session.`);
+    }),
+
+    vscode.commands.registerCommand('kronos.detachWorkSessionTerminal', async (item: unknown) => {
+      const sessionId = resolveWorkSessionId(item);
+      if (!sessionId) { return; }
+      const selected = await chooseLiveWorkSessionTerminal(sessionId);
+      if (!selected) {
+        vscode.window.showInformationMessage('That work session has no live terminal attached.');
+        return;
+      }
+      operatorTerminals.detachBinding(sessionId, selected.binding.bindingId);
+      detachWorkSessionTerminal(sessionId, selected.binding.bindingId, 'Detached by the operator.');
+      appendTerminalDetachedEvent(selected.binding, 'detached-by-operator');
+      sessionTree.refresh();
+      vscode.window.showInformationMessage('Kronos stopped managing that terminal. The terminal itself was left open and untouched.');
+    }),
+
+    vscode.commands.registerCommand('kronos.closeWorkSession', async (item: unknown) => {
+      const sessionId = resolveWorkSessionId(item);
+      const workSession = sessionId ? readWorkSession(sessionId) : null;
+      if (!sessionId || !workSession) { return; }
+      const confirmed = await vscode.window.showWarningMessage(
+        `Stop Kronos management and monitoring for ${workSession.ticketKey}? The terminal will remain open.`,
+        { modal: true },
+        'Stop Managing',
+      );
+      if (confirmed !== 'Stop Managing') { return; }
+      closeWorkSession(sessionId);
+      operatorTerminals.detachSession(sessionId);
+      appendMonitorEvent({
+        sessionId,
+        type: 'decision.recorded',
+        source: 'operator',
+        summary: `${workSession.ticketKey} work-session management stopped.`,
+        subject: { kind: 'work-session', id: sessionId, ticketKey: workSession.ticketKey },
+        metadata: { terminalLeftOpen: true },
+      });
+      sessionTree.refresh();
+      vscode.window.showInformationMessage(`Stopped managing ${workSession.ticketKey}. Its operator terminal was not closed.`);
+    }),
+
     vscode.commands.registerCommand('kronos.refresh', async () => {
       await runCommandProgress(
         { location: vscode.ProgressLocation.Notification, title: 'Kronos: Refreshing all projects...' },
@@ -2218,11 +2966,12 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showWarningMessage(`${ticketKey} is not a Jira ticket.`);
         return;
       }
-      const terminal = vscode.window.activeTerminal;
-      if (!terminal) {
-        vscode.window.showWarningMessage('Focus the Claude terminal that should receive the Jira reference, then try again.');
+      const insertionTarget = await chooseContextInsertionTerminal(ticketKey);
+      if (!insertionTarget) {
+        vscode.window.showWarningMessage('Focus the Claude terminal that should receive the Jira reference; if this ticket is managed, reattach it from Kronos Sessions first.');
         return;
       }
+      const terminal = insertionTarget.terminal;
 
       await runCommandProgress(
         {
@@ -2258,11 +3007,34 @@ export function activate(context: vscode.ExtensionContext) {
           progress.report({ message: 'Writing a local per-user Jira context artifact...' });
           const artifact = writeJiraContextArtifacts(jiraContext);
           const reference = buildJiraContextReference(ticketKey, artifact.promptPath);
-          if (vscode.window.activeTerminal !== terminal) {
-            vscode.window.showWarningMessage(`Jira context for ${ticketKey} is ready, but the active terminal changed while it was loading. Focus the intended Claude terminal and click Insert again.`);
+          if (!contextInsertionTerminalIsUnchanged(insertionTarget)) {
+            vscode.window.showWarningMessage(`Jira context for ${ticketKey} is ready, but its terminal binding changed while it was loading. Reattach or focus the intended Claude terminal and click Insert again.`);
             return;
           }
           insertTerminalContextReference(terminal, reference);
+
+          if (insertionTarget.workSession) {
+            recordWorkSessionContextArtifact(insertionTarget.workSession.id, {
+              id: `jira-${ticketKey}`,
+              kind: 'jira-ticket',
+              label: `[${ticketKey}] Jira context`,
+              promptPath: artifact.promptPath,
+              fetchedAt: jiraContext.fetchedAt,
+              complete: jiraContext.completeness.complete,
+              warnings: jiraContext.completeness.warnings,
+              contentSha256: artifact.contentSha256,
+            });
+            appendMonitorEvent({
+              sessionId: insertionTarget.workSession.id,
+              type: 'context.inserted',
+              source: 'jira',
+              summary: `${ticketKey} Jira context reference inserted without submission.`,
+              subject: { kind: 'ticket', id: ticketKey, ticketKey },
+              artifactPath: artifact.promptPath,
+              metadata: { submitted: false, artifactSha256: artifact.contentSha256 },
+            });
+            sessionTree.refresh();
+          }
 
           const fetchedSummary = `${jiraContext.completeness.fieldCount} fields, ${jiraContext.comments.length} comments, ${jiraContext.attachments.length} attachment record${jiraContext.attachments.length === 1 ? '' : 's'}`;
           const message = `Inserted [${ticketKey}] into ${terminal.name} without submitting it (${fetchedSummary}). Review it, then press Enter when ready.`;
@@ -2273,6 +3045,263 @@ export function activate(context: vscode.ExtensionContext) {
           }
         },
         `Failed to prepare Jira context for ${ticketKey}.`
+      );
+    }),
+
+    vscode.commands.registerCommand('kronos.insertGitLabContext', async (treeItem: unknown) => {
+      let ticketKey = resolveTicketKey(treeItem);
+      if (!ticketKey) {
+        const picked = await vscode.window.showQuickPick(
+          Object.entries(state.state?.tickets || {})
+            .filter(([, candidate]) => Boolean(candidate.mr?.iid))
+            .map(([key, candidate]) => ({ label: key, description: candidate.mr?.title || candidate.summary, ticketKey: key })),
+          { title: 'Choose the merge request context to insert' },
+        );
+        ticketKey = picked?.ticketKey;
+      }
+      const ticket = ticketKey ? state.state?.tickets?.[ticketKey] : undefined;
+      const iid = ticket?.mr?.iid;
+      if (!ticketKey || !ticket || !iid) {
+        vscode.window.showWarningMessage('Select a ticket with a linked GitLab merge request before inserting MR context.');
+        return;
+      }
+      let projectIdOrPath: string | undefined;
+      for (const projectName of ticketStringArray(ticket.projects)) {
+        const configured = state.state?.projects[projectName]?.config?.gitlab_project_id;
+        if (typeof configured === 'number' && Number.isFinite(configured) && configured > 0) {
+          projectIdOrPath = String(Math.floor(configured));
+          break;
+        }
+      }
+      projectIdOrPath = projectIdOrPath || gitLabProjectPathFromMergeRequestUrl(ticket.mr?.url);
+      if (!projectIdOrPath) {
+        vscode.window.showWarningMessage(`${ticketKey} needs a project gitlab_project_id or a parseable GitLab MR URL.`);
+        return;
+      }
+      const insertionTarget = await chooseContextInsertionTerminal(ticketKey);
+      if (!insertionTarget) {
+        vscode.window.showWarningMessage('Focus or reattach the Claude terminal that should receive the MR reference, then try again.');
+        return;
+      }
+
+      await runCommandProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Kronos: Fetching MR-${iid}, pipeline, jobs, and tests...`,
+        },
+        async progress => {
+          progress.report({ message: 'Fetching merge request, review, and diff context...' });
+          const snapshot = await gitlabRestClient.mergeRequestContext({ projectIdOrPath, iid });
+          progress.report({ message: 'Normalizing bounded pipeline and test evidence...' });
+          const gitLabContext = normalizeGitLabMergeRequestContext(ticketKey, iid, snapshot);
+          const artifact = writeGitLabContextArtifacts(gitLabContext);
+          const reference = buildGitLabMergeRequestContextReference(iid, artifact.promptPath);
+          if (!contextInsertionTerminalIsUnchanged(insertionTarget)) {
+            vscode.window.showWarningMessage(`MR-${iid} context is ready, but its terminal binding changed while it was loading. Reattach the intended terminal and click Insert again.`);
+            return;
+          }
+          insertTerminalContextReference(insertionTarget.terminal, reference);
+
+          if (insertionTarget.workSession) {
+            const mergeRequestBinding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
+              provider: 'gitlab',
+              resource: 'merge-request',
+              subjectId: String(iid),
+              projectId: projectIdOrPath,
+            };
+            if (ticket.mr?.url) { mergeRequestBinding.url = ticket.mr.url; }
+            let updatedSession = addWorkSessionProviderBinding(insertionTarget.workSession.id, mergeRequestBinding);
+            if (gitLabContext.pipeline) {
+              const pipelineBinding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
+                provider: 'gitlab',
+                resource: 'pipeline',
+                subjectId: String(gitLabContext.pipeline.id),
+              };
+              if (gitLabContext.pipeline.projectId !== undefined) {
+                pipelineBinding.projectId = String(gitLabContext.pipeline.projectId);
+              }
+              if (gitLabContext.pipeline.webUrl) { pipelineBinding.url = gitLabContext.pipeline.webUrl; }
+              updatedSession = addWorkSessionProviderBinding(updatedSession.id, pipelineBinding);
+            }
+            recordWorkSessionContextArtifact(updatedSession.id, {
+              id: `gitlab-mr-${iid}`,
+              kind: 'gitlab-merge-request',
+              label: `[MR-${iid}] GitLab MR and pipeline context`,
+              promptPath: artifact.promptPath,
+              fetchedAt: gitLabContext.fetchedAt,
+              complete: gitLabContext.completeness.complete,
+              warnings: gitLabContext.completeness.warnings,
+              contentSha256: artifact.contentSha256,
+            });
+            const metadata: Record<string, string | number | boolean | null> = {
+              submitted: false,
+              mergeRequestIid: iid,
+              artifactSha256: artifact.contentSha256,
+            };
+            if (gitLabContext.pipeline) { metadata['pipelineId'] = gitLabContext.pipeline.id; }
+            appendMonitorEvent({
+              sessionId: updatedSession.id,
+              type: 'context.inserted',
+              source: 'gitlab',
+              summary: `${ticketKey} MR-${iid} context reference inserted without submission.`,
+              subject: { kind: 'merge-request', id: String(iid), ticketKey },
+              artifactPath: artifact.promptPath,
+              metadata,
+            });
+            sessionTree.refresh();
+          }
+
+          const failedTests = gitLabContext.testReport?.failedCount
+            ?? gitLabContext.testReportSummary?.failedCount
+            ?? 0;
+          const summary = `${gitLabContext.notes.length} notes, ${gitLabContext.discussions.length} discussions, ${gitLabContext.jobs.length} jobs, ${failedTests} failed tests`;
+          const message = `Inserted [MR-${iid}] into ${insertionTarget.terminal.name} without submitting it (${summary}). Review it, then press Enter when ready.`;
+          if (gitLabContext.completeness.complete) {
+            vscode.window.showInformationMessage(message);
+          } else {
+            vscode.window.showWarningMessage(`${message} The saved GitLab context is marked partial; see its warnings.`);
+          }
+        },
+        `Failed to prepare GitLab context for ${ticketKey}.`,
+      );
+    }),
+
+    vscode.commands.registerCommand('kronos.insertCiContext', async (treeItem: unknown) => {
+      let ticketKey = resolveTicketKey(treeItem);
+      if (!ticketKey) {
+        const picked = await vscode.window.showQuickPick(
+          Object.entries(state.state?.tickets || {}).map(([key, candidate]) => ({
+            label: key,
+            description: candidate.summary,
+            ticketKey: key,
+          })),
+          { title: 'Choose the Jenkins and SonarQube context to insert' },
+        );
+        ticketKey = picked?.ticketKey;
+      }
+      const ticket = ticketKey ? state.state?.tickets[ticketKey] : undefined;
+      if (!ticketKey || !ticket) {
+        vscode.window.showWarningMessage('Select a ticket before inserting CI context.');
+        return;
+      }
+      const projectName = ticketStringArray(ticket.projects)[0];
+      const project = projectName ? state.state?.projects[projectName] : undefined;
+      const jenkinsUrl = ticket.build?.url || project?.config.jenkins_url;
+      const jenkinsMonitorUrl = project?.config.jenkins_url || jenkinsUrl;
+      const sonarProjectKey = project?.config.sonar_project_key;
+      const sonarBranch = ticket.mr?.source_branch
+        || ticket.mr?.sourceBranch
+        || ticket.mr?.branch
+        || ticket.mr?.head_branch
+        || project?.config.default_branch
+        || project?.config.base_branch
+        || getProjectBaseBranch(state, projectName);
+      if (!jenkinsUrl && !sonarProjectKey) {
+        vscode.window.showWarningMessage(`${ticketKey} has no linked Jenkins URL or SonarQube project key.`);
+        return;
+      }
+      const insertionTarget = await chooseContextInsertionTerminal(ticketKey);
+      if (!insertionTarget) {
+        vscode.window.showWarningMessage('Focus or reattach the Claude terminal that should receive the CI reference, then try again.');
+        return;
+      }
+
+      await runCommandProgress(
+        { location: vscode.ProgressLocation.Notification, title: `Kronos: Fetching CI evidence for ${ticketKey}...` },
+        async progress => {
+          const warnings: string[] = [];
+          let jenkinsContext: JenkinsBuildContext | undefined;
+          let sonarContext: SonarBranchContext | undefined;
+          if (jenkinsUrl) {
+            progress.report({ message: 'Fetching Jenkins build, stages, and test results...' });
+            try {
+              jenkinsContext = await jenkinsRestClient.buildContext(jenkinsUrl);
+            } catch {
+              warnings.push('Jenkins build context was unavailable; response content and credentials were not retained.');
+            }
+          }
+          if (sonarProjectKey) {
+            progress.report({ message: 'Fetching SonarQube gate, measures, and unresolved issues...' });
+            try {
+              sonarContext = await sonarRestClient.branchContext(sonarProjectKey, sonarBranch);
+            } catch {
+              warnings.push('SonarQube branch context was unavailable; response content and credentials were not retained.');
+            }
+          }
+          if (!jenkinsContext && !sonarContext) {
+            throw new Error('Neither Jenkins nor SonarQube context could be fetched. Check provider configuration in Kronos Doctor.');
+          }
+          const ciInput: Parameters<typeof buildCiContext>[1] = { warnings };
+          if (jenkinsContext) { ciInput.jenkins = jenkinsContext; }
+          if (sonarContext) { ciInput.sonar = sonarContext; }
+          const ciContext = buildCiContext(ticketKey, ciInput);
+          const artifact = writeCiContextArtifacts(ciContext);
+          const reference = buildCiContextReference(ticketKey, artifact.promptPath);
+          if (!contextInsertionTerminalIsUnchanged(insertionTarget)) {
+            vscode.window.showWarningMessage(`${ticketKey} CI context is ready, but its terminal binding changed while it was loading. Reattach the intended terminal and click Insert again.`);
+            return;
+          }
+          insertTerminalContextReference(insertionTarget.terminal, reference);
+
+          if (insertionTarget.workSession) {
+            let updatedSession = insertionTarget.workSession;
+            if (jenkinsContext) {
+              updatedSession = addWorkSessionProviderBinding(updatedSession.id, {
+                id: 'jenkins-build',
+                provider: 'jenkins',
+                resource: 'build',
+                subjectId: String(jenkinsContext.build.number),
+                url: jenkinsMonitorUrl || jenkinsContext.build.url,
+              });
+            }
+            if (sonarContext) {
+              updatedSession = addWorkSessionProviderBinding(updatedSession.id, {
+                id: 'sonar-quality-gate',
+                provider: 'sonar',
+                resource: 'quality-gate',
+                subjectId: `${sonarContext.projectKey}:${sonarContext.branch}`,
+                projectId: sonarContext.projectKey,
+                url: sonarContext.dashboardUrl,
+              });
+            }
+            recordWorkSessionContextArtifact(updatedSession.id, {
+              id: `ci-${ticketKey}`,
+              kind: 'ci-evidence',
+              label: `[CI-${ticketKey}] Jenkins and SonarQube context`,
+              promptPath: artifact.promptPath,
+              fetchedAt: ciContext.fetchedAt,
+              complete: ciContext.completeness.complete,
+              warnings: ciContext.completeness.warnings,
+              contentSha256: artifact.contentSha256,
+            });
+            appendMonitorEvent({
+              sessionId: updatedSession.id,
+              type: 'context.inserted',
+              source: 'kronos',
+              summary: `${ticketKey} CI context reference inserted without submission.`,
+              subject: { kind: 'ci-context', id: ticketKey, ticketKey },
+              artifactPath: artifact.promptPath,
+              metadata: {
+                submitted: false,
+                artifactSha256: artifact.contentSha256,
+                jenkinsIncluded: Boolean(jenkinsContext),
+                sonarIncluded: Boolean(sonarContext),
+              },
+            });
+            sessionTree.refresh();
+          }
+
+          const failedTests = jenkinsContext?.tests?.failCount || 0;
+          const sonarIssues = sonarContext?.issues.length || 0;
+          const gate = sonarContext?.qualityGate.status || 'not fetched';
+          const message = `Inserted [CI-${ticketKey}] into ${insertionTarget.terminal.name} without submitting it (${failedTests} failed Jenkins tests, ${sonarIssues} Sonar issues, gate ${gate}). Review it, then press Enter when ready.`;
+          if (ciContext.completeness.complete) {
+            vscode.window.showInformationMessage(message);
+          } else {
+            vscode.window.showWarningMessage(`${message} The saved CI context is marked partial; see its warnings.`);
+          }
+        },
+        `Failed to prepare CI context for ${ticketKey}.`,
       );
     }),
 
@@ -5753,6 +6782,72 @@ async function pickProjectFromTickets<T extends { key: string; projects: string[
   return { projectName, projectPath, tickets: byProject[projectName] || [] };
 }
 
+function resolveWorkSessionId(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) { return value.trim(); }
+  const record = recordFromUnknown(value);
+  const sessionId = record['workSessionId'];
+  return typeof sessionId === 'string' && sessionId.trim() ? sessionId.trim() : undefined;
+}
+
+function pipelineTransitionAuditSummary(ticketKey: string, transition: GitLabPipelineTransition): string {
+  return `${ticketKey} pipeline ${transition.pipelineId} transition: ${transition.kind}.`;
+}
+
+function pipelineTransitionNotificationMessage(ticketKey: string, transition: GitLabPipelineTransition): string {
+  const prefix = `${ticketKey} pipeline #${transition.pipelineId}`;
+  if (transition.kind === 'new_pipeline') { return `${prefix} started (${transition.currentStatus}).`; }
+  if (transition.kind === 'pipeline_failed') { return `${prefix} failed.`; }
+  if (transition.kind === 'pipeline_canceled') { return `${prefix} was canceled.`; }
+  if (transition.kind === 'pipeline_recovered') { return `${prefix} recovered and is now ${transition.currentStatus}.`; }
+  if (transition.kind === 'pipeline_succeeded') { return `${prefix} succeeded.`; }
+  if (transition.kind === 'blocking_jobs_failed') {
+    const names = transition.jobs.slice(0, 3).map(job => job.name).join(', ');
+    return `${prefix} has ${transition.jobs.length} newly failed blocking job${transition.jobs.length === 1 ? '' : 's'}${names ? `: ${names}` : ''}.`;
+  }
+  if (transition.kind === 'blocking_jobs_recovered') {
+    return `${prefix} recovered ${transition.jobs.length} blocking job${transition.jobs.length === 1 ? '' : 's'}.`;
+  }
+  if (transition.kind === 'tests_failed') {
+    return `${prefix} now has ${transition.tests.failed + transition.tests.error} failing or errored test${transition.tests.failed + transition.tests.error === 1 ? '' : 's'}.`;
+  }
+  return `${prefix} test failures recovered.`;
+}
+
+function ciDigestState(digest: CiMonitorDigest): string {
+  const parts: string[] = [];
+  if (digest.jenkins) { parts.push(`Jenkins ${digest.jenkins.status} #${digest.jenkins.buildNumber}`); }
+  if (digest.sonar) { parts.push(`SonarQube ${digest.sonar.gateStatus}`); }
+  return parts.join(' · ') || 'observed';
+}
+
+function ciTransitionAuditSummary(ticketKey: string, transition: CiMonitorTransition): string {
+  return `${ticketKey} ${transition.provider === 'jenkins' ? 'Jenkins' : 'SonarQube'} transition: ${transition.kind}.`;
+}
+
+function ciTransitionNotificationMessage(ticketKey: string, transition: CiMonitorTransition): string {
+  if (transition.provider === 'jenkins') {
+    const prefix = `${ticketKey} Jenkins build #${transition.buildNumber}`;
+    if (transition.kind === 'jenkins_new_build') { return `${prefix} started or replaced build #${transition.previousBuildNumber} (${transition.status}).`; }
+    if (transition.kind === 'jenkins_failed') { return `${prefix} failed or is unstable.`; }
+    if (transition.kind === 'jenkins_recovered') { return `${prefix} recovered (${transition.status}).`; }
+    if (transition.kind === 'jenkins_succeeded') { return `${prefix} succeeded.`; }
+    if (transition.kind === 'jenkins_tests_failed') { return `${prefix} has ${transition.failedTestCount} failed test${transition.failedTestCount === 1 ? '' : 's'}.`; }
+    if (transition.kind === 'jenkins_tests_recovered') { return `${prefix} test failures recovered.`; }
+    if (transition.kind === 'jenkins_stages_failed') {
+      const names = transition.affectedStageNames.slice(0, 3).join(', ');
+      return `${prefix} has ${transition.affectedStageNames.length} newly failed stage${transition.affectedStageNames.length === 1 ? '' : 's'}${names ? `: ${names}` : ''}.`;
+    }
+    return `${prefix} stage failures recovered.`;
+  }
+  const prefix = `${ticketKey} SonarQube ${transition.projectKey} (${transition.branch})`;
+  if (transition.kind === 'sonar_gate_failed') { return `${prefix} quality gate failed.`; }
+  if (transition.kind === 'sonar_gate_recovered') { return `${prefix} quality gate recovered (${transition.gateStatus}).`; }
+  if (transition.kind === 'sonar_issues_increased') {
+    return `${prefix} has ${transition.issueDelta} new unresolved issue${transition.issueDelta === 1 ? '' : 's'} (${transition.unresolvedIssueCount} total).`;
+  }
+  return `${prefix} resolved ${Math.abs(transition.issueDelta)} issue${Math.abs(transition.issueDelta) === 1 ? '' : 's'} (${transition.unresolvedIssueCount} remain).`;
+}
+
 function updateStatusBar(state: KronosState): void {
   if (state.loadIssues.length > 0) {
     statusBarItem.text = state.state ? '$(warning) Kronos: state warnings' : '$(error) Kronos: state error';
@@ -5855,7 +6950,10 @@ async function executeMrAutopilotAction(state: KronosState, request: ActionPanel
     await startTicketFromActionPanel(state, ticketKey);
     return;
   }
-  if ((command === 'viewTicket' || command === 'evidenceGate') && ticketKey) {
+  if ((command === 'viewTicket'
+    || command === 'evidenceGate'
+    || command === 'insertGitLabContext'
+    || command === 'insertCiContext') && ticketKey) {
     await tryExecuteTicketOperatorCommand(command, ticketKey);
     return;
   }

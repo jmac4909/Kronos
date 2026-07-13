@@ -47,6 +47,72 @@ function kronosTestPath(...segments) {
   return path.join(process.env.KRONOS_DIR, ...segments);
 }
 
+function cloneJsonValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function assertContentAddressedArtifactLifecycle(label, context, writeArtifacts) {
+  const kronosDir = makeTempDir(`kronos-${label.toLowerCase()}-immutable-`);
+  const write = value => writeArtifacts(value, { kronosDir });
+  const serialized = `${JSON.stringify(context, null, 2)}\n`;
+  const expectedSha256 = createHash('sha256').update(serialized, 'utf8').digest('hex');
+  const artifact = write(context);
+
+  assert.match(artifact.contentSha256, /^[a-f0-9]{64}$/);
+  assert.equal(artifact.contentSha256, expectedSha256);
+  assert.equal(path.basename(artifact.jsonPath), `context-${expectedSha256.slice(0, 24)}.json`);
+  assert.equal(path.basename(artifact.promptPath), `prompt-${expectedSha256.slice(0, 24)}.md`);
+  const originalJson = fs.readFileSync(artifact.jsonPath);
+  const originalPrompt = fs.readFileSync(artifact.promptPath);
+  assert.equal(originalJson.toString('utf8'), serialized);
+  const originalJsonStat = fs.statSync(artifact.jsonPath);
+  const originalPromptStat = fs.statSync(artifact.promptPath);
+
+  const reused = write(context);
+  assert.deepEqual(reused, artifact);
+  assert.deepEqual(fs.readFileSync(reused.jsonPath), originalJson);
+  assert.deepEqual(fs.readFileSync(reused.promptPath), originalPrompt);
+  if (process.platform !== 'win32' && originalJsonStat.ino > 0 && originalPromptStat.ino > 0) {
+    assert.equal(fs.statSync(reused.jsonPath).ino, originalJsonStat.ino);
+    assert.equal(fs.statSync(reused.promptPath).ino, originalPromptStat.ino);
+  }
+
+  const changed = cloneJsonValue(context);
+  changed.fetchedAt = '2026-07-13T12:00:01.000Z';
+  const changedArtifact = write(changed);
+  assert.notEqual(changedArtifact.contentSha256, artifact.contentSha256);
+  assert.notEqual(changedArtifact.jsonPath, artifact.jsonPath);
+  assert.notEqual(changedArtifact.promptPath, artifact.promptPath);
+  assert.deepEqual(fs.readFileSync(artifact.jsonPath), originalJson);
+  assert.deepEqual(fs.readFileSync(artifact.promptPath), originalPrompt);
+
+  const changedJsonBeforeTamper = fs.readFileSync(changedArtifact.jsonPath);
+  const tamperedPrompt = Buffer.concat([
+    fs.readFileSync(changedArtifact.promptPath),
+    Buffer.from('\nTAMPERED IMMUTABLE ARTIFACT\n', 'utf8'),
+  ]);
+  fs.writeFileSync(changedArtifact.promptPath, tamperedPrompt);
+  if (process.platform !== 'win32') { fs.chmodSync(changedArtifact.promptPath, 0o600); }
+  assert.throws(
+    () => write(changed),
+    /immutable|does not match|content address/i,
+  );
+  assert.deepEqual(fs.readFileSync(changedArtifact.jsonPath), changedJsonBeforeTamper);
+  assert.deepEqual(fs.readFileSync(changedArtifact.promptPath), tamperedPrompt);
+
+  const partial = cloneJsonValue(context);
+  partial.fetchedAt = '2026-07-13T12:00:02.000Z';
+  const partialArtifact = write(partial);
+  const partialJson = fs.readFileSync(partialArtifact.jsonPath);
+  fs.unlinkSync(partialArtifact.promptPath);
+  assert.throws(
+    () => write(partial),
+    /incomplete|refus/i,
+  );
+  assert.deepEqual(fs.readFileSync(partialArtifact.jsonPath), partialJson);
+  assert.equal(fs.existsSync(partialArtifact.promptPath), false);
+}
+
 const ACTION_SCRIPT_URI = 'vscode-resource://kronos/action-panel.js';
 
 function readSourceFixture(...segments) {
@@ -197,8 +263,20 @@ const jiraRestClient = require('../out/services/jiraRestClient.js');
 const jiraTicketContext = require('../out/services/jiraTicketContext.js');
 const jiraContextStore = require('../out/services/jiraContextStore.js');
 const terminalContextInsertion = require('../out/services/terminalContextInsertion.js');
+const workSessionStore = require('../out/services/workSessionStore.js');
+const monitorEventStore = require('../out/services/monitorEventStore.js');
+const operatorTerminalRegistry = require('../out/services/operatorTerminalRegistry.js');
 const gitlabRestClient = require('../out/services/gitlabRestClient.js');
+const gitlabMergeRequestContext = require('../out/services/gitlabMergeRequestContext.js');
+const gitlabContextStore = require('../out/services/gitlabContextStore.js');
+const pipelineTransitions = require('../out/services/pipelineTransitions.js');
+const gitlabPipelineMonitorStore = require('../out/services/gitlabPipelineMonitorStore.js');
 const jenkinsRestClient = require('../out/services/jenkinsRestClient.js');
+const sonarRestClient = require('../out/services/sonarRestClient.js');
+const ciContextStore = require('../out/services/ciContextStore.js');
+const ciTransitions = require('../out/services/ciTransitions.js');
+const ciMonitorStore = require('../out/services/ciMonitorStore.js');
+const workSessionAuditView = require('../out/services/workSessionAuditView.js');
 const acceptanceCriteria = require('../out/services/acceptanceCriteria.js');
 const humanReviewInbox = require('../out/services/humanReviewInbox.js');
 const evidenceGate = require('../out/services/evidenceGate.js');
@@ -9872,6 +9950,764 @@ function gitlabResponse(value, headers = {}) {
   };
 }
 
+test('GitLab MR context follows fork pipelines, paginates jobs, and marks optional test data partial', async () => {
+  const requests = [];
+  const client = gitlabRestClient.createGitLabRestClient({
+    env: {
+      GITLAB_TOKEN: 'gitlab-secret-token',
+      GITLAB_BASE_URL: 'https://user:password@gitlab.example/root?leak=yes#fragment',
+    },
+    async transport(request) {
+      requests.push(request);
+      const url = new URL(request.url);
+      const pathname = url.pathname;
+      if (pathname === '/root/api/v4/projects/123/merge_requests/7') {
+        return gitlabResponse({
+          id: 70,
+          iid: 7,
+          project_id: 123,
+          sha: 'source-sha',
+          head_pipeline: { id: 88, project_id: 456, sha: 'source-sha', status: 'running' },
+        });
+      }
+      if (pathname.endsWith('/notes')) { return gitlabResponse([{ id: 1, body: 'note' }]); }
+      if (pathname.endsWith('/discussions')) { return gitlabResponse([{ id: 'd1', notes: [] }]); }
+      if (pathname.endsWith('/approvals')) { return gitlabResponse({ approved: false }); }
+      if (pathname.endsWith('/diffs')) { return gitlabResponse([{ new_path: 'src/app.ts', diff: '+safe' }]); }
+      if (pathname.endsWith('/merge_requests/7/pipelines')) {
+        return gitlabResponse([{ id: 77, project_id: 123, sha: 'older-sha' }]);
+      }
+      if (pathname === '/root/api/v4/projects/456/pipelines/88') {
+        return gitlabResponse({ id: 88, project_id: 456, status: 'failed' });
+      }
+      if (pathname.endsWith('/projects/456/pipelines/88/jobs')) {
+        assert.equal(url.searchParams.get('include_retried'), 'true');
+        return url.searchParams.get('page') === '1'
+          ? gitlabResponse([{ id: 1, name: 'test', status: 'failed' }], { 'x-next-page': '2' })
+          : gitlabResponse([{ id: 2, name: 'build', status: 'success' }]);
+      }
+      if (pathname.endsWith('/test_report_summary')) {
+        return gitlabResponse({ total: { count: 2, failed: 1 } });
+      }
+      if (pathname.endsWith('/test_report')) {
+        return { statusCode: 503, body: '{"message":"secret provider content"}', headers: {} };
+      }
+      throw new Error(`Unexpected GitLab context request: ${request.url}`);
+    },
+  });
+
+  const snapshot = await client.mergeRequestContext({ projectIdOrPath: '123', iid: 7 });
+  assert.equal(snapshot.jobs.length, 2);
+  assert.equal(snapshot.completeness.jobsComplete, true);
+  assert.equal(snapshot.completeness.testsComplete, false);
+  assert.ok(snapshot.completeness.warnings.some(warning => warning.includes('test report was unavailable')));
+  assert.ok(requests.some(request => new URL(request.url).pathname.includes('/projects/456/pipelines/88/jobs')));
+  assert.equal(requests.some(request => request.url.includes('/variables')), false);
+  assert.equal(requests.every(request => !request.url.includes('user:password') && !request.url.includes('leak=yes')), true);
+
+  requests.length = 0;
+  const monitorSnapshot = await client.mergeRequestMonitor({ projectIdOrPath: '123', iid: 7 });
+  assert.equal(monitorSnapshot.jobs.length, 2);
+  assert.equal(monitorSnapshot.completeness.testsComplete, true);
+  const monitorPaths = requests.map(request => new URL(request.url).pathname);
+  assert.equal(monitorPaths.some(pathname => /\/(?:notes|discussions|approvals|diffs)$/.test(pathname)), false);
+  assert.equal(monitorPaths.some(pathname => pathname.endsWith('/test_report')), false);
+  assert.ok(monitorPaths.some(pathname => pathname.endsWith('/test_report_summary')));
+
+  const normalizedBase = gitlabRestClient.normalizeGitLabApiBaseUrl('https://user:password@gitlab.example/root?secret=yes#frag');
+  assert.equal(normalizedBase, 'https://gitlab.example/root/api/v4');
+  assert.equal(gitlabRestClient.normalizeGitLabApiBaseUrl('http://gitlab.example'), undefined);
+  assert.equal(gitlabRestClient.normalizeGitLabApiBaseUrl('http://localhost:8080'), 'http://localhost:8080/api/v4');
+});
+
+test('GitLab MR context falls back to a SHA-matching pipeline and reports page truncation', async () => {
+  const requests = [];
+  const client = gitlabRestClient.createGitLabRestClient({
+    env: { GITLAB_TOKEN: 'token', GITLAB_BASE_URL: 'https://gitlab.example' },
+    maxPages: 1,
+    async transport(request) {
+      requests.push(request);
+      const url = new URL(request.url);
+      const pathname = url.pathname;
+      if (pathname.endsWith('/merge_requests/9')) {
+        return gitlabResponse({ iid: 9, project_id: 12, sha: 'wanted-sha' });
+      }
+      if (pathname.endsWith('/notes')) {
+        return gitlabResponse([{ id: 1 }], { 'x-next-page': '2' });
+      }
+      if (pathname.endsWith('/discussions') || pathname.endsWith('/diffs')) { return gitlabResponse([]); }
+      if (pathname.endsWith('/approvals')) { return gitlabResponse({}); }
+      if (pathname.endsWith('/merge_requests/9/pipelines')) {
+        return gitlabResponse([
+          { id: 20, project_id: 12, sha: 'other-sha' },
+          { id: 21, project_id: 34, sha: 'wanted-sha' },
+        ]);
+      }
+      if (pathname === '/api/v4/projects/34/pipelines/21') { return gitlabResponse({ id: 21, status: 'success' }); }
+      if (pathname.endsWith('/projects/34/pipelines/21/jobs')) { return gitlabResponse([]); }
+      if (pathname.endsWith('/test_report_summary') || pathname.endsWith('/test_report')) { return gitlabResponse({}); }
+      throw new Error(`Unexpected GitLab context request: ${request.url}`);
+    },
+  });
+
+  const snapshot = await client.mergeRequestContext({ projectIdOrPath: '12', iid: 9 });
+  assert.equal(snapshot.completeness.notesComplete, false);
+  assert.ok(snapshot.completeness.warnings.some(warning => warning.includes('1-page safety limit')));
+  assert.ok(requests.some(request => new URL(request.url).pathname === '/api/v4/projects/34/pipelines/21'));
+});
+
+test('Jira content-addressed artifacts are immutable and preserve historical versions', () => {
+  const context = jiraTicketContext.normalizeJiraTicketContext('IMM-1', {
+    issue: {
+      id: '10001',
+      key: 'IMM-1',
+      names: { summary: 'Summary', description: 'Description' },
+      schema: { summary: { type: 'string' }, description: { type: 'string' } },
+      fields: { summary: 'Immutable Jira evidence', description: 'First normalized snapshot.' },
+    },
+    issueUrl: 'https://jira.example/browse/IMM-1',
+    comments: [],
+    commentsComplete: true,
+    fetchedAt: '2026-07-13T12:00:00.000Z',
+    warnings: [],
+  });
+  assertContentAddressedArtifactLifecycle(
+    'jira',
+    context,
+    jiraContextStore.writeJiraContextArtifacts,
+  );
+});
+
+test('GitLab content-addressed artifacts are immutable and preserve historical versions', () => {
+  const context = gitlabMergeRequestContext.normalizeGitLabMergeRequestContext('IMM-1', 7, {
+    mr: {
+      iid: 7,
+      title: 'Immutable GitLab evidence',
+      description: 'First normalized snapshot.',
+      state: 'opened',
+      source_branch: 'feature/IMM-1',
+      target_branch: 'main',
+      web_url: 'https://gitlab.example/group/app/-/merge_requests/7',
+    },
+    notes: [],
+    discussions: [],
+    approvals: { approved: false },
+    diffs: [],
+    pipelines: [],
+    jobs: [],
+    fetchedAt: '2026-07-13T12:00:00.000Z',
+    responseBytes: 0,
+    completeness: {
+      notesComplete: true,
+      discussionsComplete: true,
+      diffsComplete: true,
+      pipelinesComplete: true,
+      jobsComplete: true,
+      testsComplete: true,
+      warnings: [],
+    },
+  });
+  assertContentAddressedArtifactLifecycle(
+    'gitlab',
+    context,
+    gitlabContextStore.writeGitLabContextArtifacts,
+  );
+});
+
+test('CI content-addressed artifacts are immutable and preserve historical versions', () => {
+  const context = ciContextStore.buildCiContext('IMM-1', {
+    jenkins: {
+      schemaVersion: 1,
+      provider: 'jenkins',
+      fetchedAt: '2026-07-13T11:59:59.000Z',
+      jobOrBuildUrl: 'https://jenkins.example/job/app/',
+      build: {
+        number: 7,
+        status: 'SUCCESS',
+        url: 'https://jenkins.example/job/app/7/',
+        causes: [],
+        artifacts: [],
+        changes: [],
+      },
+      completeness: {
+        complete: true,
+        buildComplete: true,
+        testReport: 'complete',
+        stages: 'complete',
+        logsIncluded: false,
+        warnings: [],
+      },
+    },
+  });
+  context.fetchedAt = '2026-07-13T12:00:00.000Z';
+  assertContentAddressedArtifactLifecycle(
+    'ci',
+    context,
+    ciContextStore.writeCiContextArtifacts,
+  );
+});
+
+test('Jira normalized context redacts provider secrets and sanitizes embedded and resource URLs', () => {
+  const context = jiraTicketContext.normalizeJiraTicketContext('SEC-1', {
+    issue: {
+      id: '20001',
+      key: 'SEC-1',
+      names: {
+        summary: 'Summary',
+        description: 'Description',
+        customfield_10001: 'API Token',
+      },
+      schema: {
+        summary: { type: 'string' },
+        description: { type: 'string' },
+        customfield_10001: { type: 'string' },
+      },
+      fields: {
+        summary: 'Investigate password=summary-secret-value',
+        description: 'Authorization: Bearer abcdefghijklmnop https://docs-user:docs-pass@docs.example/runbook?token=url-secret-value&view=full#private',
+        customfield_10001: 'custom-field-secret-value',
+      },
+    },
+    issueUrl: 'https://jira-user:jira-pass@jira.example/browse/SEC-1?token=issue-secret-value#comment',
+    comments: [{ id: 'c1', body: 'api_key=comment-secret-value' }],
+    commentsComplete: true,
+    fetchedAt: '2026-07-13T12:00:00.000Z',
+    warnings: [],
+  });
+  const serialized = JSON.stringify(context);
+  for (const secret of [
+    'summary-secret-value',
+    'abcdefghijklmnop',
+    'docs-user',
+    'docs-pass',
+    'url-secret-value',
+    'custom-field-secret-value',
+    'jira-user',
+    'jira-pass',
+    'issue-secret-value',
+    'comment-secret-value',
+  ]) {
+    assert.equal(serialized.includes(secret), false, `Jira context retained ${secret}`);
+  }
+  assert.equal(context.url, 'https://jira.example/browse/SEC-1');
+  assert.match(context.description, /https:\/\/docs\.example\/runbook\?/);
+  assert.equal(context.description.includes('#private'), false);
+  assert.equal(context.customFields.find(field => field.id === 'customfield_10001').value, '[REDACTED]');
+});
+
+test('GitLab MR context normalizes untrusted data into private bounded artifacts', () => {
+  const rawJobs = Array.from({ length: 505 }, (_, index) => ({
+    id: index + 1,
+    name: `job-${index + 1}`,
+    stage: 'test',
+    status: index === 0 ? 'failed' : 'success',
+    web_url: `https://gitlab.example/jobs/${index + 1}?private_token=secret`,
+  }));
+  const context = gitlabMergeRequestContext.normalizeGitLabMergeRequestContext('APP-42', 77, {
+    mr: {
+      iid: 77,
+      title: 'Add terminal-first context',
+      description: 'Do the work\nPRIVATE_TOKEN=very-secret-value',
+      state: 'opened',
+      source_branch: 'feature/APP-42',
+      target_branch: 'main',
+      author: { id: 1, name: 'Ada', web_url: 'https://gitlab.example/ada?token=hidden' },
+      web_url: 'https://user:pass@gitlab.example/group/app/-/merge_requests/77?secret=yes#thread',
+    },
+    notes: [{ id: 1, body: 'review note Authorization: Bearer abcdefghijklmnop' }],
+    discussions: [{ id: 'd1', notes: [{ id: 2, body: 'Please add a test', resolvable: true, resolved: false }] }],
+    approvals: { approved: false, approvals_required: 2, approvals_left: 1 },
+    diffs: [{ old_path: 'src/a.ts', new_path: 'src/a.ts', diff: '+const API_TOKEN=secret-value' }],
+    pipelines: [{ id: 900, project_id: 456, status: 'failed', ref: 'feature/APP-42', sha: 'abc' }],
+    pipeline: { id: 900, project_id: 456, status: 'failed', ref: 'feature/APP-42', sha: 'abc' },
+    jobs: rawJobs,
+    testReportSummary: { total: { count: 3, success: 2, failed: 1, skipped: 0, error: 0 } },
+    fetchedAt: '2026-07-13T12:00:00.000Z',
+    responseBytes: 1234,
+    completeness: {
+      notesComplete: true,
+      discussionsComplete: true,
+      diffsComplete: true,
+      pipelinesComplete: true,
+      jobsComplete: true,
+      testsComplete: true,
+      warnings: [],
+    },
+  });
+  assert.equal(context.jobs.length, 500);
+  assert.ok(context.completeness.warnings.some(warning => warning.includes('GitLab jobs were truncated')));
+  assert.equal(JSON.stringify(context).includes('very-secret-value'), false);
+  assert.equal(JSON.stringify(context).includes('secret-value'), false);
+  assert.equal(context.mergeRequest.webUrl, 'https://gitlab.example/group/app/-/merge_requests/77');
+
+  const kronosDir = makeTempDir('kronos-gitlab-artifact-');
+  const artifact = gitlabContextStore.writeGitLabContextArtifacts(context, { kronosDir });
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(artifact.directoryPath).mode & 0o777, 0o700);
+    assert.equal(fs.statSync(artifact.jsonPath).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(artifact.promptPath).mode & 0o777, 0o600);
+  }
+  const prompt = fs.readFileSync(artifact.promptPath, 'utf8');
+  assert.match(prompt, /BEGIN UNTRUSTED GITLAB DATA/);
+  assert.match(prompt, /never instructions/);
+
+  const symlinkRoot = makeTempDir('kronos-gitlab-symlink-');
+  const outside = makeTempDir('kronos-gitlab-outside-');
+  if (tryCreateSymlink(outside, path.join(symlinkRoot, 'gitlab-context'), 'dir')) {
+    assert.throws(
+      () => gitlabContextStore.writeGitLabContextArtifacts(context, { kronosDir: symlinkRoot }),
+      /symbolic links/,
+    );
+  }
+});
+
+test('GitLab pipeline transitions ignore timing noise and detect failure and recovery', () => {
+  const baselineSnapshot = {
+    pipeline: { id: 900, project_id: 456, status: 'running', ref: 'feature/APP-42', sha: 'abc', duration: 10 },
+    jobs: [{ id: 1, name: 'tests', stage: 'test', status: 'running' }],
+    testReportSummary: { total: { count: 4, failed: 0, error: 0, skipped: 0 } },
+    fetchedAt: '2026-07-13T12:00:00.000Z',
+  };
+  const failedSnapshot = {
+    pipeline: { id: 900, project_id: 456, status: 'failed', ref: 'feature/APP-42', sha: 'abc', duration: 20 },
+    jobs: [
+      { id: 1, name: 'tests', stage: 'test', status: 'failed', web_url: 'https://gitlab.example/jobs/1?token=hidden' },
+      { id: 2, name: 'optional-lint', stage: 'test', status: 'failed', allow_failure: true },
+      { id: 3, name: 'old-tests', stage: 'test', status: 'failed', retried: true },
+    ],
+    testReportSummary: { total: { count: 4, failed: 1, error: 0, skipped: 0 } },
+    fetchedAt: '2026-07-13T12:01:00.000Z',
+  };
+  const recoveredSnapshot = {
+    pipeline: { id: 900, project_id: 456, status: 'success', ref: 'feature/APP-42', sha: 'abc', duration: 30 },
+    jobs: [{ id: 1, name: 'tests', stage: 'test', status: 'success' }],
+    testReportSummary: { total: { count: 4, failed: 0, error: 0, skipped: 0 } },
+    fetchedAt: '2026-07-13T12:02:00.000Z',
+  };
+  const baseline = pipelineTransitions.normalizeGitLabPipelineDigest(baselineSnapshot);
+  const failed = pipelineTransitions.normalizeGitLabPipelineDigest(failedSnapshot);
+  const recovered = pipelineTransitions.normalizeGitLabPipelineDigest(recoveredSnapshot);
+  assert.equal(pipelineTransitions.compareGitLabPipelineDigests(null, baseline).length, 0);
+  assert.deepEqual(
+    pipelineTransitions.compareGitLabPipelineDigests(baseline, failed).map(item => item.kind),
+    ['pipeline_failed', 'blocking_jobs_failed', 'tests_failed'],
+  );
+  assert.deepEqual(
+    pipelineTransitions.compareGitLabPipelineDigests(failed, recovered).map(item => item.kind),
+    ['pipeline_recovered', 'blocking_jobs_recovered', 'tests_recovered'],
+  );
+  assert.equal(failed.failedJobs.length, 1);
+  assert.equal(failed.failedJobs[0].url, 'https://gitlab.example/jobs/1');
+
+  const timingOnly = pipelineTransitions.normalizeGitLabPipelineDigest({
+    ...baselineSnapshot,
+    pipeline: { ...baselineSnapshot.pipeline, duration: 999, queued_duration: 888 },
+    fetchedAt: '2026-07-13T13:00:00.000Z',
+  });
+  assert.equal(timingOnly.fingerprint, baseline.fingerprint);
+
+  const kronosDir = makeTempDir('kronos-pipeline-monitor-');
+  const workSession = workSessionStore.createOrGetWorkSessionByTicket({ ticketKey: 'APP-42' }, { kronosDir });
+  const snapshotPath = gitlabPipelineMonitorStore.writeGitLabPipelineMonitorSnapshot(workSession.id, failed, { kronosDir });
+  const restored = gitlabPipelineMonitorStore.readGitLabPipelineMonitorSnapshot(workSession.id, { kronosDir });
+  assert.equal(restored.fingerprint, failed.fingerprint);
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(snapshotPath).mode & 0o777, 0o600);
+  }
+});
+
+test('work-session, monitor-event, and GitLab pipeline stores reject symlinked parent directories', t => {
+  const holder = makeTempDir('kronos-managed-store-parent-link-');
+  const outside = makeTempDir('kronos-managed-store-parent-outside-');
+  const linkedKronosDir = path.join(holder, 'linked-kronos');
+  if (!tryCreateSymlink(outside, linkedKronosDir, 'dir')) {
+    t.skip('Directory symlinks are unavailable on this platform.');
+    return;
+  }
+  const sessionId = 'jira-app-42';
+  const outsideSessionDir = path.join(outside, 'work-sessions', sessionId);
+  fs.mkdirSync(outsideSessionDir, { recursive: true, mode: 0o700 });
+  const options = { kronosDir: linkedKronosDir };
+
+  assert.throws(
+    () => workSessionStore.createOrGetWorkSessionByTicket({ ticketKey: 'APP-42' }, options),
+    /symbolic[- ]link/i,
+  );
+  assert.throws(
+    () => monitorEventStore.appendMonitorEvent({
+      sessionId,
+      type: 'session.created',
+      source: 'kronos',
+      summary: 'This event must not traverse a linked parent.',
+    }, options),
+    /symbolic[- ]link/i,
+  );
+  const digest = pipelineTransitions.normalizeGitLabPipelineDigest({
+    pipeline: { id: 901, project_id: 456, status: 'running', ref: 'main', sha: 'abc' },
+    jobs: [],
+    fetchedAt: '2026-07-13T12:00:00.000Z',
+  });
+  assert.ok(digest);
+  assert.throws(
+    () => gitlabPipelineMonitorStore.writeGitLabPipelineMonitorSnapshot(sessionId, digest, options),
+    /symbolic[- ]link/i,
+  );
+  assert.equal(fs.existsSync(path.join(outsideSessionDir, 'session.json')), false);
+  assert.equal(fs.existsSync(path.join(outside, 'monitor-events.jsonl')), false);
+  assert.equal(fs.existsSync(path.join(outsideSessionDir, 'gitlab-pipeline.json')), false);
+});
+
+test('managed Jenkins and SonarQube transitions ignore timing noise and persist private baselines', () => {
+  const jenkinsContext = (status, buildNumber, failCount, stageStatus, fetchedAt) => ({
+    schemaVersion: 1,
+    provider: 'jenkins',
+    fetchedAt,
+    jobOrBuildUrl: 'https://jenkins.example/job/app',
+    build: {
+      number: buildNumber,
+      status,
+      building: status === 'BUILDING',
+      url: `https://jenkins.example/job/app/${buildNumber}/`,
+      duration: fetchedAt.length * 100,
+      causes: [],
+      artifacts: [],
+      changes: [],
+    },
+    tests: {
+      passCount: 10,
+      failCount,
+      skipCount: 0,
+      totalCount: 10 + failCount,
+      failedCases: [],
+      failedCasesAvailable: failCount,
+      complete: true,
+    },
+    stages: [{ name: 'test', status: stageStatus, durationMillis: fetchedAt.length * 10 }],
+    completeness: {
+      complete: true,
+      buildComplete: true,
+      testReport: 'complete',
+      stages: 'complete',
+      logsIncluded: false,
+      warnings: [],
+    },
+  });
+  const sonarContext = (gateStatus, issueCount, fetchedAt) => ({
+    schemaVersion: 1,
+    provider: 'sonarqube',
+    fetchedAt,
+    projectKey: 'app',
+    branch: 'feature/APP-42',
+    dashboardUrl: 'https://sonar.example/dashboard?id=app&branch=feature%2FAPP-42',
+    qualityGate: { status: gateStatus, conditions: [] },
+    measures: [{ metric: 'coverage', value: gateStatus === 'OK' ? '90' : '70' }],
+    issues: Array.from({ length: issueCount }, (_, index) => ({ key: `i${index}`, message: 'issue', tags: [], impacts: [] })),
+    completeness: {
+      complete: true,
+      qualityGateComplete: true,
+      measuresComplete: true,
+      issuesComplete: true,
+      issuesFetched: issueCount,
+      issuePages: 1,
+      issueResponseBytes: 100,
+      issuesTotal: issueCount,
+      warnings: [],
+    },
+  });
+  const baseline = ciTransitions.buildCiMonitorDigest({
+    jenkins: jenkinsContext('SUCCESS', 10, 0, 'SUCCESS', '2026-07-13T12:00:00.000Z'),
+    sonar: sonarContext('OK', 1, '2026-07-13T12:00:00.000Z'),
+  });
+  const timingOnly = ciTransitions.buildCiMonitorDigest({
+    jenkins: jenkinsContext('SUCCESS', 10, 0, 'SUCCESS', '2026-07-13T13:00:00.000Z'),
+    sonar: sonarContext('OK', 1, '2026-07-13T13:00:00.000Z'),
+  });
+  assert.equal(timingOnly.fingerprint, baseline.fingerprint);
+
+  const failed = ciTransitions.buildCiMonitorDigest({
+    jenkins: jenkinsContext('FAILURE', 11, 2, 'FAILED', '2026-07-13T14:00:00.000Z'),
+    sonar: sonarContext('ERROR', 3, '2026-07-13T14:00:00.000Z'),
+  });
+  const failedKinds = ciTransitions.compareCiMonitorDigests(baseline, failed).map(item => item.kind);
+  assert.ok(failedKinds.includes('jenkins_new_build'));
+  assert.ok(failedKinds.includes('jenkins_failed'));
+  assert.ok(failedKinds.includes('jenkins_tests_failed'));
+  assert.ok(failedKinds.includes('jenkins_stages_failed'));
+  assert.ok(failedKinds.includes('sonar_gate_failed'));
+  assert.ok(failedKinds.includes('sonar_issues_increased'));
+
+  const recovered = ciTransitions.buildCiMonitorDigest({
+    jenkins: jenkinsContext('SUCCESS', 11, 0, 'SUCCESS', '2026-07-13T15:00:00.000Z'),
+    sonar: sonarContext('OK', 1, '2026-07-13T15:00:00.000Z'),
+  });
+  const recoveredKinds = ciTransitions.compareCiMonitorDigests(failed, recovered).map(item => item.kind);
+  assert.ok(recoveredKinds.includes('jenkins_recovered'));
+  assert.ok(recoveredKinds.includes('jenkins_tests_recovered'));
+  assert.ok(recoveredKinds.includes('jenkins_stages_recovered'));
+  assert.ok(recoveredKinds.includes('sonar_gate_recovered'));
+  assert.ok(recoveredKinds.includes('sonar_issues_decreased'));
+
+  const kronosDir = makeTempDir('kronos-ci-monitor-');
+  const workSession = workSessionStore.createOrGetWorkSessionByTicket({ ticketKey: 'APP-42' }, { kronosDir });
+  const snapshotPath = ciMonitorStore.writeCiMonitorSnapshot(workSession.id, failed, { kronosDir });
+  assert.equal(ciMonitorStore.readCiMonitorSnapshot(workSession.id, { kronosDir }).fingerprint, failed.fingerprint);
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(snapshotPath).mode & 0o777, 0o600);
+  }
+  const outside = makeTempDir('kronos-ci-monitor-outside-');
+  const outsideSnapshot = path.join(outside, 'snapshot.json');
+  fs.writeFileSync(outsideSnapshot, '{}\n');
+  fs.unlinkSync(snapshotPath);
+  if (tryCreateSymlink(outsideSnapshot, snapshotPath)) {
+    assert.throws(() => ciMonitorStore.writeCiMonitorSnapshot(workSession.id, failed, { kronosDir }), /safe regular file/);
+  }
+});
+
+test('operator-owned work sessions persist private metadata without controlling terminals', () => {
+  const kronosDir = makeTempDir('kronos-work-session-');
+  const options = { kronosDir, now: new Date('2026-07-13T12:00:00.000Z') };
+  let session = workSessionStore.createOrGetWorkSessionByTicket({
+    ticketKey: 'APP-42',
+    title: 'Operator-owned terminal workflow',
+    projectName: 'app',
+    projectPath: '/workspace/app',
+  }, options);
+  assert.equal(session.status, 'active');
+  assert.deepEqual(session.providerBindings, []);
+
+  session = workSessionStore.addWorkSessionProviderBinding(session.id, {
+    provider: 'gitlab',
+    resource: 'merge-request',
+    subjectId: '77',
+    projectId: '123',
+    url: 'https://user:password@gitlab.example/group/app/-/merge_requests/77?token=hidden#note',
+  }, options);
+  assert.equal(session.providerBindings.find(binding => binding.provider === 'gitlab').url,
+    'https://gitlab.example/group/app/-/merge_requests/77');
+
+  session = workSessionStore.attachWorkSessionTerminal(session.id, {
+    bindingId: 'terminal-one',
+    name: 'Claude operator terminal',
+    processId: 1234,
+  }, options);
+  assert.equal(session.terminals[0].status, 'attached');
+
+  const promptPath = path.join(kronosDir, 'jira-context', 'APP-42', 'prompt.md');
+  session = workSessionStore.recordWorkSessionContextArtifact(session.id, {
+    id: 'jira-APP-42',
+    kind: 'jira-ticket',
+    label: '[APP-42] Jira context',
+    promptPath,
+    fetchedAt: '2026-07-13T11:59:00.000Z',
+    complete: false,
+    warnings: ['Comments were partial.'],
+  }, options);
+  assert.equal(session.artifacts[0].promptPath, promptPath);
+  assert.throws(() => workSessionStore.recordWorkSessionContextArtifact(session.id, {
+    kind: 'unsafe',
+    label: 'outside',
+    promptPath: '/tmp/outside/prompt.md',
+    complete: true,
+  }, options), /inside the Kronos data directory/);
+
+  const registry = operatorTerminalRegistry.createOperatorTerminalRegistry();
+  const firstTerminal = { operatorOwned: true };
+  const secondTerminal = { operatorOwned: true };
+  registry.attach(firstTerminal, { sessionId: session.id, bindingId: 'terminal-one' });
+  registry.attach(secondTerminal, { sessionId: session.id, bindingId: 'terminal-two' });
+  assert.equal(registry.resolve(session.id).kind, 'ambiguous');
+  assert.equal(registry.resolve(session.id, 'terminal-one').terminal, firstTerminal);
+  assert.deepEqual(registry.detachTerminal(firstTerminal), { sessionId: session.id, bindingId: 'terminal-one' });
+  assert.equal(registry.resolve(session.id).terminal, secondTerminal);
+
+  const created = monitorEventStore.appendMonitorEvent({
+    sessionId: session.id,
+    type: 'context.inserted',
+    source: 'jira',
+    summary: 'APP-42 Jira context reference inserted without submission.',
+    subject: { kind: 'ticket', id: 'APP-42', ticketKey: 'APP-42' },
+    artifactPath: promptPath,
+    metadata: { submitted: false },
+  }, options);
+  const acknowledged = monitorEventStore.acknowledgeMonitorEvent(created.id, session.id, options);
+  assert.equal(acknowledged.type, 'notification.acknowledged');
+  assert.equal(monitorEventStore.listMonitorEvents({ sessionId: session.id }, options).length, 2);
+  assert.throws(() => monitorEventStore.appendMonitorEvent({
+    sessionId: session.id,
+    type: 'decision.recorded',
+    source: 'operator',
+    summary: 'unsafe event',
+    metadata: { apiToken: 'do-not-store' },
+  }, options), /metadata key is unsafe/);
+
+  session = workSessionStore.recordWorkSessionMonitoringResult(session.id, {
+    polled: 2,
+    failures: 1,
+    skipped: 1,
+    attemptedAt: '2026-07-13T12:05:00.000Z',
+    summary: 'GitLab healthy; Jenkins failed; SonarQube skipped.',
+  }, options);
+  assert.equal(session.monitoring.lastState, 'partial');
+  assert.equal(session.monitoring.lastFailureCount, 1);
+  assert.equal(session.monitoring.lastSkippedCount, 1);
+  assert.equal(session.monitoring.lastPolledAt, '2026-07-13T12:05:00.000Z');
+
+  const sessionFile = workSessionStore.workSessionRecordPath(session.id, options);
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(path.dirname(sessionFile)).mode & 0o777, 0o700);
+    assert.equal(fs.statSync(sessionFile).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(monitorEventStore.monitorEventsPath(options)).mode & 0o777, 0o600);
+  }
+  assert.equal(workSessionStore.closeWorkSession(session.id, options).status, 'closed');
+  assert.equal(workSessionStore.reopenWorkSession(session.id, options).status, 'active');
+});
+
+test('managed work-session audit view shows provider evidence without terminal content', () => {
+  const kronosDir = makeTempDir('kronos-work-session-audit-');
+  const options = { kronosDir, now: new Date('2026-07-13T12:00:00.000Z') };
+  let session = workSessionStore.createOrGetWorkSessionByTicket({
+    ticketKey: 'APP-42',
+    title: 'Fix checkout # urgently',
+  }, options);
+  session = workSessionStore.recordWorkSessionContextArtifact(session.id, {
+    kind: 'jira-ticket',
+    label: '[APP-42] Jira context',
+    promptPath: path.join(kronosDir, 'jira-context', 'APP-42', 'prompt.md'),
+    fetchedAt: '2026-07-13T11:59:00.000Z',
+    complete: false,
+    warnings: ['Comments were partial.'],
+  }, options);
+  monitorEventStore.appendMonitorEvent({
+    sessionId: session.id,
+    type: 'provider.transition',
+    source: 'gitlab',
+    summary: 'Pipeline failed *after* tests.',
+    subject: { kind: 'pipeline', id: '77', ticketKey: 'APP-42' },
+    before: { state: 'running' },
+    after: { state: 'failed' },
+  }, options);
+  const markdown = workSessionAuditView.buildWorkSessionAuditMarkdown(
+    session,
+    monitorEventStore.listMonitorEvents({ sessionId: session.id }, options),
+  );
+  assert.match(markdown, /Kronos records session metadata/);
+  assert.match(markdown, /does not collect operator terminal input or output/);
+  assert.match(markdown, /Pipeline failed \\[*]after\\[*] tests\\\./);
+  assert.match(markdown, /running.*failed/);
+  assert.match(markdown, /Comments were partial/);
+  assert.equal(markdown.includes('terminal command text'), false);
+});
+
+test('GitLab context references are shell-inert and inserted without submission', () => {
+  const promptPath = '/home/operator/.claude/kronos/gitlab-context/APP-42/MR-77/prompt.md';
+  const reference = terminalContextInsertion.buildGitLabMergeRequestContextReference(77, promptPath);
+  assert.equal(reference, `[MR-77] Read GitLab merge request and pipeline context file "${promptPath}" before answering.`);
+  assert.equal(terminalContextInsertion.isSafeTerminalContextReference(reference), true);
+  const sent = [];
+  terminalContextInsertion.insertTerminalContextReference({
+    show(preserveFocus) { sent.push(['show', preserveFocus]); },
+    sendText(text, shouldExecute) { sent.push(['sendText', text, shouldExecute]); },
+  }, reference);
+  assert.deepEqual(sent, [['show', false], ['sendText', reference, false]]);
+  assert.throws(
+    () => terminalContextInsertion.buildGitLabMergeRequestContextReference(77, '/tmp/$(touch hacked)/MR-77/prompt.md'),
+    /shell-active characters/,
+  );
+  assert.throws(
+    () => terminalContextInsertion.buildGitLabMergeRequestContextReference(78, promptPath),
+    /expected prompt artifact/,
+  );
+});
+
+test('combined Jenkins and SonarQube context is private, bounded, and inserted without submission', () => {
+  const kronosDir = makeTempDir('kronos-ci-context-');
+  const ciContext = ciContextStore.buildCiContext('APP-42', {
+    jenkins: {
+      schemaVersion: 1,
+      provider: 'jenkins',
+      fetchedAt: '2026-07-13T12:00:00.000Z',
+      jobOrBuildUrl: 'https://jenkins.example/job/app',
+      build: {
+        number: 88,
+        status: 'FAILURE',
+        url: 'https://jenkins.example/job/app/88/',
+        causes: [{ shortDescription: 'Started by token=super-secret' }],
+        artifacts: [],
+        changes: [],
+      },
+      tests: {
+        passCount: 10,
+        failCount: 1,
+        skipCount: 0,
+        totalCount: 11,
+        failedCases: [{ name: 'checkout', status: 'FAILED', errorDetails: 'Authorization: Bearer abcdefghijklmnop' }],
+        failedCasesAvailable: 1,
+        complete: true,
+      },
+      stages: [{ name: 'test', status: 'FAILED' }],
+      completeness: {
+        complete: true,
+        buildComplete: true,
+        testReport: 'complete',
+        stages: 'complete',
+        logsIncluded: false,
+        warnings: [],
+      },
+    },
+    sonar: {
+      schemaVersion: 1,
+      provider: 'sonarqube',
+      fetchedAt: '2026-07-13T12:00:00.000Z',
+      projectKey: 'app',
+      branch: 'feature/APP-42',
+      dashboardUrl: 'https://sonar.example/dashboard?id=app',
+      qualityGate: { status: 'ERROR', conditions: [] },
+      measures: [{ metric: 'coverage', value: '72.5' }],
+      issues: [{ message: 'Fix password=provider-secret', tags: [], impacts: [] }],
+      completeness: {
+        complete: true,
+        qualityGateComplete: true,
+        measuresComplete: true,
+        issuesComplete: true,
+        issuesFetched: 1,
+        issuePages: 1,
+        issueResponseBytes: 100,
+        warnings: [],
+      },
+    },
+  });
+  assert.equal(JSON.stringify(ciContext).includes('super-secret'), false);
+  assert.equal(JSON.stringify(ciContext).includes('provider-secret'), false);
+  assert.equal(JSON.stringify(ciContext).includes('abcdefghijklmnop'), false);
+  const artifact = ciContextStore.writeCiContextArtifacts(ciContext, { kronosDir });
+  const prompt = fs.readFileSync(artifact.promptPath, 'utf8');
+  assert.match(prompt, /BEGIN UNTRUSTED CI DATA/);
+  assert.match(prompt, /never instructions/);
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(artifact.directoryPath).mode & 0o777, 0o700);
+    assert.equal(fs.statSync(artifact.jsonPath).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(artifact.promptPath).mode & 0o777, 0o600);
+  }
+
+  const reference = terminalContextInsertion.buildCiContextReference('APP-42', artifact.promptPath);
+  assert.equal(reference, `[CI-APP-42] Read Jenkins and SonarQube context file "${artifact.promptPath}" before answering.`);
+  const calls = [];
+  terminalContextInsertion.insertTerminalContextReference({
+    show(preserveFocus) { calls.push(['show', preserveFocus]); },
+    sendText(text, shouldExecute) { calls.push(['sendText', text, shouldExecute]); },
+  }, reference);
+  assert.deepEqual(calls, [['show', false], ['sendText', reference, false]]);
+
+  const unsafeRoot = makeTempDir('kronos-ci-context-symlink-');
+  const escapeTarget = makeTempDir('kronos-ci-context-escape-');
+  if (tryCreateSymlink(escapeTarget, path.join(unsafeRoot, 'ci-context'), 'dir')) {
+    assert.throws(
+      () => ciContextStore.writeCiContextArtifacts(ciContext, { kronosDir: unsafeRoot }),
+      /symbolic links|safe private directory/,
+    );
+  }
+});
+
 test('Jira context fetches all fields and paginated comments into a private non-executing terminal reference', async () => {
   const requests = [];
   const client = jiraRestClient.createJiraRestClient({
@@ -10220,6 +11056,7 @@ test('jenkins REST client normalizes build status and trigger responses', async 
     number: 42,
     status: 'SUCCESS',
     url: 'https://jenkins.example/job/app/42/',
+    building: false,
   });
   assert.deepEqual(await client.triggerBuild('https://jenkins.example/job/app', { BRANCH: 'feature/K-42' }), {
     queued: true,
@@ -10229,7 +11066,164 @@ test('jenkins REST client normalizes build status and trigger responses', async 
   assert.equal(requests.length, 2);
 });
 
+test('Jenkins build context pins follow-up URLs, includes tests and stages, and never fetches logs', async () => {
+  const requests = [];
+  const client = jenkinsRestClient.createJenkinsRestClient({
+    env: {
+      JENKINS_URL: 'https://jenkins.example',
+      JENKINS_USER: 'builder',
+      JENKINS_API_TOKEN: 'secret-token',
+    },
+    async transport(request) {
+      requests.push(request);
+      const url = new URL(request.url);
+      assert.equal(url.origin, 'https://jenkins.example');
+      assert.match(request.headers.Authorization, /^Basic /);
+      if (url.pathname === '/job/app/api/json') {
+        return jenkinsResponse({
+          lastBuild: {
+            number: 88,
+            result: 'FAILURE',
+            building: false,
+            url: 'https://attacker.example/job/app/88/?token=provider-secret',
+            actions: [{ causes: [{ shortDescription: 'Started by operator' }] }],
+            artifacts: [{ fileName: 'report.xml', relativePath: 'reports/report.xml' }],
+            changeSet: { items: [{ commitId: 'abc123', msg: 'Fix checkout', affectedPaths: ['src/checkout.ts'] }] },
+          },
+        });
+      }
+      if (url.pathname === '/job/app/88/testReport/api/json') {
+        return jenkinsResponse({
+          passCount: 10,
+          failCount: 1,
+          skipCount: 0,
+          totalCount: 11,
+          duration: 4.2,
+          suites: [{ cases: [{ className: 'CheckoutTest', name: 'times out', status: 'FAILED', errorDetails: 'expected success' }] }],
+        });
+      }
+      if (url.pathname === '/job/app/88/wfapi/describe') {
+        return jenkinsResponse({ stages: [{ id: '2', name: 'test', status: 'FAILED', durationMillis: 1200 }] });
+      }
+      throw new Error(`Unexpected Jenkins context URL ${request.url}`);
+    },
+  });
+  const context = await client.buildContext('/job/app');
+  assert.equal(context.build.number, 88);
+  assert.equal(context.build.url, 'https://jenkins.example/job/app/88/');
+  assert.equal(context.tests.failCount, 1);
+  assert.equal(context.tests.failedCases[0].name, 'times out');
+  assert.equal(context.stages[0].name, 'test');
+  assert.equal(context.completeness.logsIncluded, false);
+  assert.equal(context.completeness.complete, false);
+  assert.ok(context.completeness.warnings.some(warning => warning.includes('cross-origin build URL')));
+  assert.deepEqual(requests.map(request => new URL(request.url).pathname).sort(), [
+    '/job/app/88/testReport/api/json',
+    '/job/app/88/wfapi/describe',
+    '/job/app/api/json',
+  ]);
+  assert.equal(requests.some(request => /console|log|trace/i.test(new URL(request.url).pathname)), false);
+
+  let transportCalled = false;
+  const pinnedClient = jenkinsRestClient.createJenkinsRestClient({
+    env: { JENKINS_URL: 'https://jenkins.example', JENKINS_API_TOKEN: 'secret-token' },
+    async transport() { transportCalled = true; return jenkinsResponse({}); },
+  });
+  await assert.rejects(
+    () => pinnedClient.buildStatus('https://attacker.example/job/app'),
+    /outside the configured JENKINS_URL origin/,
+  );
+  assert.equal(transportCalled, false);
+
+  const failedClient = jenkinsRestClient.createJenkinsRestClient({
+    env: { JENKINS_URL: 'https://jenkins.example' },
+    async transport() {
+      return { statusCode: 500, body: '{"error":"provider-secret-body"}', headers: {} };
+    },
+  });
+  await assert.rejects(
+    () => failedClient.buildContext('/job/app'),
+    error => {
+      assert.match(error.message, /HTTP 500/);
+      assert.equal(error.message.includes('provider-secret-body'), false);
+      return true;
+    },
+  );
+});
+
+test('SonarQube branch context paginates bounded issues and retains prior pages on partial failure', async () => {
+  const requests = [];
+  const createClient = failSecondPage => sonarRestClient.createSonarRestClient({
+    env: {
+      SONAR_HOST_URL: 'http://sonar.remote.invalid',
+      SONAR_URL: 'https://user:password@sonar.example/root/?token=hidden#fragment',
+      SONAR_TOKEN: 'sonar-secret-token',
+    },
+    issuesPerPage: 2,
+    maxIssuePages: 3,
+    async transport(request) {
+      requests.push(request);
+      const url = new URL(request.url);
+      assert.equal(url.origin, 'https://sonar.example');
+      assert.match(request.headers.Authorization, /^Bearer /);
+      if (url.pathname === '/root/api/qualitygates/project_status') {
+        return sonarResponse({ projectStatus: { status: 'ERROR', conditions: [] } });
+      }
+      if (url.pathname === '/root/api/measures/component') {
+        return sonarResponse({ component: { measures: [{ metric: 'coverage', value: '72.5' }] } });
+      }
+      if (url.pathname === '/root/api/issues/search') {
+        const page = Number(url.searchParams.get('p'));
+        if (page === 2 && failSecondPage) {
+          return { statusCode: 503, body: '{"error":"provider-secret-body"}', headers: {} };
+        }
+        const issues = page === 1
+          ? [
+            { key: 'i1', message: 'First issue', tags: [], impacts: [] },
+            { key: 'i2', message: 'Second issue', tags: [], impacts: [] },
+          ]
+          : [{ key: 'i3', message: 'Third issue', tags: [], impacts: [] }];
+        return sonarResponse({
+          paging: { pageIndex: page, pageSize: 2, total: 3 },
+          issues,
+        });
+      }
+      throw new Error(`Unexpected SonarQube URL ${request.url}`);
+    },
+  });
+
+  const complete = await createClient(false).branchContext('app', 'feature/APP-42');
+  assert.equal(complete.qualityGate.status, 'ERROR');
+  assert.equal(complete.measures[0].metric, 'coverage');
+  assert.deepEqual(complete.issues.map(issue => issue.key), ['i1', 'i2', 'i3']);
+  assert.equal(complete.completeness.complete, true);
+  assert.equal(complete.completeness.issuePages, 2);
+  assert.equal(complete.dashboardUrl, 'https://sonar.example/root/dashboard?id=app&branch=feature%2FAPP-42');
+
+  requests.length = 0;
+  const partial = await createClient(true).branchContext('app', 'feature/APP-42');
+  assert.deepEqual(partial.issues.map(issue => issue.key), ['i1', 'i2']);
+  assert.equal(partial.completeness.complete, false);
+  assert.equal(partial.completeness.issuesComplete, false);
+  assert.ok(partial.completeness.warnings.some(warning => warning.includes('page 2')));
+  assert.equal(partial.completeness.warnings.some(warning => warning.includes('provider-secret-body')), false);
+  assert.equal(requests.some(request => request.url.includes('sonar-secret-token')), false);
+  assert.equal(sonarRestClient.resolveSonarRestConfig({
+    SONAR_HOST_URL: 'http://sonar.remote.invalid',
+    SONAR_URL: 'https://sonar.example',
+    SONAR_TOKEN: 'token',
+  }).baseUrl, 'https://sonar.example');
+});
+
 function jenkinsResponse(value, headers = {}) {
+  return {
+    statusCode: 200,
+    body: JSON.stringify(value),
+    headers,
+  };
+}
+
+function sonarResponse(value, headers = {}) {
   return {
     statusCode: 200,
     body: JSON.stringify(value),
@@ -10274,12 +11268,14 @@ test('integration adapters keep raw provider payloads unknown until normalized',
     '/diffs',
     '/changes',
     "'PRIVATE-TOKEN': config.token",
-    'parseJsonWithLabel(response.body, label, { includePreview: true })',
+    'parseJsonWithLabel(response.body, label)',
     'function defaultGitLabTransport',
     "import { unknownErrorMessage } from './errorUtils'",
   ]) {
     assert.ok(gitlabSource.includes(marker), marker);
   }
+  assert.equal(gitlabSource.includes('includePreview: true'), false);
+  assert.equal(gitlabSource.includes('responsePreview('), false);
   for (const marker of [
     'Promise<any>',
     'runPipelineJson<any>',

@@ -11,6 +11,15 @@ const REQUIRED_COMMANDS = [
   'kronos.jiraBoard',
   'kronos.viewTicket',
   'kronos.insertJiraContext',
+  'kronos.insertGitLabContext',
+  'kronos.insertCiContext',
+  'kronos.manageActiveTerminal',
+  'kronos.pollManagedWorkSessions',
+  'kronos.openWorkSessionAudit',
+  'kronos.focusWorkSessionTerminal',
+  'kronos.reattachWorkSessionTerminal',
+  'kronos.detachWorkSessionTerminal',
+  'kronos.closeWorkSession',
   'kronos.evidenceGate',
   'kronos.evidenceHandoff',
   'kronos.runCenter',
@@ -136,6 +145,8 @@ function assertPanelHtml(extension, viewType) {
       ], viewType);
       assertAction(html, 'runAutopilotPass');
       assertAction(html, 'pollReviewMergeRequests');
+      assertAction(html, 'insertGitLabContext', { ticket: sharedTicket });
+      assertAction(html, 'insertCiContext', { ticket: sharedTicket });
       break;
     case 'kronosIntegrationContracts':
       assertHtmlContains(html, [
@@ -174,6 +185,9 @@ function assertPanelHtml(extension, viewType) {
       assertAction(html, 'evidenceHandoff', { ticket: sharedTicket });
       assertAction(html, 'publishEvidence', { ticket: sharedTicket });
       assertAction(html, 'insertJiraContext', { ticket: sharedTicket });
+      assertAction(html, 'manageActiveTerminal', { ticket: sharedTicket });
+      assertAction(html, 'insertGitLabContext', { ticket: sharedTicket });
+      assertAction(html, 'insertCiContext', { ticket: sharedTicket });
       break;
     case 'kronosEvidenceGate':
       assertHtmlContains(html, [

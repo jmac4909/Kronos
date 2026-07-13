@@ -368,6 +368,51 @@
         "icon": "$(symbol-keyword)"
       },
       {
+        "command": "kronos.insertGitLabContext",
+        "title": "Kronos: Insert GitLab MR and Pipeline Context",
+        "icon": "$(merge)"
+      },
+      {
+        "command": "kronos.insertCiContext",
+        "title": "Kronos: Insert Jenkins and SonarQube Context",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "kronos.manageActiveTerminal",
+        "title": "Kronos: Manage Active Operator Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "kronos.pollManagedWorkSessions",
+        "title": "Kronos: Poll Managed Providers",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "kronos.openWorkSessionAudit",
+        "title": "Kronos: Open Managed Work Session Audit",
+        "icon": "$(history)"
+      },
+      {
+        "command": "kronos.focusWorkSessionTerminal",
+        "title": "Kronos: Focus Managed Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "kronos.reattachWorkSessionTerminal",
+        "title": "Kronos: Reattach Active Terminal to Work Session",
+        "icon": "$(link)"
+      },
+      {
+        "command": "kronos.detachWorkSessionTerminal",
+        "title": "Kronos: Detach Terminal from Work Session",
+        "icon": "$(link)"
+      },
+      {
+        "command": "kronos.closeWorkSession",
+        "title": "Kronos: Stop Managing Work Session",
+        "icon": "$(close)"
+      },
+      {
         "command": "kronos.addEvidence",
         "title": "Kronos: Add Evidence Note",
         "icon": "$(notebook)"
@@ -599,6 +644,22 @@
           "when": "false"
         },
         {
+          "command": "kronos.focusWorkSessionTerminal",
+          "when": "false"
+        },
+        {
+          "command": "kronos.reattachWorkSessionTerminal",
+          "when": "false"
+        },
+        {
+          "command": "kronos.detachWorkSessionTerminal",
+          "when": "false"
+        },
+        {
+          "command": "kronos.closeWorkSession",
+          "when": "false"
+        },
+        {
           "command": "kronos.addEvidence",
           "when": "false"
         },
@@ -817,6 +878,16 @@
           "group": "navigation"
         },
         {
+          "command": "kronos.manageActiveTerminal",
+          "when": "view == kronosSessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kronos.pollManagedWorkSessions",
+          "when": "view == kronosSessions",
+          "group": "navigation@2"
+        },
+        {
           "command": "kronos.agentQualityScore",
           "when": "view == kronosSessions",
           "group": "navigation"
@@ -1020,6 +1091,16 @@
           "group": "inline"
         },
         {
+          "command": "kronos.insertGitLabContext",
+          "when": "viewItem == review_item",
+          "group": "inline"
+        },
+        {
+          "command": "kronos.insertCiContext",
+          "when": "viewItem == review_item",
+          "group": "inline"
+        },
+        {
           "command": "kronos.rejectReview",
           "when": "viewItem == review_item",
           "group": "inline"
@@ -1060,6 +1141,14 @@
         },
         {
           "command": "kronos.verifyRemote",
+          "when": "viewItem == ticket_implement || viewItem == ticket_verify || viewItem == ticket_review || viewItem == ticket"
+        },
+        {
+          "command": "kronos.insertGitLabContext",
+          "when": "viewItem == ticket_implement || viewItem == ticket_verify || viewItem == ticket_review || viewItem == ticket"
+        },
+        {
+          "command": "kronos.insertCiContext",
           "when": "viewItem == ticket_implement || viewItem == ticket_verify || viewItem == ticket_review || viewItem == ticket"
         },
         {
@@ -1145,6 +1234,28 @@
         {
           "command": "kronos.cancelRun",
           "when": "viewItem == run"
+        },
+        {
+          "command": "kronos.focusWorkSessionTerminal",
+          "when": "viewItem == work_session_attached",
+          "group": "inline"
+        },
+        {
+          "command": "kronos.reattachWorkSessionTerminal",
+          "when": "viewItem == work_session_detached || viewItem == work_session_closed",
+          "group": "inline"
+        },
+        {
+          "command": "kronos.detachWorkSessionTerminal",
+          "when": "viewItem == work_session_attached"
+        },
+        {
+          "command": "kronos.openWorkSessionAudit",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_closed"
+        },
+        {
+          "command": "kronos.closeWorkSession",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached"
         },
         {
           "command": "kronos.unlinkTicket",

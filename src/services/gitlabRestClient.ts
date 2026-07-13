@@ -11,6 +11,9 @@ export interface GitLabMergeRequestTarget {
 
 export interface GitLabRestRequestOptions {
   timeoutMs?: number;
+  maxResponseBytes?: number;
+  maxTotalBytes?: number;
+  maxPages?: number;
 }
 
 export interface GitLabHttpRequest {
@@ -18,6 +21,7 @@ export interface GitLabHttpRequest {
   url: string;
   headers: Record<string, string>;
   timeoutMs: number;
+  maxResponseBytes: number;
 }
 
 export interface GitLabHttpResponse {
@@ -31,6 +35,54 @@ export type GitLabHttpTransport = (request: GitLabHttpRequest) => Promise<GitLab
 export interface GitLabRestClientOptions {
   env?: NodeJS.ProcessEnv;
   transport?: GitLabHttpTransport;
+  maxResponseBytes?: number;
+  maxTotalBytes?: number;
+  maxPages?: number;
+}
+
+export interface GitLabMergeRequestContextOptions extends GitLabRestRequestOptions {
+  includeDiffs?: boolean;
+  includeTestReport?: boolean;
+}
+
+export interface GitLabMergeRequestContextSnapshot {
+  mr: unknown;
+  notes: unknown[];
+  discussions: unknown[];
+  approvals?: unknown;
+  diffs: unknown[];
+  pipelines: unknown[];
+  pipeline?: unknown;
+  jobs: unknown[];
+  testReportSummary?: unknown;
+  testReport?: unknown;
+  fetchedAt: string;
+  responseBytes: number;
+  completeness: {
+    notesComplete: boolean;
+    discussionsComplete: boolean;
+    diffsComplete: boolean;
+    pipelinesComplete: boolean;
+    jobsComplete: boolean;
+    testsComplete: boolean;
+    warnings: string[];
+  };
+}
+
+export interface GitLabMergeRequestMonitorSnapshot {
+  mr: unknown;
+  pipelines: unknown[];
+  pipeline?: unknown;
+  jobs: unknown[];
+  testReportSummary?: unknown;
+  fetchedAt: string;
+  responseBytes: number;
+  completeness: {
+    pipelinesComplete: boolean;
+    jobsComplete: boolean;
+    testsComplete: boolean;
+    warnings: string[];
+  };
 }
 
 interface GitLabRestConfig {
@@ -40,14 +92,22 @@ interface GitLabRestConfig {
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const MAX_PAGES = 20;
+const DEFAULT_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+const DEFAULT_MAX_TOTAL_BYTES = 30 * 1024 * 1024;
 
 export class GitLabRestClient {
   private readonly env: NodeJS.ProcessEnv;
   private readonly transport: GitLabHttpTransport;
+  private readonly maxResponseBytes: number;
+  private readonly maxTotalBytes: number;
+  private readonly maxPages: number;
 
   constructor(options: GitLabRestClientOptions = {}) {
     this.env = options.env || process.env;
     this.transport = options.transport || defaultGitLabTransport;
+    this.maxResponseBytes = boundedInteger(options.maxResponseBytes, DEFAULT_MAX_RESPONSE_BYTES, 1024, 25 * 1024 * 1024);
+    this.maxTotalBytes = boundedInteger(options.maxTotalBytes, DEFAULT_MAX_TOTAL_BYTES, 1024, 250 * 1024 * 1024);
+    this.maxPages = boundedInteger(options.maxPages, MAX_PAGES, 1, 100);
   }
 
   async projectId(gitlabPath: string, options: GitLabRestRequestOptions = {}): Promise<number | null> {
@@ -91,6 +151,190 @@ export class GitLabRestClient {
     return { mr, files: diffs };
   }
 
+  async mergeRequestMonitor(
+    target: GitLabMergeRequestTarget,
+    options: GitLabRestRequestOptions = {},
+  ): Promise<GitLabMergeRequestMonitorSnapshot> {
+    const budget = new GitLabResponseBudget(
+      boundedInteger(options.maxTotalBytes, this.maxTotalBytes, 1024, 250 * 1024 * 1024),
+    );
+    const warnings: string[] = [];
+    const request = async (
+      path: string,
+      label: string,
+      query: Record<string, string | number> = {},
+    ) => {
+      budget.assertAvailable(label);
+      const response = await this.requestJson(path, label, query, options);
+      budget.consume(response.bodyBytes, label);
+      return response;
+    };
+    const collect = (
+      path: string,
+      label: string,
+      query: Record<string, string | number> = {},
+    ) => this.collectPaginatedArray(path, label, query, options, request);
+    const optional = async (path: string, label: string): Promise<unknown | undefined> => {
+      try {
+        return (await request(path, label)).value;
+      } catch {
+        warnings.push(`${label} was unavailable; the GitLab monitor snapshot is partial.`);
+        return undefined;
+      }
+    };
+
+    const mr = (await request(mergeRequestPath(target), `GitLab MR !${target.iid}`)).value;
+    const pipelinesResult = await collect(
+      `${mergeRequestPath(target)}/pipelines`,
+      `GitLab MR !${target.iid} pipelines`,
+    );
+    warnings.push(...pipelinesResult.warnings);
+    const pipelineRef = selectGitLabPipeline(mr, pipelinesResult.values, target.projectIdOrPath);
+    let pipeline: unknown;
+    let jobs: unknown[] = [];
+    let jobsComplete = true;
+    let testsComplete = true;
+    let testReportSummary: unknown;
+    if (pipelineRef) {
+      const pipelineBase = `/projects/${encodeURIComponent(pipelineRef.projectIdOrPath)}/pipelines/${encodeURIComponent(String(pipelineRef.pipelineId))}`;
+      pipeline = await optional(pipelineBase, `GitLab pipeline ${pipelineRef.pipelineId}`);
+      const jobsResult = await collect(
+        `${pipelineBase}/jobs`,
+        `GitLab pipeline ${pipelineRef.pipelineId} jobs`,
+        { include_retried: 'true' },
+      );
+      jobs = jobsResult.values;
+      jobsComplete = jobsResult.complete;
+      warnings.push(...jobsResult.warnings);
+      testReportSummary = await optional(
+        `${pipelineBase}/test_report_summary`,
+        `GitLab pipeline ${pipelineRef.pipelineId} test summary`,
+      );
+      if (testReportSummary === undefined) { testsComplete = false; }
+    }
+
+    const snapshot: GitLabMergeRequestMonitorSnapshot = {
+      mr,
+      pipelines: pipelinesResult.values,
+      jobs,
+      fetchedAt: new Date().toISOString(),
+      responseBytes: budget.usedBytes,
+      completeness: {
+        pipelinesComplete: pipelinesResult.complete,
+        jobsComplete,
+        testsComplete,
+        warnings: uniqueStrings(warnings),
+      },
+    };
+    if (pipeline !== undefined) { snapshot.pipeline = pipeline; }
+    if (testReportSummary !== undefined) { snapshot.testReportSummary = testReportSummary; }
+    return snapshot;
+  }
+
+  async mergeRequestContext(
+    target: GitLabMergeRequestTarget,
+    options: GitLabMergeRequestContextOptions = {},
+  ): Promise<GitLabMergeRequestContextSnapshot> {
+    const budget = new GitLabResponseBudget(
+      boundedInteger(options.maxTotalBytes, this.maxTotalBytes, 1024, 250 * 1024 * 1024),
+    );
+    const warnings: string[] = [];
+    const request = async (
+      path: string,
+      label: string,
+      query: Record<string, string | number> = {},
+    ) => {
+      budget.assertAvailable(label);
+      const response = await this.requestJson(path, label, query, options);
+      budget.consume(response.bodyBytes, label);
+      return response;
+    };
+    const collect = (
+      path: string,
+      label: string,
+      query: Record<string, string | number> = {},
+    ) => this.collectPaginatedArray(path, label, query, options, request);
+    const optional = async (
+      path: string,
+      label: string,
+      query: Record<string, string | number> = {},
+    ): Promise<unknown | undefined> => {
+      try {
+        return (await request(path, label, query)).value;
+      } catch (e: unknown) {
+        warnings.push(`${label} was unavailable; the GitLab context is partial.`);
+        return undefined;
+      }
+    };
+
+    const mr = (await request(mergeRequestPath(target), `GitLab MR !${target.iid}`)).value;
+    const notesResult = await collect(`${mergeRequestPath(target)}/notes`, `GitLab MR !${target.iid} notes`, {
+      sort: 'asc',
+      order_by: 'created_at',
+    });
+    const discussionsResult = await collect(`${mergeRequestPath(target)}/discussions`, `GitLab MR !${target.iid} discussions`);
+    warnings.push(...notesResult.warnings, ...discussionsResult.warnings);
+    const approvals = await optional(`${mergeRequestPath(target)}/approvals`, `GitLab MR !${target.iid} approvals`);
+
+    let diffs: unknown[] = [];
+    let diffsComplete = options.includeDiffs === false;
+    if (options.includeDiffs !== false) {
+      const diffResult = await collect(`${mergeRequestPath(target)}/diffs`, `GitLab MR !${target.iid} diffs`);
+      diffs = diffResult.values;
+      diffsComplete = diffResult.complete;
+      warnings.push(...diffResult.warnings);
+    }
+
+    const pipelinesResult = await collect(`${mergeRequestPath(target)}/pipelines`, `GitLab MR !${target.iid} pipelines`);
+    warnings.push(...pipelinesResult.warnings);
+    const pipelineRef = selectGitLabPipeline(mr, pipelinesResult.values, target.projectIdOrPath);
+    let pipeline: unknown;
+    let jobs: unknown[] = [];
+    let jobsComplete = true;
+    let testsComplete = true;
+    let testReportSummary: unknown;
+    let testReport: unknown;
+    if (pipelineRef) {
+      const pipelineBase = `/projects/${encodeURIComponent(pipelineRef.projectIdOrPath)}/pipelines/${encodeURIComponent(String(pipelineRef.pipelineId))}`;
+      pipeline = await optional(pipelineBase, `GitLab pipeline ${pipelineRef.pipelineId}`);
+      const jobsResult = await collect(`${pipelineBase}/jobs`, `GitLab pipeline ${pipelineRef.pipelineId} jobs`, { include_retried: 'true' });
+      jobs = jobsResult.values;
+      jobsComplete = jobsResult.complete;
+      warnings.push(...jobsResult.warnings);
+      testReportSummary = await optional(`${pipelineBase}/test_report_summary`, `GitLab pipeline ${pipelineRef.pipelineId} test summary`);
+      if (testReportSummary === undefined) { testsComplete = false; }
+      if (options.includeTestReport !== false) {
+        testReport = await optional(`${pipelineBase}/test_report`, `GitLab pipeline ${pipelineRef.pipelineId} test report`);
+        if (testReport === undefined) { testsComplete = false; }
+      }
+    }
+
+    const snapshot: GitLabMergeRequestContextSnapshot = {
+      mr,
+      notes: notesResult.values,
+      discussions: discussionsResult.values,
+      diffs,
+      pipelines: pipelinesResult.values,
+      jobs,
+      fetchedAt: new Date().toISOString(),
+      responseBytes: budget.usedBytes,
+      completeness: {
+        notesComplete: notesResult.complete,
+        discussionsComplete: discussionsResult.complete,
+        diffsComplete,
+        pipelinesComplete: pipelinesResult.complete,
+        jobsComplete,
+        testsComplete,
+        warnings: uniqueStrings(warnings),
+      },
+    };
+    if (approvals !== undefined) { snapshot.approvals = approvals; }
+    if (pipeline !== undefined) { snapshot.pipeline = pipeline; }
+    if (testReportSummary !== undefined) { snapshot.testReportSummary = testReportSummary; }
+    if (testReport !== undefined) { snapshot.testReport = testReport; }
+    return snapshot;
+  }
+
   private async optionalJson(
     path: string,
     label: string,
@@ -123,18 +367,61 @@ export class GitLabRestClient {
     return results;
   }
 
+  private async collectPaginatedArray(
+    path: string,
+    label: string,
+    query: Record<string, string | number>,
+    options: GitLabRestRequestOptions,
+    request: (
+      path: string,
+      label: string,
+      query?: Record<string, string | number>,
+    ) => Promise<{ value: unknown; headers: Record<string, string | string[] | undefined>; bodyBytes: number }>,
+  ): Promise<{ values: unknown[]; complete: boolean; warnings: string[] }> {
+    const values: unknown[] = [];
+    const warnings: string[] = [];
+    const maxPages = boundedInteger(options.maxPages, this.maxPages, 1, 100);
+    let page = 1;
+    let pagesFetched = 0;
+    const visitedPages = new Set<number>();
+    for (;;) {
+      if (visitedPages.has(page)) {
+        warnings.push(`${label} returned a repeated pagination cursor; fetched items were retained.`);
+        return { values, complete: false, warnings };
+      }
+      visitedPages.add(page);
+      let response: Awaited<ReturnType<typeof request>>;
+      try {
+        response = await request(path, `${label} page ${page}`, { ...query, page, per_page: 100 });
+      } catch {
+        warnings.push(`${label} stopped at page ${page}; ${values.length} previously fetched item${values.length === 1 ? '' : 's'} were retained.`);
+        return { values, complete: false, warnings };
+      }
+      pagesFetched += 1;
+      values.push(...arrayFromUnknown(response.value));
+      const nextPage = nextPageHeader(response.headers);
+      if (!nextPage) { return { values, complete: true, warnings }; }
+      if (pagesFetched >= maxPages) {
+        warnings.push(`${label} stopped at the ${maxPages}-page safety limit.`);
+        return { values, complete: false, warnings };
+      }
+      page = nextPage;
+    }
+  }
+
   private async requestJson(
     path: string,
     label: string,
     query: Record<string, string | number> = {},
     options: GitLabRestRequestOptions = {},
-  ): Promise<{ value: unknown; headers: Record<string, string | string[] | undefined> }> {
+  ): Promise<{ value: unknown; headers: Record<string, string | string[] | undefined>; bodyBytes: number }> {
     const config = resolveGitLabRestConfig(this.env);
     const url = buildGitLabUrl(config.apiBaseUrl, path, query);
     const response = await this.transport({
       method: 'GET',
       url,
       timeoutMs: options.timeoutMs || DEFAULT_TIMEOUT_MS,
+      maxResponseBytes: boundedInteger(options.maxResponseBytes, this.maxResponseBytes, 1024, 25 * 1024 * 1024),
       headers: {
         Accept: 'application/json',
         'PRIVATE-TOKEN': config.token,
@@ -142,11 +429,17 @@ export class GitLabRestClient {
       },
     });
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw new GitLabRestError(`GitLab REST ${label} failed with HTTP ${response.statusCode}${responsePreview(response.body)}`);
+      throw new GitLabRestError(`GitLab REST ${label} failed with HTTP ${response.statusCode}. Provider response content is not displayed.`);
+    }
+    const bodyBytes = Buffer.byteLength(response.body, 'utf8');
+    const maxResponseBytes = boundedInteger(options.maxResponseBytes, this.maxResponseBytes, 1024, 25 * 1024 * 1024);
+    if (bodyBytes > maxResponseBytes) {
+      throw new GitLabRestError(`GitLab REST ${label} exceeded the ${maxResponseBytes}-byte response safety limit.`);
     }
     return {
-      value: parseJsonWithLabel(response.body, label, { includePreview: true }),
+      value: parseJsonWithLabel(response.body, label),
       headers: response.headers,
+      bodyBytes,
     };
   }
 }
@@ -183,7 +476,11 @@ export function normalizeGitLabApiBaseUrl(value: string | undefined): string | u
   const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
     const url = new URL(withScheme);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') { return undefined; }
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopbackHostname(url.hostname))) {
+      return undefined;
+    }
+    url.username = '';
+    url.password = '';
     url.pathname = `${url.pathname.replace(/\/+$/, '').replace(/\/api\/v4$/, '')}/api/v4`;
     url.search = '';
     url.hash = '';
@@ -253,13 +550,78 @@ function firstNonEmpty(...values: Array<string | undefined>): string | undefined
   return undefined;
 }
 
-function responsePreview(body: string): string {
-  const compact = body.replace(/\s+/g, ' ').trim();
-  return compact ? `: ${compact.slice(0, 300)}` : '';
-}
-
 function isGitLabNotFoundError(error: unknown): boolean {
   return /\bHTTP 40[34]\b/.test(unknownErrorMessage(error, ''));
+}
+
+interface GitLabPipelineRef {
+  projectIdOrPath: string;
+  pipelineId: number;
+}
+
+function selectGitLabPipeline(
+  mr: unknown,
+  pipelines: unknown[],
+  fallbackProjectIdOrPath: string,
+): GitLabPipelineRef | undefined {
+  const mrRecord = isRecord(mr) ? mr : {};
+  const headPipeline = isRecord(mrRecord['head_pipeline']) ? mrRecord['head_pipeline'] : undefined;
+  const headPipelineId = optionalFiniteNumberFromUnknown(headPipeline?.['id']);
+  if (headPipelineId !== undefined && headPipelineId > 0) {
+    const projectId = optionalFiniteNumberFromUnknown(headPipeline?.['project_id'])
+      ?? optionalFiniteNumberFromUnknown(mrRecord['project_id']);
+    return {
+      projectIdOrPath: projectId !== undefined ? String(Math.floor(projectId)) : fallbackProjectIdOrPath,
+      pipelineId: Math.floor(headPipelineId),
+    };
+  }
+
+  const sha = optionalTrimmedStringFromUnknown(mrRecord['sha']);
+  const pipelineRecords = pipelines.filter(isRecord);
+  const selected = (sha
+    ? pipelineRecords.find(candidate => optionalTrimmedStringFromUnknown(candidate['sha']) === sha)
+    : undefined) || pipelineRecords[0];
+  const pipelineId = optionalFiniteNumberFromUnknown(selected?.['id']);
+  if (pipelineId === undefined || pipelineId <= 0) { return undefined; }
+  const projectId = optionalFiniteNumberFromUnknown(selected?.['project_id'])
+    ?? optionalFiniteNumberFromUnknown(mrRecord['project_id']);
+  return {
+    projectIdOrPath: projectId !== undefined ? String(Math.floor(projectId)) : fallbackProjectIdOrPath,
+    pipelineId: Math.floor(pipelineId),
+  };
+}
+
+class GitLabResponseBudget {
+  public usedBytes = 0;
+
+  constructor(private readonly limitBytes: number) {}
+
+  assertAvailable(label: string): void {
+    if (this.usedBytes >= this.limitBytes) {
+      throw new GitLabRestError(`GitLab REST ${label} could not be fetched because the cumulative response safety limit was reached.`);
+    }
+  }
+
+  consume(bodyBytes: number, label: string): void {
+    this.usedBytes += Math.max(0, Math.floor(bodyBytes));
+    if (this.usedBytes > this.limitBytes) {
+      throw new GitLabRestError(`GitLab REST ${label} exceeded the cumulative ${this.limitBytes}-byte response safety limit.`);
+    }
+  }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function boundedInteger(value: number | undefined, fallback: number, minimum: number, maximum: number): number {
+  if (value === undefined || !Number.isFinite(value)) { return fallback; }
+  return Math.min(maximum, Math.max(minimum, Math.floor(value)));
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
 }
 
 function defaultGitLabTransport(request: GitLabHttpRequest): Promise<GitLabHttpResponse> {
@@ -267,8 +629,12 @@ function defaultGitLabTransport(request: GitLabHttpRequest): Promise<GitLabHttpR
     let parsed: URL;
     try {
       parsed = new URL(request.url);
-    } catch (e: unknown) {
-      reject(new Error(unknownErrorMessage(e, 'Invalid GitLab REST URL.')));
+    } catch {
+      reject(new GitLabRestError('Invalid GitLab REST URL.'));
+      return;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      reject(new GitLabRestError('Invalid GitLab REST URL protocol.'));
       return;
     }
     const client = parsed.protocol === 'https:' ? https : http;
@@ -278,7 +644,18 @@ function defaultGitLabTransport(request: GitLabHttpRequest): Promise<GitLabHttpR
       headers: request.headers,
     }, res => {
       const chunks: Buffer[] = [];
-      res.on('data', chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))));
+      let receivedBytes = 0;
+      res.on('data', chunk => {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+        receivedBytes += buffer.length;
+        if (receivedBytes > request.maxResponseBytes) {
+          res.destroy();
+          req.destroy();
+          reject(new GitLabRestError(`GitLab REST response exceeded the ${request.maxResponseBytes}-byte safety limit.`));
+          return;
+        }
+        chunks.push(buffer);
+      });
       res.on('end', () => {
         resolve({
           statusCode: res.statusCode || 0,
@@ -286,11 +663,17 @@ function defaultGitLabTransport(request: GitLabHttpRequest): Promise<GitLabHttpR
           headers: res.headers,
         });
       });
+      res.on('error', () => {
+        reject(new GitLabRestError('GitLab REST response ended unexpectedly.'));
+      });
     });
     req.on('timeout', () => {
-      req.destroy(new Error(`Timed out after ${request.timeoutMs}ms reaching GitLab REST API.`));
+      req.destroy();
+      reject(new GitLabRestError(`Timed out after ${request.timeoutMs}ms reaching GitLab REST API.`));
     });
-    req.on('error', reject);
+    req.on('error', () => {
+      reject(new GitLabRestError('GitLab REST network request failed.'));
+    });
     req.end();
   });
 }

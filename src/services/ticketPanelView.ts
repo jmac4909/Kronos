@@ -161,13 +161,18 @@ export function buildTicketHtml(key: string, ticket: Ticket, input: TicketPanelR
 
   const jiraUrl = safeHttpHref(ticketStringField(ticket, 'jira_url'));
   const mrActionUrl = mr ? safeHttpHref(ticketStringField(mr, 'url')) : '';
+  const mrActionIid = mr ? ticketStringField(mr, 'iid') : '';
+  const hasMrActionIid = /^[1-9][0-9]*$/.test(mrActionIid);
   const buildActionUrl = build ? safeHttpHref(ticketStringField(build, 'url')) : '';
   const isQueued = Boolean(input.queue?.items?.some(item => item.ticket === key));
   const actionButtons = [
     projectList.length > 0
       ? actionButton('startTicket', 'Start Work', { ticket: key, primary: true })
       : actionButton('linkTicket', 'Link Project', { ticket: key, primary: true }),
+    actionButton('manageActiveTerminal', 'Manage This Terminal', { ticket: key }),
     ticket.source === 'jira' ? actionButton('insertJiraContext', `Insert [${key}]`, { ticket: key }) : '',
+    hasMrActionIid ? actionButton('insertGitLabContext', `Insert [MR-${mrActionIid}]`, { ticket: key }) : '',
+    actionButton('insertCiContext', `Insert [CI-${key}]`, { ticket: key }),
     actionButton('verifyLocal', 'Verify Local', { ticket: key }),
     actionButton('verifyRemote', 'Verify Remote', { ticket: key }),
     isQueued

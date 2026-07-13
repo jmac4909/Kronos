@@ -273,6 +273,8 @@ export function normalizeJiraBaseUrl(value: string | undefined): string | undefi
     if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopbackHostname(url.hostname))) {
       return undefined;
     }
+    url.username = '';
+    url.password = '';
     url.pathname = url.pathname.replace(/\/+$/, '');
     url.search = '';
     url.hash = '';
@@ -304,6 +306,8 @@ function normalizeJiraIssueUrl(value: string | undefined): string | undefined {
   try {
     const url = new URL(trimmed);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') { return undefined; }
+    url.username = '';
+    url.password = '';
     url.search = '';
     url.hash = '';
     return url.toString();

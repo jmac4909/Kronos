@@ -151,8 +151,23 @@
       actionsEl.appendChild(makeEl('span', 'modal-blocked-hint', 'Link to a project first to start or queue.'));
     }
     if (actionsEl) {
+      actionsEl.appendChild(makeButton('Manage This Terminal', '', function() {
+        post('manageActiveTerminal', { ticket: currentModalKey });
+        closeModal();
+      }));
       actionsEl.appendChild(makeButton('Insert [' + currentModalKey + ']', '', function() {
         post('insertJiraContext', { ticket: currentModalKey });
+        closeModal();
+      }));
+      var mrIid = t.mr && String(t.mr.iid || '').trim();
+      if (/^[1-9][0-9]*$/.test(mrIid)) {
+        actionsEl.appendChild(makeButton('Insert [MR-' + mrIid + ']', '', function() {
+          post('insertGitLabContext', { ticket: currentModalKey });
+          closeModal();
+        }));
+      }
+      actionsEl.appendChild(makeButton('Insert [CI-' + currentModalKey + ']', '', function() {
+        post('insertCiContext', { ticket: currentModalKey });
         closeModal();
       }));
       actionsEl.appendChild(makeButton('Verify Local', '', function() { post('verifyLocal', { ticket: currentModalKey }); closeModal(); }));

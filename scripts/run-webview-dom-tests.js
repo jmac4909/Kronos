@@ -156,7 +156,7 @@ test('jira board filters cards, opens ticket modal, renders comments, and posts 
       projects: [],
       labels: [],
       attachments: [],
-      mr: null,
+      mr: { status: 'opened' },
       build: null,
       evidenceCount: 0,
       hasJiraUrl: false,
@@ -240,7 +240,10 @@ test('jira board filters cards, opens ticket modal, renders comments, and posts 
   assert.match(document.getElementById('modal-mr').textContent, /MR !41 - pending review/);
   assert.equal(document.getElementById('modal-build').textContent, 'Build #142 - SUCCESS');
   assert.equal(document.getElementById('modal-attachments').textContent, 'evidence.md (2KB)');
+  assert.ok([...document.querySelectorAll('#modal-actions button')].some(button => button.textContent === 'Manage This Terminal'));
   assert.ok([...document.querySelectorAll('#modal-actions button')].some(button => button.textContent === 'Insert [KRONOS-FB-1]'));
+  assert.ok([...document.querySelectorAll('#modal-actions button')].some(button => button.textContent === 'Insert [MR-41]'));
+  assert.ok([...document.querySelectorAll('#modal-actions button')].some(button => button.textContent === 'Insert [CI-KRONOS-FB-1]'));
   assert.ok([...document.querySelectorAll('#modal-actions button')].some(button => button.textContent === 'Verify Local'));
   assert.ok([...document.querySelectorAll('#modal-actions button')].some(button => button.textContent === 'Verify Remote'));
   assert.ok(env.messages.some(message => message.command === 'getComments' && message.ticket === 'KRONOS-FB-1'));
@@ -254,6 +257,22 @@ test('jira board filters cards, opens ticket modal, renders comments, and posts 
   }));
   assert.match(document.getElementById('modal-comments').textContent, /Reviewer/);
   assert.match(document.getElementById('modal-comments').textContent, /Ready for manual pass\./);
+
+  click(env.dom.window, buttonByText(document, 'Manage This Terminal'));
+  assert.deepEqual(actionMessages(env.messages).at(-1), { command: 'manageActiveTerminal', ticket: 'KRONOS-FB-1' });
+  assert.equal(document.getElementById('modal-overlay').classList.contains('show'), false);
+
+  click(env.dom.window, document.querySelector('[data-ticket="KRONOS-FB-1"] .card-title'));
+  click(env.dom.window, buttonByText(document, 'Insert [MR-41]'));
+  assert.deepEqual(actionMessages(env.messages).at(-1), { command: 'insertGitLabContext', ticket: 'KRONOS-FB-1' });
+  assert.equal(document.getElementById('modal-overlay').classList.contains('show'), false);
+
+  click(env.dom.window, document.querySelector('[data-ticket="KRONOS-FB-1"] .card-title'));
+  click(env.dom.window, buttonByText(document, 'Insert [CI-KRONOS-FB-1]'));
+  assert.deepEqual(actionMessages(env.messages).at(-1), { command: 'insertCiContext', ticket: 'KRONOS-FB-1' });
+  assert.equal(document.getElementById('modal-overlay').classList.contains('show'), false);
+
+  click(env.dom.window, document.querySelector('[data-ticket="KRONOS-FB-1"] .card-title'));
 
   click(env.dom.window, buttonByText(document, 'Insert [KRONOS-FB-1]'));
   assert.deepEqual(actionMessages(env.messages).at(-1), { command: 'insertJiraContext', ticket: 'KRONOS-FB-1' });
@@ -274,6 +293,7 @@ test('jira board filters cards, opens ticket modal, renders comments, and posts 
   assert.ok([...document.querySelectorAll('#modal-actions button')].some(button => button.textContent === 'Verify Local'));
   assert.ok([...document.querySelectorAll('#modal-actions button')].some(button => button.textContent === 'Verify Remote'));
   assert.ok([...document.querySelectorAll('#modal-actions button')].some(button => button.textContent === 'Add Evidence'));
+  assert.equal([...document.querySelectorAll('#modal-actions button')].some(button => /^Insert \[MR-(?:\?|)\]$/.test(button.textContent)), false);
   assert.ok(env.messages.some(message => message.command === 'getComments' && message.ticket === 'KRONOS-FB-3'));
   assert.deepEqual(env.errors, []);
 });

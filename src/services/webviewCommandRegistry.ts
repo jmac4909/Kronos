@@ -8,6 +8,9 @@ export const BOARD_MESSAGE_COMMANDS = new Set([
   'openMr',
   'getComments',
   'insertJiraContext',
+  'insertGitLabContext',
+  'insertCiContext',
+  'manageActiveTerminal',
   'addEvidence',
   'addEvidenceCheck',
   'recordEnvironmentResult',
@@ -94,6 +97,8 @@ export const MR_AUTOPILOT_MESSAGE_COMMANDS = new Set([
   'runCenter',
   'evidenceGate',
   'viewTicket',
+  'insertGitLabContext',
+  'insertCiContext',
   'startTicket',
 ]);
 
@@ -126,7 +131,10 @@ export const BACKLOG_TRIAGE_MESSAGE_COMMANDS = new Set([
 
 export const TICKET_DETAIL_MESSAGE_COMMANDS = new Set([
   'startTicket',
+  'manageActiveTerminal',
   'insertJiraContext',
+  'insertGitLabContext',
+  'insertCiContext',
   'addToQueue',
   'removeFromQueue',
   'linkTicket',
@@ -177,7 +185,10 @@ export const OPERATOR_COMMAND_TO_VSCODE_COMMAND = new Map<string, string>([
   ['stats', 'kronos.stats'],
   ['sessionHistory', 'kronos.sessionHistory'],
   ['viewTicket', 'kronos.viewTicket'],
+  ['manageActiveTerminal', 'kronos.manageActiveTerminal'],
   ['insertJiraContext', 'kronos.insertJiraContext'],
+  ['insertGitLabContext', 'kronos.insertGitLabContext'],
+  ['insertCiContext', 'kronos.insertCiContext'],
   ['recordEnvironmentResult', 'kronos.recordEnvironmentResult'],
   ['extractAcceptanceCriteria', 'kronos.extractAcceptanceCriteria'],
   ['updateAcceptanceCriteria', 'kronos.updateAcceptanceCriteria'],
@@ -305,7 +316,10 @@ export const AGING_REPORT_MESSAGE_COMMANDS = new Set([
 
 export const TICKET_SCOPED_OPERATOR_COMMANDS = new Set([
   'addToQueue',
+  'manageActiveTerminal',
   'insertJiraContext',
+  'insertGitLabContext',
+  'insertCiContext',
   'addEvidence',
   'addEvidenceCheck',
   'linkTicket',
