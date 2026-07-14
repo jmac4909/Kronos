@@ -1516,24 +1516,39 @@ test('Work filtering hides completed Jira work by default and exposes explicit c
   assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-2', shipped, { jiraStatus: 'Shipped', completion: 'active' }), false);
   assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-1', active, { label: 'terminal-first' }), true);
   assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-1', active, { label: 'other' }), false);
-  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-1', active, { project: 'JIRA' }), true, 'Jira namespace remains filterable');
+  assert.equal(workTicketFilters.workTicketMatchesFilter(
+    'JIRA-1',
+    active,
+    { jiraProject: 'JIRA' },
+  ), true, 'Jira namespace remains independently filterable');
   assert.equal(workTicketFilters.workTicketMatchesFilter(
     'JIRA-1',
     fixtureTicket({ linked_local_project: 'Api' }),
-    { project: 'Api' },
+    { localProject: 'Api' },
   ), true, 'an explicit local project remains filterable');
   assert.equal(workTicketFilters.workTicketMatchesFilter(
     'JIRA-1',
-    fixtureTicket(),
-    { project: 'legacy-auto-link' },
-  ), false, 'legacy project tags never behave like explicit links');
+    fixtureTicket({ jira_project_key: 'ABC', linked_local_project: 'Api' }),
+    { jiraProject: 'Api' },
+  ), false, 'a local project name cannot satisfy the Jira-project filter');
+  assert.equal(workTicketFilters.workTicketMatchesFilter(
+    'JIRA-1',
+    fixtureTicket({ jira_project_key: 'ABC', linked_local_project: 'Api' }),
+    { localProject: 'ABC' },
+  ), false, 'a Jira namespace cannot satisfy the local-project filter');
+  assert.equal(workTicketFilters.workTicketMatchesFilter(
+    'JIRA-1',
+    fixtureTicket({ jira_project_key: 'ABC', linked_local_project: 'Api' }),
+    { jiraProject: 'ABC', localProject: 'Api' },
+  ), true, 'Jira and local-project filters compose');
 
   assert.deepEqual(workTicketFilters.collectWorkTicketFilterOptions({
     'JIRA-1': active,
     'JIRA-2': shipped,
     'JIRA-3': fixtureTicket({ jira_status: 'shipped', jira_project_key: 'ABC', linked_local_project: 'Other' }),
   }), {
-    projects: ['ABC', 'JIRA', 'Other'],
+    jiraProjects: ['ABC', 'JIRA'],
+    localProjects: ['Other'],
     labels: ['terminal-first'],
     jiraStatuses: ['In Progress', 'Shipped'],
   });

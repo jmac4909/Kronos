@@ -4,7 +4,8 @@ export type WorkCompletionFilter = 'active' | 'completed' | 'all';
 
 export interface WorkTicketFilter {
   query?: string;
-  project?: string;
+  jiraProject?: string;
+  localProject?: string;
   label?: string;
   source?: Ticket['source'];
   jiraStatus?: string;
@@ -12,7 +13,8 @@ export interface WorkTicketFilter {
 }
 
 export interface WorkTicketFilterOptions {
-  projects: string[];
+  jiraProjects: string[];
+  localProjects: string[];
   labels: string[];
   jiraStatuses: string[];
 }
@@ -25,11 +27,13 @@ export interface WorkTicketCompletionPreferences {
 export function normalizeWorkTicketFilter(filter: WorkTicketFilter): WorkTicketFilter {
   const normalized: WorkTicketFilter = {};
   const query = safeSingleLine(filter.query, 500);
-  const project = safeSingleLine(filter.project, 200);
+  const jiraProject = safeSingleLine(filter.jiraProject, 200);
+  const localProject = safeSingleLine(filter.localProject, 200);
   const label = safeSingleLine(filter.label, 200);
   const jiraStatus = safeSingleLine(filter.jiraStatus, 200);
   if (query) { normalized.query = query; }
-  if (project) { normalized.project = project; }
+  if (jiraProject) { normalized.jiraProject = jiraProject; }
+  if (localProject) { normalized.localProject = localProject; }
   if (label) { normalized.label = label; }
   if (filter.source === 'jira') { normalized.source = filter.source; }
   if (jiraStatus) { normalized.jiraStatus = jiraStatus; }
@@ -49,8 +53,12 @@ export function workTicketMatchesFilter(
 ): boolean {
   const normalized = normalizeWorkTicketFilter(filter);
   if (normalized.source && ticket.source !== normalized.source) { return false; }
-  if (normalized.project && ![ticket.jira_project_key, ticket.linked_local_project]
-    .some(project => comparable(project || '') === comparable(normalized.project || ''))) {
+  if (normalized.jiraProject
+    && comparable(ticket.jira_project_key || '') !== comparable(normalized.jiraProject)) {
+    return false;
+  }
+  if (normalized.localProject
+    && comparable(ticket.linked_local_project || '') !== comparable(normalized.localProject)) {
     return false;
   }
   if (normalized.label && !(ticket.labels || []).some(label => comparable(label) === comparable(normalized.label || ''))) {
@@ -104,18 +112,20 @@ export function isCompletedWorkTicket(
 export function collectWorkTicketFilterOptions(
   tickets: Readonly<Record<string, Ticket>>,
 ): WorkTicketFilterOptions {
-  const projects = new Map<string, string>();
+  const jiraProjects = new Map<string, string>();
+  const localProjects = new Map<string, string>();
   const labels = new Map<string, string>();
   const statuses = new Map<string, string>();
   for (const ticket of Object.values(tickets)) {
-    if (ticket.jira_project_key) { retainDisplayValue(projects, ticket.jira_project_key); }
-    if (ticket.linked_local_project) { retainDisplayValue(projects, ticket.linked_local_project); }
+    if (ticket.jira_project_key) { retainDisplayValue(jiraProjects, ticket.jira_project_key); }
+    if (ticket.linked_local_project) { retainDisplayValue(localProjects, ticket.linked_local_project); }
     for (const label of ticket.labels || []) { retainDisplayValue(labels, label); }
     retainDisplayValue(statuses, ticket.jira_status);
   }
   const byDisplayName = (left: string, right: string): number => left.localeCompare(right, undefined, { sensitivity: 'base' });
   return {
-    projects: [...projects.values()].sort(byDisplayName),
+    jiraProjects: [...jiraProjects.values()].sort(byDisplayName),
+    localProjects: [...localProjects.values()].sort(byDisplayName),
     labels: [...labels.values()].sort(byDisplayName),
     jiraStatuses: [...statuses.values()].sort(byDisplayName),
   };

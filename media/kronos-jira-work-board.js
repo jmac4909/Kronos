@@ -46,13 +46,15 @@
   function readFilters(document) {
     var search = document.getElementById('jira-board-search');
     var status = document.getElementById('jira-board-status');
-    var project = document.getElementById('jira-board-project');
+    var jiraProject = document.getElementById('jira-board-jira-project');
+    var localProject = document.getElementById('jira-board-local-project');
     var label = document.getElementById('jira-board-label');
     var hideDone = document.getElementById('jira-board-hide-done');
     return {
       query: normalizeToken(search && search.value || '', 500),
       status: normalizeToken(status && status.value || '', 200),
-      project: normalizeToken(project && project.value || '', 200),
+      jiraProject: normalizeToken(jiraProject && jiraProject.value || '', 200),
+      localProject: normalizeToken(localProject && localProject.value || '', 200),
       label: normalizeToken(label && label.value || '', 200),
       hideDone: Boolean(hideDone && hideDone.checked),
     };
@@ -66,7 +68,8 @@
       if (!saved || typeof saved !== 'object') { return false; }
       setControlValue(document, 'jira-board-search', normalizeToken(saved.query || '', 500));
       setControlValue(document, 'jira-board-status', normalizeToken(saved.status || '', 200));
-      setControlValue(document, 'jira-board-project', normalizeToken(saved.project || '', 200));
+      setControlValue(document, 'jira-board-jira-project', normalizeToken(saved.jiraProject || '', 200));
+      setControlValue(document, 'jira-board-local-project', normalizeToken(saved.localProject || '', 200));
       setControlValue(document, 'jira-board-label', normalizeToken(saved.label || '', 200));
       var hideDone = document.getElementById('jira-board-hide-done');
       if (hideDone && typeof saved.hideDone === 'boolean') { hideDone.checked = saved.hideDone; }
@@ -94,7 +97,10 @@
     var completed = card.getAttribute('data-completed') === 'true';
     if (!includeDone && filters.hideDone && completed) { return false; }
     if (filters.status && normalizeToken(card.getAttribute('data-status') || '', 200) !== filters.status) { return false; }
-    if (filters.project && parseTokenList(card.getAttribute('data-projects') || '[]').indexOf(filters.project) < 0) { return false; }
+    if (filters.jiraProject
+      && normalizeToken(card.getAttribute('data-jira-project') || '', 200) !== filters.jiraProject) { return false; }
+    if (filters.localProject
+      && normalizeToken(card.getAttribute('data-local-project') || '', 200) !== filters.localProject) { return false; }
     if (filters.label && parseTokenList(card.getAttribute('data-labels') || '[]').indexOf(filters.label) < 0) { return false; }
     if (filters.query && normalizeToken(card.getAttribute('data-search') || '', 100000).indexOf(filters.query) < 0) { return false; }
     return true;
@@ -196,7 +202,7 @@
       postTicketAction(vscodeApi, 'openTicketWorkspace', card.getAttribute('data-ticket') || '');
     });
 
-    ['jira-board-search', 'jira-board-status', 'jira-board-project', 'jira-board-label', 'jira-board-hide-done'].forEach(function(id) {
+    ['jira-board-search', 'jira-board-status', 'jira-board-jira-project', 'jira-board-local-project', 'jira-board-label', 'jira-board-hide-done'].forEach(function(id) {
       var control = document.getElementById(id);
       if (!control) { return; }
       control.addEventListener(id === 'jira-board-search' ? 'input' : 'change', function() {
@@ -211,7 +217,8 @@
       reset.addEventListener('click', function() {
         setControlValue(document, 'jira-board-search', '');
         setControlValue(document, 'jira-board-status', '');
-        setControlValue(document, 'jira-board-project', '');
+        setControlValue(document, 'jira-board-jira-project', '');
+        setControlValue(document, 'jira-board-local-project', '');
         setControlValue(document, 'jira-board-label', '');
         var hideDone = document.getElementById('jira-board-hide-done');
         if (hideDone) { hideDone.checked = hideDone.getAttribute('data-default-checked') !== 'false'; }

@@ -437,7 +437,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
       { label: '$(search) Search text', description: current.query || 'none', id: 'query' },
       { label: '$(issue-opened) Completion', description: current.jiraStatus ? `status: ${current.jiraStatus}` : current.completion || this.workTree.defaultCompletion(), id: 'completion' },
       { label: '$(list-filter) Jira status', description: current.jiraStatus || 'any active status', id: 'status' },
-      { label: '$(project) Project', description: current.project || 'all projects', id: 'project' },
+      { label: '$(issues) Jira project', description: current.jiraProject || 'all Jira projects', id: 'jiraProject' },
+      { label: '$(repo) Local project', description: current.localProject || 'all local projects', id: 'localProject' },
       { label: '$(tag) Label', description: current.label || 'all labels', id: 'label' },
       { label: '$(clear-all) Clear filters', description: 'return to the configured Jira visibility default', id: 'clear' },
     ], { title: 'Filter Kronos Work', placeHolder: 'Choose a filter to change' });
@@ -486,17 +487,25 @@ class TerminalFirstRuntime implements vscode.Disposable {
         { label: 'All labels', value: '' },
         ...options.labels.map(value => ({ label: value, value })),
       ], { title: 'Filter by label' })
-      : await vscode.window.showQuickPick([
-        { label: 'All projects', value: '' },
-        ...options.projects.map(value => ({ label: value, value })),
-      ], { title: 'Filter by project' });
+      : selection.id === 'jiraProject'
+        ? await vscode.window.showQuickPick([
+          { label: 'All Jira projects', value: '' },
+          ...options.jiraProjects.map(value => ({ label: value, value })),
+        ], { title: 'Filter by Jira project' })
+        : await vscode.window.showQuickPick([
+          { label: 'All local projects', value: '' },
+          ...options.localProjects.map(value => ({ label: value, value })),
+        ], { title: 'Filter by local project' });
     if (facet) {
       const next = { ...current };
       if (selection.id === 'label') {
         if (facet.value) { next.label = facet.value; }
         else { delete next.label; }
-      } else if (facet.value) { next.project = facet.value; }
-      else { delete next.project; }
+      } else if (selection.id === 'jiraProject') {
+        if (facet.value) { next.jiraProject = facet.value; }
+        else { delete next.jiraProject; }
+      } else if (facet.value) { next.localProject = facet.value; }
+      else { delete next.localProject; }
       this.workTree.setFilter(next);
     }
   }

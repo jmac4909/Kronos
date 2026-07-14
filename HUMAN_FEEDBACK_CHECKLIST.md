@@ -55,7 +55,7 @@ Use a real ticket only when its provider data is approved for local context capt
 2. Confirm completed stories are hidden by default.
 3. Clear **Hide completed**, confirm completed rows appear, then enable it again and confirm they disappear.
 4. Search by part of a ticket key or summary and confirm only matching rows remain.
-5. Apply status, project, and label filters individually and in combination. Confirm each result and empty-result state is understandable.
+5. Apply status, Jira project, local project, and label filters individually and in combination. Confirm Jira namespaces never satisfy the local-project filter (or the reverse), and each result and empty-result state is understandable.
 6. Clear the filters and confirm the board returns to its default non-completed view.
 7. Open one ticket workspace and confirm the title, summary, description, status, provider links, and known completeness warnings are easy to find.
 8. Inspect a ticket with sparse standard/custom fields. Confirm `null`, blank text, empty arrays/objects, and recursively empty rich text are absent while meaningful `false` and `0` values remain.

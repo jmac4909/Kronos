@@ -36,8 +36,10 @@ interface BoardTicket {
   status: string;
   statusToken: string;
   completed: boolean;
-  projects: string[];
-  projectTokens: string[];
+  jiraProject: string;
+  jiraProjectToken: string;
+  localProject: string;
+  localProjectToken: string;
   labels: string[];
   labelTokens: string[];
   searchText: string;
@@ -61,7 +63,8 @@ export function buildJiraWorkBoardHtml(input: JiraWorkBoardInput): string {
     .sort(compareBoardTickets);
   const columns = boardColumns(tickets);
   const statuses = uniqueFacet(tickets.map(ticket => ticket.status));
-  const projects = uniqueFacet(tickets.flatMap(ticket => ticket.projects));
+  const jiraProjects = uniqueFacet(tickets.map(ticket => ticket.jiraProject));
+  const linkedProjectFilters = uniqueFacet(tickets.map(ticket => ticket.localProject));
   const labels = uniqueFacet(tickets.flatMap(ticket => ticket.labels));
   const completedCount = tickets.filter(ticket => ticket.completed).length;
   const hideCompletedByDefault = input.hideCompletedByDefault !== false;
@@ -80,7 +83,7 @@ export function buildJiraWorkBoardHtml(input: JiraWorkBoardInput): string {
   .jira-board-shell { max-width: none; }
   .jira-board-header { align-items: center; }
   .jira-board-heading-actions { display: flex; align-items: center; gap: 8px; }
-  .jira-board-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(130px, 1fr)) auto auto; gap: 8px; align-items: end; padding: 12px; border: 1px solid var(--k-border); border-radius: var(--k-radius); background: var(--k-surface); }
+  .jira-board-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(130px, 1fr)) auto auto; gap: 8px; align-items: end; padding: 12px; border: 1px solid var(--k-border); border-radius: var(--k-radius); background: var(--k-surface); }
   .jira-board-filter { display: grid; gap: 4px; min-width: 0; }
   .jira-board-filter label, .jira-board-toggle-label { color: var(--k-muted); font-size: 10px; font-weight: 650; text-transform: uppercase; }
   .jira-board-filter input, .jira-board-filter select { width: 100%; min-height: 30px; padding: 4px 8px; color: var(--k-fg); background: var(--vscode-input-background, var(--k-bg)); border: 1px solid var(--vscode-input-border, var(--k-border)); border-radius: var(--k-radius-sm); font: inherit; }
@@ -158,10 +161,11 @@ ${webviewRuntimeScriptTag(input.nonce, webviewRuntimeScriptUri(input.scriptUri))
   <section class="jira-board-filters" aria-label="Jira board filters">
     <div class="jira-board-filter search">
       <label for="jira-board-search">Search</label>
-      <input id="jira-board-search" type="search" placeholder="Key, summary, type, priority, project, label…" autocomplete="off">
+      <input id="jira-board-search" type="search" placeholder="Key, summary, Jira project, local project, label…" autocomplete="off">
     </div>
     ${selectFilter('jira-board-status', 'Status', statuses)}
-    ${selectFilter('jira-board-project', 'Project', projects)}
+    ${selectFilter('jira-board-jira-project', 'Jira project', jiraProjects)}
+    ${selectFilter('jira-board-local-project', 'Local project', linkedProjectFilters)}
     ${selectFilter('jira-board-label', 'Label', labels)}
     <label class="jira-board-toggle" for="jira-board-hide-done">
       <input id="jira-board-hide-done" type="checkbox" data-default-checked="${hideCompletedByDefault ? 'true' : 'false'}"${hideCompletedByDefault ? ' checked' : ''}>
@@ -195,7 +199,8 @@ function normalizeBoardTicket(
   const key = normalizeTicketKey(keyValue);
   if (!key) { return null; }
   const status = safeSingleLine(ticket.jira_status, 160) || 'Unknown';
-  const projects = uniqueFacet([ticket.jira_project_key || '', ticket.linked_local_project || '']);
+  const jiraProject = safeSingleLine(ticket.jira_project_key, 200);
+  const localProject = safeSingleLine(ticket.linked_local_project, 200);
   const labels = uniqueFacet(ticket.labels || []);
   return {
     key,
@@ -203,8 +208,10 @@ function normalizeBoardTicket(
     status,
     statusToken: filterToken(status),
     completed: isCompletedBoardTicket(ticket, customDoneStatuses),
-    projects,
-    projectTokens: projects.map(filterToken),
+    jiraProject,
+    jiraProjectToken: filterToken(jiraProject),
+    localProject,
+    localProjectToken: filterToken(localProject),
     labels,
     labelTokens: labels.map(filterToken),
     searchText: [
@@ -215,7 +222,8 @@ function normalizeBoardTicket(
       safeSingleLine(ticket.priority, 160),
       status,
       safeSingleLine(ticket.jira_status_category, 100),
-      ...projects,
+      jiraProject,
+      localProject,
       ...labels,
       safeSingleLine(ticket.mr?.title, 1_000),
       safeSingleLine(ticket.mr?.state, 100),
@@ -283,8 +291,8 @@ function buildTicketCardHtml(ticket: BoardTicket): string {
   const priority = safeSingleLine(value.priority, 120);
   const type = safeSingleLine(value.type, 120) || 'Issue';
   const typeKind = /bug|defect/i.test(type) ? 'bug' : 'issue';
-  const jiraProject = safeSingleLine(value.jira_project_key, 200);
-  const launchProject = safeSingleLine(value.linked_local_project, 200);
+  const jiraProject = ticket.jiraProject;
+  const launchProject = ticket.localProject;
   const projectChips = [
     jiraProject ? chip(`Jira: ${jiraProject}`, 'project') : '',
     launchProject ? chip(`Project: ${launchProject}`, 'project') : '',
@@ -302,7 +310,7 @@ function buildTicketCardHtml(ticket: BoardTicket): string {
     ? chip(`${attachmentCount} attachment${attachmentCount === 1 ? '' : 's'}`, '')
     : '';
   const projectActionLabel = launchProject ? `Project: ${launchProject}` : '+ Add Project';
-  return `<article class="jira-ticket-card" data-ticket-card data-ticket="${escapeAttr(ticket.key)}" data-status="${escapeAttr(ticket.statusToken)}" data-projects="${escapeAttr(JSON.stringify(ticket.projectTokens))}" data-labels="${escapeAttr(JSON.stringify(ticket.labelTokens))}" data-search="${escapeAttr(ticket.searchText)}" data-completed="${ticket.completed ? 'true' : 'false'}" data-ticket-type="${typeKind}">
+  return `<article class="jira-ticket-card" data-ticket-card data-ticket="${escapeAttr(ticket.key)}" data-status="${escapeAttr(ticket.statusToken)}" data-jira-project="${escapeAttr(ticket.jiraProjectToken)}" data-local-project="${escapeAttr(ticket.localProjectToken)}" data-labels="${escapeAttr(JSON.stringify(ticket.labelTokens))}" data-search="${escapeAttr(ticket.searchText)}" data-completed="${ticket.completed ? 'true' : 'false'}" data-ticket-type="${typeKind}">
     <div class="jira-ticket-heading"><button type="button" class="jira-ticket-key jira-ticket-open" data-action="openTicketWorkspace" data-ticket="${escapeAttr(ticket.key)}" aria-label="Open ${escapeAttr(ticket.key)}: ${escapeAttr(summary)}">${escapeHtml(ticket.key)}</button><div class="jira-ticket-heading-actions">${actionButton('chooseTicketProject', projectActionLabel, ticket.key)}<span class="jira-ticket-priority">${escapeHtml(priority || type)}</span></div></div>
     <div class="jira-ticket-summary">${escapeHtml(summary)}</div>
     <div class="jira-ticket-meta">${projectChips}${labelChips}${overflowCount > 0 ? chip(`+${overflowCount} more`, '') : ''}${mrChip}${buildChip}${attachmentChip}</div>

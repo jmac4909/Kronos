@@ -50,7 +50,13 @@ test('board builder exposes useful Jira filters and only ticket-scoped terminal-
     scriptUri: 'vscode-resource://kronos/media/kronos-jira-work-board.js',
   });
 
-  for (const id of ['jira-board-search', 'jira-board-status', 'jira-board-project', 'jira-board-label']) {
+  for (const id of [
+    'jira-board-search',
+    'jira-board-status',
+    'jira-board-jira-project',
+    'jira-board-local-project',
+    'jira-board-label',
+  ]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.match(html, /id="jira-board-hide-done" type="checkbox" data-default-checked="true" checked/);
@@ -173,15 +179,39 @@ test('board filters survive a webview HTML rerender through VS Code webview stat
     setState(value) { stateValue = JSON.parse(JSON.stringify(value)); },
   };
   first.search.value = 'KRONOS-2';
-  first.project.value = 'kronos';
+  first.jiraProject.value = 'kronos';
+  first.localProject.value = 'api';
   first.hideDone.checked = false;
   assert.equal(boardRuntime.persistFilters(first.document, vscodeApi), true);
 
   const rerendered = createDomHarness('complete');
   assert.equal(boardRuntime.restoreFilters(rerendered.document, vscodeApi), true);
   assert.equal(rerendered.search.value, 'kronos-2');
-  assert.equal(rerendered.project.value, 'kronos');
+  assert.equal(rerendered.jiraProject.value, 'kronos');
+  assert.equal(rerendered.localProject.value, 'api');
   assert.equal(rerendered.hideDone.checked, false);
+});
+
+test('board filters Jira namespaces independently from explicit local projects', () => {
+  const harness = createDomHarness('complete');
+  harness.hideDone.checked = false;
+  harness.jiraProject.value = 'kronos';
+  harness.localProject.value = 'api';
+  assert.deepEqual(boardRuntime.applyFilters(harness.document), {
+    visibleCount: 1,
+    totalCount: 2,
+    completedHidden: 0,
+  });
+  assert.equal(harness.openCard.hidden, false);
+  assert.equal(harness.doneCard.hidden, true);
+
+  harness.localProject.value = 'web';
+  assert.equal(boardRuntime.applyFilters(harness.document).visibleCount, 1);
+  assert.equal(harness.openCard.hidden, true);
+  assert.equal(harness.doneCard.hidden, false);
+
+  harness.jiraProject.value = 'other';
+  assert.equal(boardRuntime.applyFilters(harness.document).visibleCount, 0);
 });
 
 test('board reset returns to the configured completed-work default', () => {
@@ -222,7 +252,8 @@ function createDomHarness(readyState) {
   const openCard = card({
     'data-ticket': 'KRONOS-1',
     'data-status': 'in progress',
-    'data-projects': JSON.stringify(['kronos']),
+    'data-jira-project': 'kronos',
+    'data-local-project': 'api',
     'data-labels': JSON.stringify(['terminal-first']),
     'data-search': 'kronos-1 open terminal first',
     'data-completed': 'false',
@@ -230,7 +261,8 @@ function createDomHarness(readyState) {
   const doneCard = card({
     'data-ticket': 'KRONOS-2',
     'data-status': 'done',
-    'data-projects': JSON.stringify(['kronos']),
+    'data-jira-project': 'kronos',
+    'data-local-project': 'web',
     'data-labels': JSON.stringify(['terminal-first']),
     'data-search': 'kronos-2 done terminal first',
     'data-completed': 'true',
@@ -240,7 +272,8 @@ function createDomHarness(readyState) {
   const board = element();
   const search = control('');
   const status = control('');
-  const project = control('');
+  const jiraProject = control('');
+  const localProject = control('');
   const label = control('');
   const hideDone = control('');
   hideDone.checked = true;
@@ -252,7 +285,8 @@ function createDomHarness(readyState) {
     ['jira-work-board', board],
     ['jira-board-search', search],
     ['jira-board-status', status],
-    ['jira-board-project', project],
+    ['jira-board-jira-project', jiraProject],
+    ['jira-board-local-project', localProject],
     ['jira-board-label', label],
     ['jira-board-hide-done', hideDone],
     ['jira-board-reset', reset],
@@ -271,7 +305,22 @@ function createDomHarness(readyState) {
     },
     querySelector() { return null; },
   });
-  return { board, document, doneCard, doneColumn, hideDone, label, openCard, openColumn, project, reset, search, status, summary };
+  return {
+    board,
+    document,
+    doneCard,
+    doneColumn,
+    hideDone,
+    jiraProject,
+    label,
+    localProject,
+    openCard,
+    openColumn,
+    reset,
+    search,
+    status,
+    summary,
+  };
 }
 
 function column(cards) {

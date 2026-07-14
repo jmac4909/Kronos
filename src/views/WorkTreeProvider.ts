@@ -73,7 +73,8 @@ export class WorkTreeProvider implements vscode.TreeDataProvider<WorkTreeItem>, 
       .sort(compareWorkTickets);
     if (visibleTickets.length === 0) {
       const normalized = normalizeWorkTicketFilter(this.filter);
-      if (!normalized.query && !normalized.project && !normalized.label && !normalized.jiraStatus
+      if (!normalized.query && !normalized.jiraProject && !normalized.localProject
+        && !normalized.label && !normalized.jiraStatus
         && (normalized.completion === 'active'
           || (normalized.completion === undefined && completionPreferences.hideCompletedByDefault !== false))
         && allTickets.every(([, ticket]) => isCompletedWorkTicket(ticket, completionPreferences.additionalDoneStatuses))) {
