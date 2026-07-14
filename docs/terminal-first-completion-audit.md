@@ -18,7 +18,7 @@ The repository is ready for the operator-owned human feedback pass in `HUMAN_FEE
 | Projects and Git | Tests cover configurable bounded discovery, registered-first selection, authoritative uncheck, integration setup, branch reads without Git execution, VS Code built-in Git status/diff, caps of 500 paths and 512 KiB, redacted `[GIT-project]` context, and linked launch directories. | Pass |
 | Merge requests | Tests cover current-branch discovery, ticket fallback, ambiguity refusal, durable local bindings, initial healthy/mergeable attention, partial review reads, known-MR opening, and prefilled new-MR browser navigation without creating an MR. | Pass |
 | Jenkins and SonarQube | Tests cover bounded Jenkins/Sonar reads, retained Jenkins build targets, deterministic latest-first choices with saved timestamps, Sonar branch dashboard links, persisted monitored-branch choices, literal `sonar.projectKey` discovery from Jenkins XML, and rejection of expression-only values. | Pass |
-| Attention | Tests cover real transitions, initial MR and healthy SonarQube observations, provider failures/recoveries, acknowledgements, project grouping, newest-state replacement without stale-row resurrection, provider branch/build choices, and editable MR/CI insertion. | Pass |
+| Attention | Tests cover real transitions, initial and cleared-but-still-open MR reminders, healthy SonarQube observations, provider failures/recoveries, acknowledgements, project grouping, newest-state replacement without stale-row resurrection, provider branch/build choices, and editable MR/CI insertion. | Pass |
 | Setup and Doctor | DOM and activation tests cover dedicated dashboards, allowlisted actions, credential-readiness reporting, and no credential values in UI. | Pass |
 | Security and dependencies | Public-surface, security, and context-governance gates pass. Runtime dependencies are empty; only TypeScript and Node/VS Code type packages are development dependencies. `npm audit` reports zero known vulnerabilities. | Pass |
 | Packaging | `npm run feedback:ready` compiles, tests, packages, checks the VSIX contents, rejects legacy/development/local-state files, and creates a safe synthetic feedback state. | Final gate |
@@ -27,6 +27,7 @@ The repository is ready for the operator-owned human feedback pass in `HUMAN_FEE
 
 - Repeated provider-read failures create durable transitions only when the normalized source state or error changes.
 - Attention now shows only the newest transition for each project/provider/facet. Recoveries, later failures, builds, pipelines, and gate results replace stale rows; acknowledging the newest row cannot resurrect an older one. The append-only audit history is unchanged.
+- Clearing an open MR now snoozes it until the next successful GitLab poll. That poll records one fresh reminder; unchanged polls do not duplicate an uncleared reminder, and merged or closed MRs stay cleared.
 - Jenkins job configuration and observed build targets are stored separately, so multiple real builds remain available from Attention.
 - Jenkins build choices are deterministically latest-first even when bindings share a timestamp.
 - Jenkins XML discovery skips expression-valued Sonar settings while still accepting a later safe literal setting.

@@ -403,6 +403,13 @@ export class ManagedProviderMonitor {
             if (notice) { notices.push(notice); }
           }
         }
+        const openReminder = appendOpenMergeRequestReminder(
+          session,
+          mrDigest,
+          mrSnapshotPath,
+          mrDigest.url || providerUrl,
+        );
+        if (openReminder) { notices.push(openReminder); }
         if (!previousMr || previousMr.fingerprint !== mrDigest.fingerprint) {
           writeGitLabMergeRequestMonitorSnapshot(session.id, mrDigest);
         }
@@ -1041,6 +1048,48 @@ function appendGitLabMergeRequestTransitionOnce(
   );
 }
 
+function appendOpenMergeRequestReminder(
+  session: TicketWorkSessionRecord,
+  digest: GitLabMergeRequestDigest,
+  artifactPath: string,
+  providerUrl: string | undefined,
+): ManagedProviderNotice | null {
+  if (digest.state.trim().toLowerCase() !== 'opened') { return null; }
+  const recent = listMonitorEvents({
+    sessionId: session.id,
+    types: ['provider.transition', 'notification.acknowledged'],
+    limit: 2000,
+  });
+  const latestMergeRequestEvent = recent.find(event => event.type === 'provider.transition'
+    && event.source === 'gitlab'
+    && event.subject?.kind === 'merge-request'
+    && event.subject.id === String(digest.iid));
+  if (!latestMergeRequestEvent) { return null; }
+  const acknowledgement = recent.find(event => event.type === 'notification.acknowledged'
+    && event.metadata?.['acknowledgedEventId'] === latestMergeRequestEvent.id);
+  if (!acknowledgement) { return null; }
+  const needsAttention = gitLabMergeRequestNeedsAttention(digest);
+  const event = appendTransitionOnce({
+    session,
+    source: 'gitlab',
+    summary: needsAttention
+      ? `${session.ticketKey} MR !${digest.iid} remains open and still needs attention after being cleared.`
+      : `${session.ticketKey} MR !${digest.iid} remains open after being cleared from Attention.`,
+    subject: { kind: 'merge-request', id: String(digest.iid), ticketKey: session.ticketKey },
+    state: mergeRequestEventState(digest),
+    fingerprint: digest.fingerprint,
+    artifactPath,
+    transitionKey: `open-mr-reminder:${acknowledgement.id}`,
+    metadata: {
+      ...mergeRequestMetadata(digest, 'open_mr_reminder'),
+      reminderAfterAcknowledgementId: acknowledgement.id,
+    },
+  });
+  return event
+    ? notice(event, session, needsAttention ? 'warning' : 'information', providerUrl, 'kronos.insertGitLabContext')
+    : null;
+}
+
 function appendCiTransitionOnce(
   session: TicketWorkSessionRecord,
   transition: CiMonitorTransition,
@@ -1207,7 +1256,7 @@ function mergeRequestTransitionSummary(
 
 function mergeRequestMetadata(
   digest: GitLabMergeRequestDigest,
-  transitionKind: GitLabMergeRequestTransitionKind | 'initial_mr_attention' | 'initial_mr_observed' | 'baseline',
+  transitionKind: GitLabMergeRequestTransitionKind | 'initial_mr_attention' | 'initial_mr_observed' | 'open_mr_reminder' | 'baseline',
 ): Record<string, string | number | boolean | null> {
   return {
     transitionKind,

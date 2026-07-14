@@ -28,7 +28,7 @@ Kronos solves a narrow enterprise-development problem: the evidence needed for a
 | --- | --- |
 | **Work** | Search and filter Jira work, link a local project and branch, then open a focused ticket workspace. |
 | **Sessions** | Organize operator-owned Claude terminals by local project, attach multiple Jira contexts when useful, and never read terminal contents. |
-| **Attention** | Show the newest meaningful MR, pipeline, Jenkins, and SonarQube state by project while retaining full history in the private audit. |
+| **Attention** | Show the newest meaningful provider state by project, resurface still-open MRs after the next poll, and retain full history in the private audit. |
 | **Context composer** | Review fetched evidence, edit the focus, and place one shell-inert line in the chosen terminal with submission disabled. |
 
 ### A 60-second workflow

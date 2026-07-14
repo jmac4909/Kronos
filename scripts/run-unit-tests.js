@@ -366,6 +366,7 @@ test('managed provider polling automatically discovers and locally binds a proje
   });
   const originalDiscover = gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest;
   const originalMonitor = gitLabRestModule.gitlabRestClient.mergeRequestMonitor;
+  let mergeRequestState = 'opened';
   gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest = async () => ({
     match: {
       iid: 90,
@@ -381,7 +382,7 @@ test('managed provider polling automatically discovers and locally binds a proje
   gitLabRestModule.gitlabRestClient.mergeRequestMonitor = async () => ({
     mr: {
       iid: 90,
-      state: 'opened',
+      state: mergeRequestState,
       title: 'JIRA-900 Automatic MR discovery',
       source_branch: 'feature/JIRA-900',
       target_branch: 'main',
@@ -450,6 +451,41 @@ test('managed provider polling automatically discovers and locally binds a proje
     assert.match(discoveryEvent.summary, /first observed \(opened\/mergeable\)/);
     const duplicate = await monitor.poll();
     assert.equal(duplicate.transitions, 0);
+    monitorEventStore.acknowledgeMonitorEvent(discoveryEvent.id, session.id);
+    const afterClear = await monitor.poll();
+    assert.equal(afterClear.transitions, 1, 'a still-open MR returns on the next poll after its Attention item is cleared');
+    const reminderEvent = monitorEventStore.listMonitorEvents({
+      sessionId: session.id,
+      source: 'gitlab',
+      types: ['provider.transition'],
+    }).find(event => event.metadata?.transitionKind === 'open_mr_reminder');
+    assert.ok(reminderEvent);
+    assert.equal(reminderEvent.subject.kind, 'merge-request');
+    assert.equal(reminderEvent.subject.id, '90');
+    assert.equal(reminderEvent.metadata.reminderAfterAcknowledgementId.startsWith('event-'), true);
+    assert.equal(
+      monitorEventStore.listMonitorEvents({ sessionId: session.id, types: ['provider.transition'] })
+        .some(event => event.id === discoveryEvent.id),
+      true,
+      'the original cleared event remains in the append-only audit',
+    );
+    const stableReminder = await monitor.poll();
+    assert.equal(stableReminder.transitions, 0, 'an uncleared reminder is not duplicated on every poll');
+    monitorEventStore.acknowledgeMonitorEvent(reminderEvent.id, session.id);
+    const repeatedClear = await monitor.poll();
+    assert.equal(repeatedClear.transitions, 1, 'clearing the reminder snoozes the still-open MR until one more poll');
+    mergeRequestState = 'merged';
+    const mergedPoll = await monitor.poll();
+    assert.equal(mergedPoll.transitions, 1);
+    const mergedEvent = monitorEventStore.listMonitorEvents({
+      sessionId: session.id,
+      source: 'gitlab',
+      types: ['provider.transition'],
+    }).find(event => event.metadata?.transitionKind === 'merge_request_merged');
+    assert.ok(mergedEvent);
+    monitorEventStore.acknowledgeMonitorEvent(mergedEvent.id, session.id);
+    const afterMergedClear = await monitor.poll();
+    assert.equal(afterMergedClear.transitions, 0, 'a cleared merged MR does not return on later polls');
   } finally {
     gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest = originalDiscover;
     gitLabRestModule.gitlabRestClient.mergeRequestMonitor = originalMonitor;

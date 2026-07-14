@@ -132,6 +132,7 @@ If GitLab and CI providers are safely configured:
 7. Confirm ordinary unchanged polls do not create repeated attention noise.
 8. With Jenkins configured and no explicit SonarQube project key, use a safe fixture job whose `/config.xml` contains a literal `sonar.projectKey`. Confirm polling discovers SonarQube without retaining raw XML; confirm an expression value such as `${SONAR_PROJECT_KEY}` is ignored.
 9. Cause a provider stream to change state more than once (for example failure, recovery, then partial). Confirm only its newest state remains in Attention, the older transitions remain in the audit, and acknowledging the newest state does not bring an older row back.
+10. Clear an Attention item for an MR that remains open, then poll again. Confirm the MR returns once on that next poll, does not duplicate on later polls while uncleared, and stops returning after GitLab reports it merged or closed.
 
 ## Reload and Recovery
 
