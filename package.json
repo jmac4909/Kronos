@@ -1,0 +1,552 @@
+{
+  "name": "kronos",
+  "displayName": "Kronos — Terminal Work Companion",
+  "description": "Terminal-first Jira, merge-request, pipeline, and audit context for interactive sessions. Kronos reads, inserts, monitors, audits, and launches Claude only from an explicit operator action.",
+  "version": "0.1.0",
+  "publisher": "jmacke01",
+  "author": {
+    "name": "Jeremy Mackey",
+    "url": "https://github.com/jmac4909"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "preview": true,
+  "homepage": "https://github.com/jmac4909/Kronos#readme",
+  "bugs": {
+    "url": "https://github.com/jmac4909/Kronos/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jmac4909/kronos.git"
+  },
+  "keywords": [
+    "vscode-extension",
+    "typescript",
+    "terminal",
+    "jira",
+    "gitlab",
+    "jenkins",
+    "sonarqube",
+    "pipeline",
+    "audit",
+    "claude-code",
+    "ai-assisted-development",
+    "developer-tools",
+    "human-in-the-loop"
+  ],
+  "icon": "media/kronos-marketplace-icon.png",
+  "galleryBanner": {
+    "color": "#0b1220",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Kronos reads provider context, writes private local context and audit records, and can insert non-submitting references into an operator-owned terminal. Claude launch is disabled in untrusted workspaces. Kronos never executes workspace code, runs project commands, or changes Git."
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kronos",
+          "title": "Kronos",
+          "icon": "media/kronos-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "kronos": [
+        {
+          "id": "kronosWork",
+          "name": "Work"
+        },
+        {
+          "id": "kronosSessions",
+          "name": "Sessions"
+        },
+        {
+          "id": "kronosAttention",
+          "name": "Attention"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "kronos.refreshTickets",
+        "title": "Kronos: Refresh Jira Tickets",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "kronos.openJiraBoard",
+        "title": "Kronos: Open Jira Work Board",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "kronos.filterWork",
+        "title": "Kronos: Filter Work",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "kronos.clearWorkFilter",
+        "title": "Kronos: Clear Work Filter",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "kronos.openTicketWorkspace",
+        "title": "Kronos: Open Ticket Workspace",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "kronos.configureProjectDiscoveryFolders",
+        "title": "Kronos: Choose Project Discovery Folders",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "kronos.registerWorkspaceProject",
+        "title": "Kronos: Discover and Manage Local Projects",
+        "icon": "$(folder-library)"
+      },
+      {
+        "command": "kronos.chooseTicketProject",
+        "title": "Kronos: Choose Ticket Project and Branch",
+        "icon": "$(repo)"
+      },
+      {
+        "command": "kronos.newClaudeSession",
+        "title": "Kronos: New Claude Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "kronos.startClaudeForTicket",
+        "title": "Kronos: Start Claude for Ticket",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "kronos.manageActiveTerminal",
+        "title": "Kronos: Manage Focused Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "kronos.insertJiraContext",
+        "title": "Kronos: Insert Jira Context",
+        "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "kronos.insertGitLabContext",
+        "title": "Kronos: Insert Merge Request and Pipeline Context",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "kronos.insertCiContext",
+        "title": "Kronos: Insert Jenkins and SonarQube Context",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "kronos.pollManagedWorkSessions",
+        "title": "Kronos: Poll Managed Providers",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "kronos.openWorkSessionAudit",
+        "title": "Kronos: Open Work Session Audit",
+        "icon": "$(history)"
+      },
+      {
+        "command": "kronos.focusWorkSessionTerminal",
+        "title": "Kronos: Open Session Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "kronos.reattachWorkSessionTerminal",
+        "title": "Kronos: Connect Focused Terminal to Session",
+        "icon": "$(link)"
+      },
+      {
+        "command": "kronos.detachWorkSessionTerminal",
+        "title": "Kronos: Detach Terminal",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "kronos.closeWorkSession",
+        "title": "Kronos: Stop Managing Work Session",
+        "icon": "$(close)"
+      },
+      {
+        "command": "kronos.removeWorkSession",
+        "title": "Kronos: Remove Session from Kronos",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "kronos.openProjectGitStatus",
+        "title": "Kronos: View Project Git Status and Diff",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "kronos.insertProjectGitContext",
+        "title": "Kronos: Insert Project Working Diff Context",
+        "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "kronos.openProjectMergeRequest",
+        "title": "Kronos: Open Project Merge Request Page",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "kronos.insertProjectGitLabContext",
+        "title": "Kronos: Insert Project Merge Request Evidence",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "kronos.insertProjectCiContext",
+        "title": "Kronos: Insert Project Jenkins and SonarQube Evidence",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "kronos.configureProjectIntegrations",
+        "title": "Kronos: Configure Project Provider Polling",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "kronos.pauseWorkSessionMonitoring",
+        "title": "Kronos: Pause Work Session Monitoring",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "kronos.resumeWorkSessionMonitoring",
+        "title": "Kronos: Resume Work Session Monitoring",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "kronos.acknowledgeAttention",
+        "title": "Kronos: Acknowledge Attention Item",
+        "icon": "$(check)"
+      },
+      {
+        "command": "kronos.openProvider",
+        "title": "Kronos: Open Provider Page",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "kronos.setup",
+        "title": "Kronos: Setup",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "kronos.doctor",
+        "title": "Kronos: Doctor",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "kronos.settings",
+        "title": "Kronos: Settings",
+        "icon": "$(settings-gear)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "kronos.refreshTickets",
+          "when": "view == kronosWork",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kronos.openJiraBoard",
+          "when": "view == kronosWork",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kronos.filterWork",
+          "when": "view == kronosWork",
+          "group": "navigation@3"
+        },
+        {
+          "command": "kronos.clearWorkFilter",
+          "when": "view == kronosWork",
+          "group": "navigation@4"
+        },
+        {
+          "command": "kronos.configureProjectDiscoveryFolders",
+          "when": "view == kronosWork",
+          "group": "navigation@5"
+        },
+        {
+          "command": "kronos.registerWorkspaceProject",
+          "when": "view == kronosWork",
+          "group": "navigation@6"
+        },
+        {
+          "command": "kronos.newClaudeSession",
+          "when": "view == kronosSessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kronos.manageActiveTerminal",
+          "when": "view == kronosSessions",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kronos.pollManagedWorkSessions",
+          "when": "view == kronosSessions || view == kronosAttention",
+          "group": "navigation@3"
+        },
+        {
+          "command": "kronos.setup",
+          "when": "view == kronosWork || view == kronosSessions || view == kronosAttention",
+          "group": "navigation@8"
+        },
+        {
+          "command": "kronos.doctor",
+          "when": "view == kronosWork || view == kronosSessions || view == kronosAttention",
+          "group": "navigation@9"
+        },
+        {
+          "command": "kronos.settings",
+          "when": "view == kronosWork || view == kronosSessions || view == kronosAttention",
+          "group": "navigation@10"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "kronos.openTicketWorkspace",
+          "when": "viewItem == work_ticket",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.startClaudeForTicket",
+          "when": "viewItem == work_ticket",
+          "group": "inline@2"
+        },
+        {
+          "command": "kronos.manageActiveTerminal",
+          "when": "viewItem == work_ticket",
+          "group": "terminal@1"
+        },
+        {
+          "command": "kronos.chooseTicketProject",
+          "when": "viewItem == work_ticket",
+          "group": "project@1"
+        },
+        {
+          "command": "kronos.insertJiraContext",
+          "when": "viewItem == work_ticket",
+          "group": "context@1"
+        },
+        {
+          "command": "kronos.insertGitLabContext",
+          "when": "viewItem == work_ticket",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.insertCiContext",
+          "when": "viewItem == work_ticket",
+          "group": "context@3"
+        },
+        {
+          "command": "kronos.focusWorkSessionTerminal",
+          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused || viewItem == standalone_session_attached",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.reattachWorkSessionTerminal",
+          "when": "viewItem == work_session_detached || viewItem == work_session_detached_paused || viewItem == work_session_closed || viewItem == standalone_session_detached || viewItem == standalone_session_closed",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.openWorkSessionAudit",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == work_session_closed || viewItem == standalone_session_attached || viewItem == standalone_session_detached || viewItem == standalone_session_closed",
+          "group": "audit@1"
+        },
+        {
+          "command": "kronos.pauseWorkSessionMonitoring",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached",
+          "group": "monitoring@1"
+        },
+        {
+          "command": "kronos.resumeWorkSessionMonitoring",
+          "when": "viewItem == work_session_attached_paused || viewItem == work_session_detached_paused",
+          "group": "monitoring@1"
+        },
+        {
+          "command": "kronos.detachWorkSessionTerminal",
+          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused || viewItem == standalone_session_attached",
+          "group": "management@1"
+        },
+        {
+          "command": "kronos.closeWorkSession",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == standalone_session_attached || viewItem == standalone_session_detached",
+          "group": "management@2"
+        },
+        {
+          "command": "kronos.removeWorkSession",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == work_session_closed || viewItem == standalone_session_attached || viewItem == standalone_session_detached || viewItem == standalone_session_closed",
+          "group": "management@3"
+        },
+        {
+          "command": "kronos.openProjectGitStatus",
+          "when": "viewItem == registered_project",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.insertProjectGitContext",
+          "when": "viewItem == registered_project",
+          "group": "inline@2"
+        },
+        {
+          "command": "kronos.openProjectMergeRequest",
+          "when": "viewItem == registered_project",
+          "group": "project@1"
+        },
+        {
+          "command": "kronos.insertProjectGitLabContext",
+          "when": "viewItem == registered_project",
+          "group": "context@1"
+        },
+        {
+          "command": "kronos.insertProjectCiContext",
+          "when": "viewItem == registered_project",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.configureProjectIntegrations",
+          "when": "viewItem == registered_project",
+          "group": "management@1"
+        },
+        {
+          "command": "kronos.acknowledgeAttention",
+          "when": "viewItem == attention_item",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.openProvider",
+          "when": "viewItem == attention_item",
+          "group": "inline@2"
+        },
+        {
+          "command": "kronos.openTicketWorkspace",
+          "when": "viewItem == attention_item",
+          "group": "ticket@1"
+        },
+        {
+          "command": "kronos.insertGitLabContext",
+          "when": "viewItem == attention_item",
+          "group": "context@1"
+        },
+        {
+          "command": "kronos.insertCiContext",
+          "when": "viewItem == attention_item",
+          "group": "context@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Kronos — Terminal Work Companion",
+      "properties": {
+        "kronos.refreshIntervalSec": {
+          "type": "number",
+          "default": 300,
+          "minimum": 15,
+          "description": "How often Kronos refreshes Jira work metadata, in seconds."
+        },
+        "kronos.managedProviderPollIntervalSec": {
+          "type": "number",
+          "default": 300,
+          "minimum": 15,
+          "description": "How often Kronos reads GitLab, Jenkins, and SonarQube status for monitored work sessions, in seconds."
+        },
+        "kronos.projectDiscoveryRoots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "machine",
+          "description": "Parent folders Kronos may inspect for local Git projects when discovery is explicitly opened. Use Kronos: Choose Project Discovery Folders for the native multi-folder picker. Open workspace folders are always offered. Use ~ for the current home folder."
+        },
+        "kronos.projectDiscoveryDepth": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 5,
+          "scope": "machine",
+          "description": "Maximum child-directory depth inspected below each configured project discovery root. Discovery is bounded and read-only."
+        },
+        "kronos.projectDiscoveryLimit": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 500,
+          "scope": "machine",
+          "description": "Maximum number of local project candidates shown by one explicit discovery action."
+        },
+        "kronos.hideCompletedJiraWork": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide completed Jira tickets by default in both the Work tree and Jira board. Explicit filters and saved board choices still take precedence."
+        },
+        "kronos.completedJiraStatuses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional Jira status names that Kronos should treat as completed, for teams whose workflow does not use Jira's Done status category."
+        },
+        "kronos.claudeCommand": {
+          "type": "string",
+          "default": "claude",
+          "scope": "machine",
+          "description": "Validated Claude CLI command submitted only after New Claude Session or Start Claude for Ticket. Only claude/claude-* plus approved interactive model, effort, safe-mode, IDE, display, and non-escalating permission flags are accepted."
+        },
+        "kronos.claudeTerminalName": {
+          "type": "string",
+          "default": "Claude",
+          "description": "Base name for terminals created by an explicit Kronos Claude launch."
+        },
+        "kronos.claudeLaunchCwd": {
+          "type": "string",
+          "enum": [
+            "ticketProject",
+            "workspace",
+            "home"
+          ],
+          "enumDescriptions": [
+            "Use the ticket's configured project folder, then fall back to the workspace or home folder.",
+            "Use the first open workspace folder, then fall back to the home folder.",
+            "Use the current user's home folder."
+          ],
+          "default": "ticketProject",
+          "description": "Starting directory for terminals created by an explicit Claude launch."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "node scripts/clean-output.js && node node_modules/typescript/bin/tsc -p ./",
+    "watch": "node scripts/clean-output.js && node node_modules/typescript/bin/tsc -watch -p ./",
+    "package": "npx --yes @vscode/vsce@3.9.2 package --no-dependencies --allow-missing-repository --githubBranch main",
+    "test": "npm run public:check && node scripts/check-manifest.js && node scripts/check-runtime-graph.js && node scripts/check-security.js && node scripts/check-context-governance.js && npm run compile && node scripts/run-unit-tests.js && npm run webview:dom && npm run webview:jira-board",
+    "public:check": "node scripts/check-public-surface.js",
+    "webview:dom": "node scripts/run-webview-dom-tests.js",
+    "webview:jira-board": "node scripts/run-jira-work-board-tests.js",
+    "feedback:state": "node scripts/create-feedback-state.js",
+    "feedback:state:force": "node scripts/create-feedback-state.js --force",
+    "feedback:smoke": "node scripts/run-feedback-smoke.js",
+    "feedback:ready": "node scripts/prepare-human-feedback.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

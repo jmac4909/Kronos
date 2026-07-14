@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">Kronos Jira Work Board product preview</title>
+  <desc id="desc">A synthetic dark-theme VS Code window showing Kronos Work, Sessions, Attention, local projects, Jira filters, and three ticket columns.</desc>
+  <defs>
+    <linearGradient id="window" x1="0" y1="0" x2="1440" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827"/>
+      <stop offset="1" stop-color="#070b14"/>
+    </linearGradient>
+    <linearGradient id="active" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#818cf8"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#020617" flood-opacity=".55"/>
+    </filter>
+    <style>
+      text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .muted { fill: #8795aa; }
+      .soft { fill: #b7c1d2; }
+      .strong { fill: #eef4ff; }
+      .tiny { font-size: 11px; }
+      .small { font-size: 12px; }
+      .body { font-size: 13px; }
+      .label { font-size: 11px; font-weight: 700; letter-spacing: .7px; }
+      .heading { font-size: 22px; font-weight: 650; }
+      .column { fill: #111827; stroke: #2a364a; stroke-width: 1; }
+      .card { fill: #182235; stroke: #34445d; stroke-width: 1; }
+      .chip { fill: #202d43; stroke: #3b4a62; stroke-width: 1; }
+      .button { fill: #16243a; stroke: #3c536f; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="900" fill="#050812"/>
+  <g filter="url(#shadow)">
+    <rect x="34" y="28" width="1372" height="844" rx="18" fill="url(#window)" stroke="#26344c"/>
+    <rect x="34" y="28" width="1372" height="42" rx="18" fill="#121a2a"/>
+    <path d="M34 52h1372v18H34z" fill="#121a2a"/>
+    <circle cx="62" cy="49" r="6" fill="#fb7185"/>
+    <circle cx="82" cy="49" r="6" fill="#fbbf24"/>
+    <circle cx="102" cy="49" r="6" fill="#4ade80"/>
+    <text x="720" y="54" text-anchor="middle" class="small soft">Kronos — Terminal Work Companion</text>
+    <text x="1380" y="54" text-anchor="end" class="tiny muted">SYNTHETIC PRODUCT PREVIEW</text>
+
+    <rect x="34" y="70" width="56" height="802" fill="#0b111e"/>
+    <rect x="34" y="88" width="3" height="52" fill="url(#active)"/>
+    <rect x="48" y="96" width="28" height="24" rx="5" fill="none" stroke="#60a5fa" stroke-width="2"/>
+    <path d="m54 104 5 4-5 4M63 113h7" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="69" cy="101" r="2" fill="#60a5fa"/>
+    <path d="M52 164h20M52 171h16M52 178h20" stroke="#56657a" stroke-width="2" stroke-linecap="round"/>
+    <path d="M51 224h22v19H51zM56 219v5M68 219v5" fill="none" stroke="#56657a" stroke-width="2"/>
+    <circle cx="62" cy="836" r="11" fill="none" stroke="#56657a" stroke-width="2"/>
+
+    <rect x="90" y="70" width="244" height="802" fill="#0f1726"/>
+    <path d="M334 70v802" stroke="#29364a"/>
+    <text x="110" y="103" class="label muted">KRONOS</text>
+    <text x="110" y="140" class="body strong" font-weight="650">WORK</text>
+    <text x="310" y="140" text-anchor="end" class="tiny muted">3</text>
+    <rect x="100" y="153" width="224" height="36" rx="6" fill="#19243a"/>
+    <rect x="100" y="153" width="3" height="36" rx="2" fill="#38bdf8"/>
+    <text x="119" y="176" class="body strong">Jira Work Board</text>
+    <text x="110" y="221" class="body soft">Selected</text>
+    <text x="310" y="221" text-anchor="end" class="tiny muted">1</text>
+    <text x="110" y="251" class="body soft">In Review</text>
+    <text x="310" y="251" text-anchor="end" class="tiny muted">1</text>
+    <text x="110" y="281" class="body soft">Done</text>
+    <text x="310" y="281" text-anchor="end" class="tiny muted">1</text>
+    <path d="M102 304h220" stroke="#26344a"/>
+    <text x="110" y="342" class="body strong" font-weight="650">SESSIONS</text>
+    <rect x="108" y="358" width="8" height="8" rx="4" fill="#4ade80"/>
+    <text x="126" y="367" class="small soft">Claude · DEMO-142</text>
+    <text x="310" y="367" text-anchor="end" class="tiny muted">attached</text>
+    <text x="126" y="393" class="small muted">Claude · standalone</text>
+    <path d="M102 417h220" stroke="#26344a"/>
+    <text x="110" y="455" class="body strong" font-weight="650">ATTENTION</text>
+    <circle cx="112" cy="480" r="4" fill="#f59e0b"/>
+    <text x="126" y="484" class="small soft">MR !87 needs review</text>
+    <circle cx="112" cy="510" r="4" fill="#4ade80"/>
+    <text x="126" y="514" class="small soft">Build #412 recovered</text>
+    <rect x="106" y="808" width="212" height="38" rx="7" class="button"/>
+    <text x="212" y="832" text-anchor="middle" class="small soft">Setup &amp; Doctor</text>
+
+    <g transform="translate(334 70)">
+      <rect width="1072" height="802" fill="#0c1321"/>
+      <text x="34" y="50" class="heading strong">Jira Work Board</text>
+      <text x="34" y="73" class="small muted">3 tickets · refreshed just now · open a workspace or explicitly start Claude</text>
+
+      <rect x="34" y="96" width="1004" height="80" rx="9" fill="#121c2d" stroke="#2d3a50"/>
+      <text x="50" y="119" class="label muted">LOCAL PROJECTS</text>
+      <rect x="50" y="132" width="305" height="30" rx="6" fill="#18253a" stroke="#33455f"/>
+      <text x="63" y="152" class="small strong" font-weight="650">checkout-api</text>
+      <text x="340" y="152" text-anchor="end" class="tiny" fill="#60a5fa">feature/demo-142-idempotency</text>
+      <rect x="367" y="132" width="260" height="30" rx="6" fill="#18253a" stroke="#33455f"/>
+      <text x="380" y="152" class="small strong" font-weight="650">developer-portal</text>
+      <text x="612" y="152" text-anchor="end" class="tiny" fill="#60a5fa">main</text>
+      <text x="1018" y="119" text-anchor="end" class="tiny muted">branch read locally from Git HEAD</text>
+
+      <rect x="34" y="190" width="1004" height="70" rx="9" fill="#121c2d" stroke="#2d3a50"/>
+      <text x="50" y="211" class="label muted">SEARCH</text>
+      <rect x="50" y="219" width="310" height="28" rx="5" fill="#0c1423" stroke="#3a4a63"/>
+      <text x="62" y="238" class="small muted">Key, summary, project, label…</text>
+      <text x="380" y="211" class="label muted">STATUS</text>
+      <rect x="380" y="219" width="150" height="28" rx="5" fill="#0c1423" stroke="#3a4a63"/>
+      <text x="393" y="238" class="small soft">All statuses</text>
+      <text x="548" y="211" class="label muted">PROJECT</text>
+      <rect x="548" y="219" width="170" height="28" rx="5" fill="#0c1423" stroke="#3a4a63"/>
+      <text x="561" y="238" class="small soft">checkout-api</text>
+      <rect x="743" y="224" width="13" height="13" rx="2" fill="#0c1423" stroke="#3a4a63"/>
+      <text x="766" y="237" class="small soft">Hide completed</text>
+      <rect x="930" y="218" width="90" height="30" rx="5" class="button"/>
+      <text x="975" y="238" text-anchor="middle" class="small soft">Reset</text>
+
+      <text x="36" y="284" class="tiny muted">3 of 3 shown</text>
+
+      <g transform="translate(34 300)">
+        <rect width="320" height="456" rx="10" class="column"/>
+        <text x="16" y="31" class="label muted">SELECTED</text>
+        <rect x="282" y="15" width="22" height="22" rx="11" fill="#1d293d"/>
+        <text x="293" y="30" text-anchor="middle" class="tiny soft">1</text>
+        <rect x="12" y="48" width="296" height="248" rx="9" class="card"/>
+        <rect x="12" y="48" width="4" height="248" rx="2" fill="#38bdf8"/>
+        <text x="27" y="74" class="small" fill="#60a5fa" font-weight="700">DEMO-142</text>
+        <text x="290" y="74" text-anchor="end" class="tiny muted">High</text>
+        <text x="27" y="101" class="body strong" font-weight="650">Make retry handling idempotent</text>
+        <text x="27" y="121" class="body strong" font-weight="650">across duplicate events</text>
+        <rect x="27" y="139" width="84" height="22" rx="11" class="chip"/>
+        <text x="69" y="154" text-anchor="middle" class="tiny" fill="#7dd3fc">checkout-api</text>
+        <rect x="118" y="139" width="67" height="22" rx="11" class="chip"/>
+        <text x="151" y="154" text-anchor="middle" class="tiny soft">backend</text>
+        <rect x="27" y="177" width="126" height="30" rx="5" fill="#1d4ed8"/>
+        <text x="90" y="197" text-anchor="middle" class="small" fill="#fff" font-weight="650">Start Claude</text>
+        <rect x="161" y="177" width="130" height="30" rx="5" class="button"/>
+        <text x="226" y="197" text-anchor="middle" class="small soft">Open Workspace</text>
+        <path d="M27 221h264" stroke="#34445d"/>
+        <text x="27" y="247" class="tiny muted">CONTEXT</text>
+        <rect x="27" y="257" width="76" height="25" rx="5" class="button"/>
+        <text x="65" y="274" text-anchor="middle" class="tiny soft">Jira</text>
+        <rect x="110" y="257" width="76" height="25" rx="5" class="button"/>
+        <text x="148" y="274" text-anchor="middle" class="tiny soft">MR</text>
+        <rect x="193" y="257" width="76" height="25" rx="5" class="button"/>
+        <text x="231" y="274" text-anchor="middle" class="tiny soft">CI</text>
+      </g>
+
+      <g transform="translate(376 300)">
+        <rect width="320" height="456" rx="10" class="column"/>
+        <text x="16" y="31" class="label muted">IN REVIEW</text>
+        <rect x="282" y="15" width="22" height="22" rx="11" fill="#1d293d"/>
+        <text x="293" y="30" text-anchor="middle" class="tiny soft">1</text>
+        <rect x="12" y="48" width="296" height="230" rx="9" class="card"/>
+        <rect x="12" y="48" width="4" height="230" rx="2" fill="#f59e0b"/>
+        <text x="27" y="74" class="small" fill="#60a5fa" font-weight="700">DEMO-156</text>
+        <text x="290" y="74" text-anchor="end" class="tiny muted">Medium</text>
+        <text x="27" y="101" class="body strong" font-weight="650">Add trace IDs to provider reads</text>
+        <rect x="27" y="119" width="84" height="22" rx="11" class="chip"/>
+        <text x="69" y="134" text-anchor="middle" class="tiny" fill="#7dd3fc">checkout-api</text>
+        <rect x="118" y="119" width="68" height="22" rx="11" fill="#3b2d19"/>
+        <text x="152" y="134" text-anchor="middle" class="tiny" fill="#fbbf24">MR !87</text>
+        <rect x="193" y="119" width="88" height="22" rx="11" fill="#183526"/>
+        <text x="237" y="134" text-anchor="middle" class="tiny" fill="#4ade80">Build #412</text>
+        <text x="27" y="169" class="tiny muted">REVIEW</text>
+        <text x="290" y="169" text-anchor="end" class="small" fill="#fbbf24">Changes requested</text>
+        <rect x="27" y="187" width="126" height="30" rx="5" fill="#1d4ed8"/>
+        <text x="90" y="207" text-anchor="middle" class="small" fill="#fff" font-weight="650">Open Session</text>
+        <rect x="161" y="187" width="130" height="30" rx="5" class="button"/>
+        <text x="226" y="207" text-anchor="middle" class="small soft">Insert MR</text>
+        <text x="27" y="252" class="tiny muted">Read-only provider state</text>
+      </g>
+
+      <g transform="translate(718 300)">
+        <rect width="320" height="456" rx="10" class="column"/>
+        <text x="16" y="31" class="label muted">DONE</text>
+        <rect x="282" y="15" width="22" height="22" rx="11" fill="#1d293d"/>
+        <text x="293" y="30" text-anchor="middle" class="tiny soft">1</text>
+        <rect x="12" y="48" width="296" height="166" rx="9" class="card"/>
+        <rect x="12" y="48" width="4" height="166" rx="2" fill="#4ade80"/>
+        <text x="27" y="74" class="small" fill="#60a5fa" font-weight="700">DEMO-131</text>
+        <text x="290" y="74" text-anchor="end" class="tiny muted">Normal</text>
+        <text x="27" y="101" class="body strong" font-weight="650">Bound provider pagination</text>
+        <rect x="27" y="119" width="70" height="22" rx="11" fill="#183526"/>
+        <text x="62" y="134" text-anchor="middle" class="tiny" fill="#4ade80">passed</text>
+        <text x="27" y="184" class="tiny muted">Completed work shown</text>
+      </g>
+
+      <text x="1038" y="789" text-anchor="end" class="tiny muted">Synthetic data · example.invalid providers · no live credentials or employer information</text>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "compile",
+      "group": "build",
+      "problemMatcher": "$tsc",
+      "label": "npm: compile"
+    },
+    {
+      "type": "npm",
+      "script": "feedback:state:force",
+      "problemMatcher": [],
+      "label": "npm: feedback:state:force"
+    },
+    {
+      "label": "Kronos: Prepare Feedback Dev Host",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "npm: feedback:state:force",
+        "npm: compile"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}
