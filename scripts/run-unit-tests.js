@@ -526,6 +526,12 @@ test('project integration setup validates provider identifiers and launch-projec
     jenkinsUrl: 'https://jenkins.example/job/team/job/application',
     sonar: { projectKey: 'team:application', branch: 'feature/local-branch' },
   });
+  const savedBindingOnlyState = stateStore.emptyWorkCatalog();
+  savedBindingOnlyState.tickets['JIRA-123'] = fixtureTicket({ projects: [] });
+  assert.deepEqual(managedProviderMonitor.configuredCiPollingTargets(savedBindingOnlyState, existingSession), {
+    jenkinsUrl: 'https://jenkins.example/job/old',
+    sonar: { projectKey: 'old:key', branch: 'old-branch' },
+  });
   assert.throws(() => projectCatalog.setLocalProjectIntegrations(initial, [{
     name: 'Application',
     jenkinsUrl: 'https://user:secret@jenkins.example/job/application/',

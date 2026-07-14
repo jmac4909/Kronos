@@ -1299,13 +1299,19 @@ class TerminalFirstRuntime implements vscode.Disposable {
       if (ticket.jira_url) { binding.url = ticket.jira_url; }
       updated = this.requireTicketSession(addWorkSessionProviderBinding(updated.id, binding));
     }
-    if (ticket.mr?.iid && !latestGitLabMergeRequestBinding(updated)) {
+    const currentMergeRequest = latestGitLabMergeRequestBinding(updated);
+    const currentMatchesTicket = currentMergeRequest?.subjectId === String(ticket.mr?.iid || '');
+    const gitLabProject = config?.gitlab_project_id || config?.gitlab_project_path;
+    const mergeRequestNeedsEnrichment = currentMatchesTicket && Boolean(
+      (gitLabProject && !currentMergeRequest?.projectId)
+      || (ticket.mr?.url && !currentMergeRequest?.url),
+    );
+    if (ticket.mr?.iid && (!currentMergeRequest || mergeRequestNeedsEnrichment)) {
       const binding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
         provider: 'gitlab',
         resource: 'merge-request',
         subjectId: String(ticket.mr.iid),
       };
-      const gitLabProject = config?.gitlab_project_id || config?.gitlab_project_path;
       if (gitLabProject) { binding.projectId = String(gitLabProject); }
       if (ticket.mr.url) { binding.url = ticket.mr.url; }
       updated = this.requireTicketSession(addWorkSessionProviderBinding(updated.id, binding));
@@ -1530,7 +1536,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
               subjectId: String(iid),
               projectId: projectIdOrPath,
             };
-            if (target.url) { mergeRequestBinding.url = target.url; }
+            const mergeRequestUrl = target.url || context.mergeRequest.webUrl;
+            if (mergeRequestUrl) { mergeRequestBinding.url = mergeRequestUrl; }
             let session = addWorkSessionProviderBinding(selection.workSession.id, mergeRequestBinding);
             if (context.pipeline) {
               const pipelineBinding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
@@ -1572,9 +1579,11 @@ class TerminalFirstRuntime implements vscode.Disposable {
     if (!ticketKey || !ticket) { return; }
     const selection = await this.chooseInsertionTerminal(ticketKey);
     if (!selection) { return; }
+    const ticketSession = selection.workSession?.kind === 'ticket' ? selection.workSession : undefined;
+    const savedTargets = ticketSession ? configuredCiPollingTargets(this.state.state, ticketSession) : {};
     const config = this.projectConfig(ticket);
-    const jenkinsUrl = ticket.build?.url || config?.jenkins_url;
-    const sonarTarget = configuredSonarBranch(this.state.state, ticketKey);
+    const jenkinsUrl = savedTargets.jenkinsUrl || ticket.build?.url || config?.jenkins_url;
+    const sonarTarget = savedTargets.sonar || configuredSonarBranch(this.state.state, ticketKey);
     if (!jenkinsUrl && !sonarTarget) {
       void vscode.window.showWarningMessage(`${ticketKey} has no linked Jenkins URL or SonarQube project/branch.`);
       return;
@@ -2253,15 +2262,18 @@ class TerminalFirstRuntime implements vscode.Disposable {
     const jiraConfigured = isJiraRestConfigured();
     const sessions = listWorkSessions();
     const sessionIssues = listWorkSessionStoreIssues();
-    const integrationReadyCount = projects.filter(project => {
+    const integrationCounts = projects.reduce((counts, project) => {
       const config = this.state.state?.projects[project.name]?.config;
-      return Boolean(
-        (config?.gitlab_project_id || config?.gitlab_project_path)
-        && config?.jenkins_url
-        && config?.sonar_project_key
-        && (config?.default_branch || config?.base_branch),
-      );
-    }).length;
+      const gitlab = Boolean(config?.gitlab_project_id || config?.gitlab_project_path);
+      const jenkins = Boolean(config?.jenkins_url);
+      const sonar = Boolean(config?.sonar_project_key);
+      return {
+        projects: counts.projects + (gitlab || jenkins || sonar ? 1 : 0),
+        gitlab: counts.gitlab + (gitlab ? 1 : 0),
+        jenkins: counts.jenkins + (jenkins ? 1 : 0),
+        sonar: counts.sonar + (sonar ? 1 : 0),
+      };
+    }, { projects: 0, gitlab: 0, jenkins: 0, sonar: 0 });
     const configuredMonitoringProviders = [
       isGitLabRestConfigured() ? 'GitLab' : '',
       isJenkinsRestConfigured() ? 'Jenkins' : '',
@@ -2307,8 +2319,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
         title: 'Project polling configuration',
         detail: projects.length === 0
           ? 'Register a local project before adding provider identifiers.'
-          : `${integrationReadyCount}/${projects.length} registered project${projects.length === 1 ? '' : 's'} have GitLab, Jenkins, SonarQube, and branch identifiers filled in.`,
-        status: projects.length > 0 && integrationReadyCount === projects.length ? 'pass' : 'warn',
+          : `${integrationCounts.projects}/${projects.length} registered project${projects.length === 1 ? '' : 's'} have at least one optional polling target; GitLab ${integrationCounts.gitlab}, Jenkins ${integrationCounts.jenkins}, SonarQube ${integrationCounts.sonar}.`,
+        status: projects.length > 0 && integrationCounts.projects === projects.length ? 'pass' : 'warn',
         action: 'configureProjectIntegrations',
         actionLabel: 'Configure Integrations',
       },
