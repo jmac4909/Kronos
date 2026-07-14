@@ -3,7 +3,7 @@ import * as os from 'os';
 import type { ProjectConfig, Ticket } from './state/types';
 import { TerminalFirstState } from './state/TerminalFirstState';
 import { WorkTreeProvider } from './views/WorkTreeProvider';
-import { ManagedSessionTreeProvider } from './views/ManagedSessionTreeProvider';
+import { ManagedSessionTreeProvider, type RegisteredProjectCommandTarget } from './views/ManagedSessionTreeProvider';
 import { AttentionTreeProvider } from './views/AttentionTreeProvider';
 import { defaultProviderEnvPath, loadProviderEnv } from './services/providerEnv';
 import { unknownErrorMessage } from './services/errorUtils';
@@ -14,6 +14,7 @@ import {
   configuredGitLabProjectPathFromMergeRequestUrl,
   gitlabRestClient,
   isGitLabRestConfigured,
+  normalizeGitLabApiBaseUrl,
 } from './services/gitlabRestClient';
 import { normalizeGitLabMergeRequestContext, type GitLabMergeRequestContext } from './services/gitlabMergeRequestContext';
 import { writeGitLabContextArtifacts } from './services/gitlabContextStore';
@@ -24,9 +25,12 @@ import {
   buildCiContextReference,
   buildGitLabMergeRequestContextReference,
   buildJiraContextReference,
+  buildProjectGitContextReference,
   insertEditableTerminalContextReference,
   insertTerminalContextReference,
 } from './services/terminalContextInsertion';
+import { readProjectGitEvidence, renderProjectGitEvidence } from './services/vscodeGitReadService';
+import { writeProjectGitContextArtifact } from './services/projectGitContextStore';
 import {
   createOperatorTerminalRegistry,
   type OperatorTerminalBinding,
@@ -44,6 +48,7 @@ import {
   listWorkSessions,
   readWorkSession,
   recordWorkSessionContextArtifact,
+  removeWorkSession,
   reopenWorkSession,
   setWorkSessionMonitoring,
   setWorkSessionProject,
@@ -64,7 +69,7 @@ import {
   type ManagedProviderNotice,
   type ManagedProviderPollResult,
 } from './services/managedProviderMonitor';
-import { buildTicketWorkspaceHtml } from './services/ticketWorkspaceView';
+import { buildTicketWorkspaceHtml, type ProviderPollingViewStatus } from './services/ticketWorkspaceView';
 import {
   JIRA_WORK_BOARD_ACTIONS,
   JIRA_WORK_BOARD_SCRIPT,
@@ -211,7 +216,11 @@ class TerminalFirstRuntime implements vscode.Disposable {
     hideCompletedByDefault: () => this.hideCompletedJiraWork(),
     doneStatusNames: () => this.completedJiraStatuses(),
   });
-  private readonly sessionTree = new ManagedSessionTreeProvider(this.operatorTerminals);
+  private readonly sessionTree = new ManagedSessionTreeProvider(
+    this.operatorTerminals,
+    () => listWorkSessions(),
+    () => this.state.state,
+  );
   private readonly attentionTree = new AttentionTreeProvider();
   private readonly output = vscode.window.createOutputChannel('Kronos Terminal Work Companion');
   private readonly disposables: vscode.Disposable[] = [];
@@ -318,6 +327,13 @@ class TerminalFirstRuntime implements vscode.Disposable {
     this.command('kronos.reattachWorkSessionTerminal', async argument => this.reattachFocusedTerminal(argument));
     this.command('kronos.detachWorkSessionTerminal', async argument => this.detachManagedTerminal(argument));
     this.command('kronos.closeWorkSession', async argument => this.stopManagingSession(argument));
+    this.command('kronos.removeWorkSession', async argument => this.removeManagedSession(argument));
+    this.command('kronos.openProjectGitStatus', async argument => this.openProjectGitStatus(argument));
+    this.command('kronos.insertProjectGitContext', async argument => this.insertProjectGitContext(argument));
+    this.command('kronos.openProjectMergeRequest', async argument => this.openProjectMergeRequest(argument));
+    this.command('kronos.insertProjectGitLabContext', async argument => this.insertProjectProviderContext(argument, 'gitlab'));
+    this.command('kronos.insertProjectCiContext', async argument => this.insertProjectProviderContext(argument, 'ci'));
+    this.command('kronos.configureProjectIntegrations', async argument => this.configureProjectIntegrations(argument));
     this.command('kronos.pauseWorkSessionMonitoring', async argument => this.setMonitoring(argument, false));
     this.command('kronos.resumeWorkSessionMonitoring', async argument => this.setMonitoring(argument, true));
     this.command('kronos.acknowledgeAttention', async argument => this.acknowledgeAttention(argument));
@@ -666,6 +682,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       try {
         this.state.setLocalProjectIntegrations(message.projects);
         this.refreshTerminalFirstViews();
+        void this.pollProviders(false);
         panel.dispose();
         void vscode.window.showInformationMessage(
           `Saved read-only provider polling setup for ${message.projects.length} project${message.projects.length === 1 ? '' : 's'}. Run Doctor to verify credentials and remaining prerequisites.`,
@@ -762,11 +779,13 @@ class TerminalFirstRuntime implements vscode.Disposable {
     const selected = choice.unlink ? undefined : choice.project;
     const existingSession = getWorkSessionByTicket(ticketKey);
     if (existingSession) {
-      setWorkSessionProject(existingSession.id, selected
+      let updated = setWorkSessionProject(existingSession.id, selected
         ? { projectName: selected.name, projectPath: selected.path }
         : {});
+      if (updated.kind === 'ticket') { updated = this.ensureProviderBindings(updated, ticket); }
     }
     this.refreshTerminalFirstViews();
+    void this.pollProviders(false);
     void vscode.window.showInformationMessage(selected
       ? `${ticketKey} will launch Claude in ${selected.path}${selected.branch ? ` on ${selected.branch}` : ''}. Existing terminals were not changed.`
       : `${ticketKey} local project unlinked. Existing terminals were not changed.`);
@@ -794,6 +813,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
         if (result.complete && result.warnings.length === 0) { void vscode.window.showInformationMessage(message); }
         else { void vscode.window.showWarningMessage(`${message} Open Doctor for details.`); }
       }
+      void this.pollProviders(false);
     } catch (error: unknown) {
       const detail = unknownErrorMessage(error, 'Jira ticket refresh failed.');
       this.log('Jira ticket refresh failed.', detail);
@@ -930,6 +950,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       workSession: session,
       liveTerminalCount: session ? this.operatorTerminals.listBindings(session.id).length : 0,
       localProject: ticketLocalProject(this.state.state, ticket),
+      providerPolling: this.providerPollingViewStatus(ticketKey, ticket, session),
     });
     record.panel.webview.html = withWebviewCsp(
       html,
@@ -939,6 +960,48 @@ class TerminalFirstRuntime implements vscode.Disposable {
 
   private refreshTicketPanels(): void {
     for (const [ticketKey, record] of this.ticketPanels) { this.renderTicketPanel(ticketKey, record); }
+  }
+
+  private providerPollingViewStatus(
+    ticketKey: string,
+    ticket: Ticket,
+    session: WorkSessionRecord | null,
+  ): ProviderPollingViewStatus[] {
+    const config = this.projectConfig(ticket) || {};
+    const polling = session?.kind === 'ticket' && session.status === 'active' && session.monitoring.enabled;
+    const mrBinding = session?.providerBindings.find(binding => binding.provider === 'gitlab' && binding.resource === 'merge-request');
+    const mrIid = ticket.mr?.iid || (mrBinding && /^[1-9][0-9]*$/.test(mrBinding.subjectId) ? Number(mrBinding.subjectId) : undefined);
+    const gitLabConfigured = Boolean(config.gitlab_project_id || config.gitlab_project_path);
+    const gitLab: ProviderPollingViewStatus = !gitLabConfigured
+      ? { provider: 'GitLab', state: 'setup', detail: 'Add the project ID or group/project path.' }
+      : !isGitLabRestConfigured()
+        ? { provider: 'GitLab', state: 'setup', detail: 'Project linked; credentials need Doctor.' }
+        : !polling
+          ? { provider: 'GitLab', state: 'paused', detail: 'Starts automatically with an active monitored ticket session.' }
+          : mrIid
+            ? { provider: 'GitLab', state: 'active', detail: `Polling MR !${mrIid}, review, pipeline, jobs, and tests.` }
+            : { provider: 'GitLab', state: 'discovering', detail: 'Polling is active; finding a unique open MR by branch or ticket key.' };
+
+    const jenkinsConfigured = Boolean(ticket.build?.url || config.jenkins_url);
+    const jenkins: ProviderPollingViewStatus = !jenkinsConfigured
+      ? { provider: 'Jenkins', state: 'setup', detail: 'Add the project Jenkins job URL.' }
+      : !isJenkinsRestConfigured()
+        ? { provider: 'Jenkins', state: 'setup', detail: 'Job linked; credentials need Doctor.' }
+        : polling
+          ? { provider: 'Jenkins', state: 'active', detail: 'Polling the configured job, stages, and tests.' }
+          : { provider: 'Jenkins', state: 'paused', detail: 'Starts automatically with an active monitored ticket session.' };
+
+    const sonarTarget = configuredSonarBranch(this.state.state, ticketKey);
+    const sonar: ProviderPollingViewStatus = !config.sonar_project_key
+      ? { provider: 'SonarQube', state: 'setup', detail: 'Add the SonarQube project key.' }
+      : !sonarTarget
+        ? { provider: 'SonarQube', state: 'setup', detail: 'Add or discover the branch used for SonarQube polling.' }
+        : !isSonarRestConfigured()
+          ? { provider: 'SonarQube', state: 'setup', detail: 'Project linked; credentials need Doctor.' }
+          : polling
+            ? { provider: 'SonarQube', state: 'active', detail: `Polling ${sonarTarget.projectKey}:${sonarTarget.branch}.` }
+            : { provider: 'SonarQube', state: 'paused', detail: 'Starts automatically with an active monitored ticket session.' };
+    return [gitLab, jenkins, sonar];
   }
 
   private async manageFocusedTerminal(argument: unknown): Promise<void> {
@@ -1180,6 +1243,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       subject: { kind: 'work-session', id: updated.id, ...workSessionTicketMetadata(updated) },
       metadata: { terminalBindingId: persisted.id },
     });
+    if (updated.kind === 'ticket' && updated.monitoring.enabled) { void this.pollProviders(false); }
     return updated;
   }
 
@@ -1759,6 +1823,235 @@ class TerminalFirstRuntime implements vscode.Disposable {
     this.refreshTerminalFirstViews();
   }
 
+  private async removeManagedSession(argument: unknown): Promise<void> {
+    const session = await this.resolveWorkSession(argument, true);
+    if (!session) { return; }
+    const context = workSessionEventContext(session);
+    const liveCount = this.operatorTerminals.listBindings(session.id).length;
+    const confirmation = await vscode.window.showWarningMessage(
+      `Remove ${context.label} from Kronos? Its local session record and monitoring snapshots will be deleted. ${liveCount > 0 ? `${liveCount} attached terminal${liveCount === 1 ? '' : 's'} will remain open and untouched. ` : ''}Shared audit history and saved context files are retained locally.`,
+      { modal: true },
+      'Remove Session',
+    );
+    if (confirmation !== 'Remove Session') { return; }
+    removeWorkSession(session.id);
+    this.operatorTerminals.detachSession(session.id);
+    try {
+      appendMonitorEvent({
+        sessionId: session.id,
+        type: 'decision.recorded',
+        source: 'operator',
+        summary: `${context.label} session record removed from Kronos by the operator.`,
+        subject: { kind: 'work-session', id: session.id, ...workSessionTicketMetadata(session) },
+        metadata: { terminalClosed: false, sessionRecordRemoved: true },
+      });
+    } catch (error: unknown) {
+      // The requested removal already succeeded. Do not report it as failed
+      // merely because the retained append-only audit ledger was unavailable.
+      this.log('Session was removed, but its final audit note could not be recorded.', unknownErrorMessage(error, 'Audit write failed.'));
+    }
+    this.refreshTerminalFirstViews();
+    void vscode.window.showInformationMessage(`Removed ${context.label} from Sessions. Any terminal remains open and operator-owned.`);
+  }
+
+  private async openProjectGitStatus(argument: unknown): Promise<void> {
+    const project = this.resolveRegisteredProject(argument);
+    if (!project) { return; }
+    await this.runProgress(`Kronos: Reading ${project.projectName} Git status...`, async progress => {
+      progress.report({ message: 'Reading the VS Code built-in Git model without changing the repository...' });
+      const evidence = await readProjectGitEvidence(project.projectPath, { openRepositoryIfNeeded: true });
+      const document = await vscode.workspace.openTextDocument({
+        language: 'markdown',
+        content: renderProjectGitEvidence(project.projectName, evidence),
+      });
+      await vscode.window.showTextDocument(document, { preview: true });
+      if (!evidence.available) {
+        void vscode.window.showWarningMessage(evidence.warning || 'VS Code Git status is unavailable for this project.');
+      }
+    });
+  }
+
+  private async insertProjectGitContext(argument: unknown): Promise<void> {
+    const project = this.resolveRegisteredProject(argument);
+    if (!project) { return; }
+    const selection = await this.chooseProjectInsertionTerminal(project);
+    if (!selection) { return; }
+    await this.runProgress(`Kronos: Preparing ${project.projectName} Git context...`, async progress => {
+      progress.report({ message: 'Reading read-only status and diff from VS Code Git...' });
+      const evidence = await readProjectGitEvidence(project.projectPath, { openRepositoryIfNeeded: true });
+      if (!evidence.available) {
+        void vscode.window.showWarningMessage(evidence.warning || 'VS Code Git status is unavailable for this project.');
+        return;
+      }
+      const rendered = renderProjectGitEvidence(project.projectName, evidence);
+      const artifact = writeProjectGitContextArtifact(project.projectName, rendered);
+      const warnings = [
+        ...(evidence.warning ? [evidence.warning] : []),
+        ...(evidence.diffTruncated ? ['The working-tree diff was truncated at the bounded local context limit.'] : []),
+        ...(artifact.redacted ? ['Potential credential material was redacted from the saved Git context.'] : []),
+      ];
+      this.openContextComposer({
+        key: `git:${project.projectName}`,
+        panelTitle: `${project.projectName} — Compose Git Context`,
+        title: `${project.projectName}: ${evidence.branch || 'working tree'}`,
+        subtitle: `${evidence.changeCount} changed path${evidence.changeCount === 1 ? '' : 's'}. Review the snapshot, edit the focus, then place one non-submitting line in the attached terminal.`,
+        sourceLabel: 'Local Git read-only',
+        reference: buildProjectGitContextReference(artifact.contextId, artifact.promptPath),
+        promptPath: artifact.promptPath,
+        suggestedFocus: 'Review the current working-tree changes for correctness, missing tests, security risks, and unintended edits before we make or publish an MR.',
+        evidence: [
+          { label: 'Branch', detail: evidence.branch || 'unavailable' },
+          { label: 'Changed paths', detail: evidence.changes.slice(0, 40).map(change => `${change.staged ? 'staged' : 'working'} ${change.status}: ${change.path}`).join('\n') || 'Clean working tree' },
+          { label: 'Diff snapshot', detail: evidence.diff ? `${evidence.diff.length} characters${evidence.diffTruncated ? ' (truncated)' : ''}` : 'No textual diff returned' },
+        ],
+        warnings,
+        selection,
+        onInserted: () => {
+          if (selection.workSession) {
+            const complete = evidence.available && !evidence.diffTruncated;
+            recordWorkSessionContextArtifact(selection.workSession.id, {
+              id: `git-${artifact.contentSha256.slice(0, 24)}`,
+              kind: 'git-working-tree',
+              label: `[${artifact.contextId}] local Git working tree`,
+              promptPath: artifact.promptPath,
+              complete,
+              warnings,
+              contentSha256: artifact.contentSha256,
+            });
+            this.appendContextEvent(selection.workSession, 'kronos', project.projectName, artifact.promptPath, artifact.contentSha256);
+          }
+          this.refreshTerminalFirstViews();
+          void vscode.window.showInformationMessage(
+            `Inserted [${artifact.contextId}] into ${selection.terminal.name} without submitting it. Review the line, then press Enter yourself.`,
+          );
+        },
+      });
+    });
+  }
+
+  private async insertProjectProviderContext(argument: unknown, provider: 'gitlab' | 'ci'): Promise<void> {
+    const project = this.resolveRegisteredProject(argument);
+    if (!project) { return; }
+    const ticketKey = await this.chooseProjectTicketSession(project, provider === 'gitlab' ? 'MR evidence' : 'CI evidence');
+    if (!ticketKey) { return; }
+    if (provider === 'gitlab') { await this.insertGitLabContext({ ticketKey }); }
+    else { await this.insertCiContext({ ticketKey }); }
+  }
+
+  private configureProjectIntegrations(argument: unknown): void {
+    const project = this.resolveRegisteredProject(argument);
+    if (project) { this.openProjectIntegrationSetup([project.projectName]); }
+  }
+
+  private async openProjectMergeRequest(argument: unknown): Promise<void> {
+    const project = this.resolveRegisteredProject(argument);
+    if (!project) { return; }
+    const projectSessions = listWorkSessions().filter(session => session.projectName === project.projectName);
+    const knownUrl = projectSessions.flatMap(session => session.providerBindings)
+      .slice().reverse()
+      .find(binding => binding.provider === 'gitlab' && binding.resource === 'merge-request' && binding.url)?.url;
+    const linkedTicket = Object.values(this.state.state?.tickets || {}).find(ticket =>
+      ticket.launch_project === project.projectName || ticket.projects.includes(project.projectName)
+    );
+    const ticketMrUrl = linkedTicket?.mr?.url;
+    if (ticketMrUrl || knownUrl) {
+      await this.openHttpUrl(ticketMrUrl || knownUrl || '');
+      return;
+    }
+
+    const config = this.state.state?.projects[project.projectName]?.config || {};
+    const projectPath = config.gitlab_project_path;
+    const branch = readProjectGitBranch(project.projectPath)?.branch;
+    if (!projectPath || !branch || branch.startsWith('detached@')) {
+      void vscode.window.showWarningMessage(
+        `${project.projectName} needs a GitLab group/project path and a current branch before Kronos can open a prefilled new-MR page.`,
+      );
+      return;
+    }
+    try {
+      const apiUrl = normalizeGitLabApiBaseUrl(
+        process.env['GITLAB_API_BASE_URL']
+          || process.env['GITLAB_BASE_URL']
+          || process.env['GITLAB_URL']
+          || process.env['GITLAB_HOST'],
+      );
+      if (!apiUrl) { throw new Error('GitLab base URL is not configured.'); }
+      const webBase = apiUrl.replace(/\/api\/v4\/?$/, '');
+      const encodedProjectPath = projectPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+      const url = new URL(`${webBase}/${encodedProjectPath}/-/merge_requests/new`);
+      url.searchParams.set('merge_request[source_branch]', branch);
+      url.searchParams.set('merge_request[target_branch]', config.default_branch || config.base_branch || 'main');
+      await this.openHttpUrl(url.toString());
+    } catch (error: unknown) {
+      void vscode.window.showWarningMessage(unknownErrorMessage(error, 'Kronos could not open the GitLab new-MR page.'));
+    }
+  }
+
+  private resolveRegisteredProject(argument: unknown): RegisteredProjectCommandTarget | undefined {
+    const projectName = stringProperty(argument, 'projectName');
+    const projectPath = stringProperty(argument, 'projectPath');
+    const registered = listLocalProjects(this.state.state).find(project =>
+      project.name === projectName && project.path === projectPath
+    );
+    if (!registered) {
+      void vscode.window.showWarningMessage('Select a currently registered project for this action.');
+      return undefined;
+    }
+    return { projectName: registered.name, projectPath: registered.path };
+  }
+
+  private async chooseProjectTicketSession(
+    project: RegisteredProjectCommandTarget,
+    actionLabel: string,
+  ): Promise<string | undefined> {
+    const sessions = listWorkSessions({ kind: 'ticket', status: 'active' }).filter((session): session is TicketWorkSessionRecord =>
+      session.kind === 'ticket' && session.projectName === project.projectName
+    );
+    if (sessions.length === 0) {
+      void vscode.window.showWarningMessage(
+        `Start or attach a ticket session for ${project.projectName} before inserting ${actionLabel}. Project-only Git context does not require a Jira ticket.`,
+      );
+      return undefined;
+    }
+    if (sessions.length === 1) { return sessions[0]?.ticketKey; }
+    const pick = await vscode.window.showQuickPick(sessions.map(session => ({
+      label: session.ticketKey,
+      description: session.title,
+      session,
+    })), { title: `Choose the ${project.projectName} ticket for ${actionLabel}` });
+    return pick?.session.ticketKey;
+  }
+
+  private async chooseProjectInsertionTerminal(project: RegisteredProjectCommandTarget): Promise<TerminalSelection | undefined> {
+    const sessions = listWorkSessions({ status: 'active' }).filter(session => session.projectName === project.projectName);
+    if (sessions.length === 0) {
+      void vscode.window.showWarningMessage(
+        `Start a Claude session in ${project.projectName}, or manage a focused terminal for it, before inserting the working diff.`,
+      );
+      return undefined;
+    }
+    const active = vscode.window.activeTerminal;
+    const activeBinding = active ? this.operatorTerminals.bindingForTerminal(active) : undefined;
+    let session = activeBinding ? sessions.find(candidate => candidate.id === activeBinding.sessionId) : undefined;
+    if (!session && sessions.length === 1) { session = sessions[0]; }
+    if (!session) {
+      const pick = await vscode.window.showQuickPick(sessions.map(candidate => ({
+        label: workSessionEventContext(candidate).label,
+        description: candidate.kind === 'ticket' ? candidate.ticketKey : 'standalone',
+        session: candidate,
+      })), { title: `Choose the ${project.projectName} session for Git context` });
+      session = pick?.session;
+    }
+    if (!session) { return undefined; }
+    if (session.kind === 'ticket') { return this.chooseInsertionTerminal(session.ticketKey); }
+    const selected = await this.chooseLiveTerminal(session.id);
+    if (!selected) {
+      void vscode.window.showWarningMessage(`Focus or reattach the operator-owned terminal for ${session.title} before inserting context.`);
+      return undefined;
+    }
+    return { terminal: selected.terminal, binding: selected.binding, workSession: session };
+  }
+
   private async setMonitoring(argument: unknown, enabled: boolean): Promise<void> {
     const session = await this.resolveWorkSession(argument, true);
     if (!session) { return; }
@@ -1780,6 +2073,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       metadata: { monitoringEnabled: enabled },
     });
     this.refreshTerminalFirstViews();
+    if (enabled) { void this.pollProviders(false); }
   }
 
   private async acknowledgeAttention(argument: unknown): Promise<void> {
@@ -1932,6 +2226,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       isJenkinsRestConfigured() ? 'Jenkins' : '',
       isSonarRestConfigured() ? 'SonarQube' : '',
     ].filter(Boolean);
+    const activePolling = this.activeProviderPollingSummary();
     const stateIssueCount = this.state.loadIssues.length + sessionIssues.length;
     const ticketCount = Object.keys(this.state.state?.tickets || {}).length;
     return [
@@ -1979,7 +2274,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       {
         title: 'MR and pipeline monitoring',
         detail: configuredMonitoringProviders.length > 0
-          ? `${configuredMonitoringProviders.join(', ')} read-only monitoring configured.`
+          ? `${configuredMonitoringProviders.join(', ')} read-only access configured. ${activePolling.detail}`
           : 'No optional GitLab, Jenkins, or SonarQube monitoring provider is fully configured yet.',
         status: configuredMonitoringProviders.length > 0 ? 'pass' : 'warn',
         action: 'openDoctor',
@@ -2023,6 +2318,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     const gitLabConfigured = isGitLabRestConfigured();
     const jenkinsConfigured = isJenkinsRestConfigured();
     const sonarConfigured = isSonarRestConfigured();
+    const activePolling = this.activeProviderPollingSummary();
     const workCatalogStatus: OperationsStatus = this.state.state === null || stateIssues.length > 0
       ? 'fail'
       : ticketCount > 0 ? 'pass' : 'warn';
@@ -2069,6 +2365,11 @@ class TerminalFirstRuntime implements vscode.Disposable {
         detail: sonarConfigured ? 'Configured for bounded read-only quality-gate access.' : 'Requires a SonarQube URL and token plus a project/branch binding.',
       },
       {
+        name: 'Automatic provider polling',
+        status: activePolling.sessions > 0 && (activePolling.gitlab + activePolling.jenkins + activePolling.sonar) > 0 ? 'pass' : 'warn',
+        detail: activePolling.detail,
+      },
+      {
         name: 'Private work-session state',
         status: sessionIssues.length === 0 ? 'pass' : 'fail',
         detail: `${sessions.length} session${sessions.length === 1 ? '' : 's'}; ${sessionIssues.length} invalid record${sessionIssues.length === 1 ? '' : 's'}${sessionIssues[0] ? ` — ${sessionIssues[0].filePath}: ${sessionIssues[0].detail}` : ''}`,
@@ -2107,6 +2408,33 @@ class TerminalFirstRuntime implements vscode.Disposable {
         detail: unknownErrorMessage(error, 'Claude launch settings are invalid.'),
       };
     }
+  }
+
+  private activeProviderPollingSummary(): {
+    sessions: number;
+    gitlab: number;
+    jenkins: number;
+    sonar: number;
+    detail: string;
+  } {
+    const sessions = listWorkSessions({ kind: 'ticket', status: 'active', monitoringEnabled: true })
+      .filter((session): session is TicketWorkSessionRecord => session.kind === 'ticket');
+    const counts = { sessions: sessions.length, gitlab: 0, jenkins: 0, sonar: 0 };
+    for (const session of sessions) {
+      const ticket = this.state.state?.tickets[session.ticketKey];
+      if (!ticket) { continue; }
+      for (const status of this.providerPollingViewStatus(session.ticketKey, ticket, session)) {
+        if (status.provider === 'GitLab' && (status.state === 'active' || status.state === 'discovering')) { counts.gitlab += 1; }
+        if (status.provider === 'Jenkins' && status.state === 'active') { counts.jenkins += 1; }
+        if (status.provider === 'SonarQube' && status.state === 'active') { counts.sonar += 1; }
+      }
+    }
+    return {
+      ...counts,
+      detail: counts.sessions === 0
+        ? 'No active monitored ticket sessions. Polling starts automatically after a configured ticket session is attached.'
+        : `${counts.sessions} monitored ticket session${counts.sessions === 1 ? '' : 's'}; GitLab ${counts.gitlab} active/discovering, Jenkins ${counts.jenkins} active, SonarQube ${counts.sonar} active.`,
+    };
   }
 
   private async resolveTicketKey(argument: unknown, allowPick: boolean): Promise<string | undefined> {
@@ -2192,39 +2520,54 @@ class TerminalFirstRuntime implements vscode.Disposable {
       }
     }
 
-    const value = await vscode.window.showInputBox({
-      title: `Connect a GitLab merge request to ${ticketKey}`,
-      prompt: configuredProject
-        ? 'Paste the merge-request URL or enter its numeric IID. Kronos saves the binding only in the local work session.'
-        : 'Paste the full merge-request URL. Its origin must match the configured GitLab API.',
-      placeHolder: 'https://gitlab.example/group/project/-/merge_requests/77',
-      ignoreFocusOut: true,
-    });
-    const candidate = value?.trim();
-    if (!candidate) { return undefined; }
-    if (/^[1-9][0-9]*$/.test(candidate)) {
-      const iid = Number(candidate);
-      if (Number.isSafeInteger(iid) && configuredProject) {
-        return { iid, projectIdOrPath: configuredProject };
-      }
-      void vscode.window.showWarningMessage('A numeric MR IID also needs a configured GitLab project ID or an existing linked MR URL.');
+    if (!configuredProject) {
+      void vscode.window.showWarningMessage(
+        `${ticketKey} needs a GitLab project ID or group/project path. Configure the linked project; Kronos will then find the open MR automatically.`,
+      );
       return undefined;
     }
-    let iid: number | undefined;
+
+    const sourceBranch = ticket.mr?.source_branch
+      || ticket.mr?.sourceBranch
+      || ticket.mr?.branch
+      || ticket.mr?.head_branch
+      || (session?.projectPath ? readProjectGitBranch(session.projectPath)?.branch : undefined);
+    let discovery;
     try {
-      const parsed = new URL(candidate);
-      const match = /\/-\/merge_requests\/([1-9][0-9]*)(?:\/|$)/.exec(parsed.pathname);
-      const numeric = match?.[1] ? Number(match[1]) : Number.NaN;
-      if (Number.isSafeInteger(numeric)) { iid = numeric; }
-    } catch {
-      iid = undefined;
-    }
-    const projectIdOrPath = configuredGitLabProjectPathFromMergeRequestUrl(candidate, process.env);
-    if (!iid || !projectIdOrPath) {
-      void vscode.window.showWarningMessage('That MR URL is invalid or outside the configured GitLab origin. Run Kronos: Doctor to check GitLab configuration.');
+      discovery = await gitlabRestClient.discoverOpenMergeRequest({
+        projectIdOrPath: configuredProject,
+        ticketKey,
+        ...(sourceBranch && !sourceBranch.startsWith('detached@') ? { sourceBranch } : {}),
+      });
+    } catch (error: unknown) {
+      const detail = unknownErrorMessage(error, 'GitLab merge-request discovery failed.');
+      this.log(`Could not discover a GitLab MR for ${ticketKey}.`, detail);
+      void vscode.window.showWarningMessage(`${detail} Run Kronos: Doctor to verify GitLab polling.`);
       return undefined;
     }
-    return { iid, projectIdOrPath, url: candidate };
+    if (!discovery.match) {
+      void vscode.window.showWarningMessage(discovery.ambiguous
+        ? `${ticketKey} has ${discovery.candidateCount} possible open merge requests. Kronos will not guess; use a unique ticket key in the MR title/description or work from its source branch.`
+        : `No unique open merge request matches ${ticketKey}${sourceBranch ? ` or branch ${sourceBranch}` : ''} yet. GitLab polling will keep checking automatically.`);
+      return undefined;
+    }
+    const target: GitLabInsertionTarget = {
+      iid: discovery.match.iid,
+      projectIdOrPath: configuredProject,
+    };
+    if (discovery.match.webUrl) { target.url = discovery.match.webUrl; }
+    if (session?.status === 'active') {
+      const bindingInput: Parameters<typeof addWorkSessionProviderBinding>[1] = {
+        provider: 'gitlab',
+        resource: 'merge-request',
+        subjectId: String(target.iid),
+        projectId: configuredProject,
+      };
+      if (target.url) { bindingInput.url = target.url; }
+      addWorkSessionProviderBinding(session.id, bindingInput);
+      this.refreshTerminalFirstViews();
+    }
+    return target;
   }
 
   private projectConfig(ticket: Ticket): ProjectConfig | undefined {

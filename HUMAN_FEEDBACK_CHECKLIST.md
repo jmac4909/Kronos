@@ -71,6 +71,9 @@ Use a real ticket only when its provider data is approved for local context capt
 8. Start Claude for the linked ticket and confirm its new terminal starts in the selected project directory and its terminal tab shows both the ticket key and current Git branch, such as `Claude · JIRA-123 @ feature/name`.
 9. Choose **Manage Focused Terminal** on an existing terminal and confirm linking does not change that terminal's directory or send `cd`.
 10. Poll the linked ticket and confirm its selected local project's GitLab/Jenkins/SonarQube identifiers are used. Then unlink the local project and confirm future ticket launches fall back to the configured workspace/home behavior while Jira/provider project tags remain.
+11. In Sessions, expand **Projects** below the session list. Confirm every registered project shows branch and change count; open its status/diff and verify the repository is unchanged.
+12. Insert the project's `[GIT-project]` context into its explicitly attached session. Confirm the composer previews changed paths, potential credential material is redacted from the private artifact, and the terminal line is not submitted.
+13. Use **Open or create merge request**. Confirm an existing MR opens when known; otherwise a prefilled GitLab new-MR browser page opens and no MR is created until you act in GitLab.
 
 ## Start Claude for a Ticket
 
@@ -104,8 +107,9 @@ If GitLab and CI providers are safely configured:
 6. Detach the standalone terminal and confirm it remains open and Claude remains operator-controlled.
 7. Pause monitoring on the ticket-linked session and confirm provider polling stops for that work session.
 8. Resume monitoring and run **Poll Managed Providers** once.
-9. Open each available work-session audit. Confirm it uses the standalone title or real ticket identity as appropriate and contains no terminal transcript.
-10. Stop managing both sessions and confirm both terminals remain open and usable.
+9. Open the ticket workspace and confirm GitLab, Jenkins, and SonarQube each show active, discovering, paused, or setup state. Confirm GitLab discovers a unique open MR by current branch/ticket key without a manual connect prompt and refuses an ambiguous fixture.
+10. Open each available work-session audit. Confirm it uses the standalone title or real ticket identity as appropriate and contains no terminal transcript.
+11. Stop managing one session and confirm its terminal remains open and usable. Remove an old session, confirm the terminal still remains open, and confirm the removed row no longer appears while retained context/audit files remain local.
 
 ## Launch Validation and Operations
 

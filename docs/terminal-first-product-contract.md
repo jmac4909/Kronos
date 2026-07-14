@@ -56,7 +56,7 @@ It supports:
 - opening one canonical ticket workspace;
 - explicitly discovering local projects from open workspace folders and configured roots, within configured depth/result limits, then registering only selected folders;
 - configuring each registered project's GitLab project ID/path, Jenkins job URL, SonarQube project key, and default monitoring branch through a guided local editor;
-- reading a registered project's current Git branch without invoking Git;
+- reading a registered project's current Git branch without invoking Git, plus explicitly reading status and a bounded diff through VS Code's built-in Git model;
 - choosing or unlinking one primary local launch project for a ticket while preserving Jira/provider project associations;
 - managing the explicitly focused terminal for that ticket;
 - explicitly creating and focusing a Claude terminal linked to that ticket;
@@ -81,7 +81,7 @@ Only an action invoked from the ticket path creates a ticket link. A standalone 
 
 ### Sessions
 
-Sessions is the durable operational view for standalone and ticket-linked work sessions.
+Sessions is the durable operational view with two ordered sections: interactive Sessions first and registered Projects below it.
 
 Each session presents:
 
@@ -93,7 +93,9 @@ Each session presents:
 - monitoring readiness, last attempt, latest successful poll, failures, and skips;
 - the linked local project path and currently observed branch when available.
 
-Supported actions are focus, explicit reattach, detach, pause monitoring, resume monitoring, poll now, open audit, and stop management.
+Supported session actions are focus, explicit reattach, detach, pause monitoring, resume monitoring, poll now, open audit, stop management, and confirmed local removal. Removal never closes a terminal; it removes the session record and colocated monitor snapshots while retaining shared audit history and saved context artifacts.
+
+Each registered Project exposes branch and read-only status, an explicit bounded diff view, a secret-redacted Git-context insertion action, an existing-MR or prefilled new-MR browser action, ticket-scoped MR/CI evidence insertion, and provider setup. These actions use VS Code's built-in Git read model and provider REST reads; they never stage, commit, push, create an MR through an API, or otherwise mutate Git/provider state.
 
 Selecting any Session means “open its terminal.” A live attachment is focused immediately. When VS Code has discarded the ephemeral attachment, Kronos never guesses from a saved process ID or duplicate terminal name: it reconnects the only unclaimed open terminal or asks the operator to choose one, then focuses it.
 
@@ -120,7 +122,7 @@ Unchanged polling results do not create new Attention items.
 
 ## Context Insertion Contract
 
-Context insertion is always explicit and ticket-scoped. Creating a standalone Claude session does not silently create ticket context or a ticket association.
+Context insertion is always explicit and terminal-scoped. Jira, MR, and CI evidence remain ticket-scoped. A `[GIT-project]` working-tree snapshot is project-scoped and may be inserted into an explicitly attached standalone or ticket session for that project. Creating a standalone Claude session does not silently create ticket context or a ticket association.
 
 1. Kronos resolves the selected ticket and the explicitly managed terminal.
 2. It reads the configured provider through bounded read-only APIs.
@@ -150,13 +152,15 @@ Monitoring is read-only and belongs to an active provider-bound work session. A 
 
 - The default interval is configured by `kronos.managedProviderPollIntervalSec`.
 - The operator can pause, resume, or poll a session immediately.
-- A private cross-window lease prevents duplicate concurrent polling against one Kronos data directory.
+- A private cross-window lease prevents duplicate concurrent polling against one Kronos data directory. POSIX uses `O_NOFOLLOW`; Windows, where that flag is unsupported, uses exclusive creation and lstat/fstat identity verification around every lease read, write, renewal, and unlink.
 - Monitoring baselines contain bounded normalized digests, not full provider responses.
 - Incomplete provider components do not erase the last complete component or create false recovery events.
 - Losing lease ownership stops persistence and prevents the next provider request from starting.
 - Provider errors affect readiness and Attention; they do not trigger remediation.
 
 Monitoring can observe GitLab, Jenkins, and SonarQube. Jira remains explicitly refreshed from Work rather than continuously monitored as terminal content.
+
+Saving project integration data, linking a ticket project, attaching a monitored ticket session, resuming monitoring, or refreshing Jira requests an immediate bounded provider poll in addition to the interval. When no MR is already known, GitLab polling automatically searches open MRs by the observed current source branch and then by Jira key in title/description. Exactly one match is bound locally; ambiguous results are reported and never guessed. MR and CI insertion controls fetch reviewed evidence only and are not provider-connect controls.
 
 ## Audit and Local State
 
@@ -188,7 +192,7 @@ The installed extension has zero third-party runtime dependencies. Kronos uses t
 The public terminal-first command surface is intentionally limited to:
 
 - Work: refresh the Jira board; search/filter/show completed/clear filters; open ticket workspace; start Claude for the selected ticket; manage a focused terminal; insert Jira/MR/CI context;
-- Sessions: create a standalone Claude session; poll providers; open audit; focus/reattach/detach terminal; stop management; pause/resume monitoring;
+- Sessions: create a standalone Claude session; poll providers; open audit; focus/reattach/detach terminal; stop or remove local management; pause/resume monitoring; view registered project status/diff; insert project Git/MR/CI evidence; open an existing or prefilled new MR page; configure project providers;
 - Attention: acknowledge item and open provider;
 - Operations: Setup, Doctor, and Settings.
 

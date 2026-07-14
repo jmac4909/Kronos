@@ -38,6 +38,15 @@ export function buildCiContextReference(ticketKey: string, promptPath: string): 
   return reference;
 }
 
+export function buildProjectGitContextReference(contextIdValue: string, promptPath: string): string {
+  const contextId = normalizeGitContextId(contextIdValue);
+  const absolutePromptPath = path.resolve(promptPath);
+  assertShellInertPromptPath(absolutePromptPath);
+  const reference = `[${contextId}] Read local Git working-tree status and diff context file ${JSON.stringify(absolutePromptPath)}${REFERENCE_SUFFIX}`;
+  assertSafeTerminalContextReference(reference);
+  return reference;
+}
+
 export function insertTerminalContextReference(
   terminal: TerminalContextInsertionTarget,
   reference: string,
@@ -87,7 +96,8 @@ export function assertSafeTerminalContextReference(reference: string): void {
 function parseTerminalContextReference(reference: string):
   | { kind: 'jira'; key: string; promptPath: string }
   | { kind: 'gitlab'; iid: number; promptPath: string }
-  | { kind: 'ci'; key: string; promptPath: string } {
+  | { kind: 'ci'; key: string; promptPath: string }
+  | { kind: 'git'; contextId: string; promptPath: string } {
   if (!reference || reference.length > MAX_REFERENCE_LENGTH || reference !== reference.trim()) {
     throw new Error('Terminal context reference is missing or invalid.');
   }
@@ -115,6 +125,18 @@ function parseTerminalContextReference(reference: string):
       throw new Error('CI terminal context reference does not point to the expected prompt artifact.');
     }
     return { kind: 'ci', key, promptPath };
+  }
+
+  const gitPrefix = /^\[(GIT-[A-Za-z0-9_.-]{1,100})\] Read local Git working-tree status and diff context file /.exec(reference);
+  if (gitPrefix && reference.endsWith(REFERENCE_SUFFIX)) {
+    const contextIdValue = gitPrefix[1];
+    if (!contextIdValue) { throw new Error('Git terminal context reference has no context id.'); }
+    const contextId = normalizeGitContextId(contextIdValue);
+    const promptPath = parsePromptPathLiteral(reference, gitPrefix[0].length);
+    if (path.basename(path.dirname(promptPath)) !== contextId) {
+      throw new Error('Git terminal context reference does not point to the expected prompt artifact.');
+    }
+    return { kind: 'git', contextId, promptPath };
   }
 
   const prefixMatch = /^\[([A-Z][A-Z0-9_]{0,127}-[1-9][0-9]*)\] Read Jira context file /.exec(reference);
@@ -155,6 +177,14 @@ function normalizeMergeRequestIid(value: number): number {
     throw new Error('GitLab merge request IID is missing or invalid.');
   }
   return value;
+}
+
+function normalizeGitContextId(value: string): string {
+  const normalized = value.trim();
+  if (!/^GIT-[A-Za-z0-9_.-]{1,100}$/.test(normalized)) {
+    throw new Error('Git context id is missing or invalid.');
+  }
+  return normalized;
 }
 
 function assertShellInertPromptPath(promptPath: string): void {

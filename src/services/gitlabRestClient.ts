@@ -49,6 +49,28 @@ export interface GitLabMergeRequestMonitorOptions extends GitLabRestRequestOptio
   includeReview?: boolean;
 }
 
+export interface GitLabMergeRequestDiscoveryInput {
+  projectIdOrPath: string;
+  ticketKey: string;
+  sourceBranch?: string;
+}
+
+export interface GitLabDiscoveredMergeRequest {
+  iid: number;
+  title: string;
+  sourceBranch: string;
+  targetBranch?: string;
+  webUrl?: string;
+  updatedAt?: string;
+}
+
+export interface GitLabMergeRequestDiscoveryResult {
+  match?: GitLabDiscoveredMergeRequest;
+  strategy?: 'source-branch' | 'ticket-key';
+  candidateCount: number;
+  ambiguous: boolean;
+}
+
 export interface GitLabMergeRequestContextSnapshot {
   mr: unknown;
   notes: unknown[];
@@ -132,6 +154,42 @@ export class GitLabRestClient {
   async mergeRequest(target: GitLabMergeRequestTarget, options: GitLabRestRequestOptions = {}): Promise<unknown> {
     const data = await this.requestJson(mergeRequestPath(target), `GitLab MR !${target.iid}`, {}, options);
     return data.value;
+  }
+
+  /**
+   * Finds one open MR without mutating GitLab. A unique current-branch match
+   * wins; the Jira key in title/description is the bounded fallback. Kronos
+   * deliberately refuses to guess when multiple candidates remain.
+   */
+  async discoverOpenMergeRequest(
+    input: GitLabMergeRequestDiscoveryInput,
+    options: GitLabRestRequestOptions = {},
+  ): Promise<GitLabMergeRequestDiscoveryResult> {
+    const projectIdOrPath = input.projectIdOrPath.trim();
+    const ticketKey = normalizeDiscoveryTicketKey(input.ticketKey);
+    const sourceBranch = optionalTrimmedStringFromUnknown(input.sourceBranch);
+    if (!projectIdOrPath) { throw new GitLabRestError('GitLab MR discovery needs a project ID or path.'); }
+
+    if (sourceBranch) {
+      const branchCandidates = normalizeDiscoveryCandidates((await this.requestJson(
+        `/projects/${encodeURIComponent(projectIdOrPath)}/merge_requests`,
+        `GitLab open MRs for branch ${sourceBranch}`,
+        { state: 'opened', source_branch: sourceBranch, order_by: 'updated_at', sort: 'desc', page: 1, per_page: 20 },
+        options,
+      )).value);
+      const branchMatch = uniqueDiscoveryMatch(branchCandidates, ticketKey);
+      if (branchMatch.match || branchMatch.ambiguous) {
+        return { ...branchMatch, strategy: 'source-branch' };
+      }
+    }
+
+    const ticketCandidates = normalizeDiscoveryCandidates((await this.requestJson(
+      `/projects/${encodeURIComponent(projectIdOrPath)}/merge_requests`,
+      `GitLab open MRs for ${ticketKey}`,
+      { state: 'opened', search: ticketKey, in: 'title,description', order_by: 'updated_at', sort: 'desc', page: 1, per_page: 20 },
+      options,
+    )).value).filter(candidate => candidate.searchText.includes(ticketKey));
+    return { ...uniqueDiscoveryMatch(ticketCandidates, ticketKey), strategy: 'ticket-key' };
   }
 
   async mergeRequestStatus(target: GitLabMergeRequestTarget, options: GitLabRestRequestOptions = {}): Promise<unknown> {
@@ -612,6 +670,72 @@ function firstNonEmpty(...values: Array<string | undefined>): string | undefined
     if (trimmed) { return trimmed; }
   }
   return undefined;
+}
+
+interface NormalizedDiscoveryCandidate extends GitLabDiscoveredMergeRequest {
+  searchText: string;
+}
+
+function normalizeDiscoveryTicketKey(value: string): string {
+  const ticketKey = value.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9_]{0,127}-[1-9][0-9]*$/.test(ticketKey)) {
+    throw new GitLabRestError('GitLab MR discovery needs a valid Jira ticket key.');
+  }
+  return ticketKey;
+}
+
+function normalizeDiscoveryCandidates(value: unknown): NormalizedDiscoveryCandidate[] {
+  const candidates: NormalizedDiscoveryCandidate[] = [];
+  const seen = new Set<number>();
+  for (const item of arrayFromUnknown(value).slice(0, 20)) {
+    const record = isRecord(item) ? item : {};
+    const iidValue = optionalFiniteNumberFromUnknown(record['iid']);
+    const iid = iidValue !== undefined ? Math.floor(iidValue) : 0;
+    if (!Number.isSafeInteger(iid) || iid <= 0 || seen.has(iid)) { continue; }
+    const title = optionalTrimmedStringFromUnknown(record['title']) || `Merge request !${iid}`;
+    const sourceBranch = optionalTrimmedStringFromUnknown(record['source_branch']);
+    if (!sourceBranch) { continue; }
+    const description = optionalTrimmedStringFromUnknown(record['description']) || '';
+    const targetBranch = optionalTrimmedStringFromUnknown(record['target_branch']);
+    const webUrl = optionalTrimmedStringFromUnknown(record['web_url']);
+    const updatedAt = optionalTrimmedStringFromUnknown(record['updated_at']);
+    const candidate: NormalizedDiscoveryCandidate = {
+      iid,
+      title: title.slice(0, 500),
+      sourceBranch: sourceBranch.slice(0, 500),
+      searchText: `${title}\n${description}\n${sourceBranch}`.toUpperCase(),
+    };
+    if (targetBranch) { candidate.targetBranch = targetBranch.slice(0, 500); }
+    if (webUrl && /^https?:\/\//i.test(webUrl)) { candidate.webUrl = webUrl; }
+    if (updatedAt) { candidate.updatedAt = updatedAt.slice(0, 100); }
+    seen.add(iid);
+    candidates.push(candidate);
+  }
+  return candidates;
+}
+
+function uniqueDiscoveryMatch(
+  candidates: NormalizedDiscoveryCandidate[],
+  ticketKey: string,
+): Omit<GitLabMergeRequestDiscoveryResult, 'strategy'> {
+  const narrowed = candidates.length > 1
+    ? candidates.filter(candidate => candidate.searchText.includes(ticketKey))
+    : candidates;
+  const usable = narrowed.length > 0 ? narrowed : candidates;
+  if (usable.length !== 1) {
+    return { candidateCount: usable.length, ambiguous: usable.length > 1 };
+  }
+  const selected = usable[0];
+  if (!selected) { return { candidateCount: 0, ambiguous: false }; }
+  const match: GitLabDiscoveredMergeRequest = {
+    iid: selected.iid,
+    title: selected.title,
+    sourceBranch: selected.sourceBranch,
+  };
+  if (selected.targetBranch) { match.targetBranch = selected.targetBranch; }
+  if (selected.webUrl) { match.webUrl = selected.webUrl; }
+  if (selected.updatedAt) { match.updatedAt = selected.updatedAt; }
+  return { match, candidateCount: usable.length, ambiguous: false };
 }
 
 function isGitLabNotFoundError(error: unknown): boolean {

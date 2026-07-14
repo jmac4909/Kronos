@@ -59,12 +59,13 @@ import {
 import { tryAcquireManagedMonitorLease } from './managedMonitorLease';
 import {
   listWorkSessions,
+  addWorkSessionProviderBinding,
   recordWorkSessionMonitoringResult,
   type TicketWorkSessionRecord,
 } from './workSessionStore';
 import { optionalTrimmedStringFromUnknown } from './records';
 import { unknownErrorMessage } from './errorUtils';
-import { projectConfigurationForTicket } from './projectCatalog';
+import { projectConfigurationForTicket, readProjectGitBranch } from './projectCatalog';
 
 export interface ManagedProviderPollResult {
   polled: number;
@@ -201,7 +202,53 @@ export class ManagedProviderMonitor {
     );
     const state = this.options.state();
     const ticket = state?.tickets[session.ticketKey];
-    const target = configuredGitLabPollingTarget(state, session);
+    let target = configuredGitLabPollingTarget(state, session);
+    if (!target) {
+      const config = projectConfigurationForTicket(state, ticket);
+      const configuredProject = config.gitlab_project_id || config.gitlab_project_path;
+      if (configuredProject) {
+        const sourceBranch = ticket?.mr?.source_branch
+          || ticket?.mr?.sourceBranch
+          || ticket?.mr?.branch
+          || ticket?.mr?.head_branch
+          || (session.projectPath ? readProjectGitBranch(session.projectPath)?.branch : undefined);
+        try {
+          const discovery = await gitlabRestClient.discoverOpenMergeRequest({
+            projectIdOrPath: String(configuredProject),
+            ticketKey: session.ticketKey,
+            ...(sourceBranch && !sourceBranch.startsWith('detached@') ? { sourceBranch } : {}),
+          });
+          if (discovery.match) {
+            const bindingInput: Parameters<typeof addWorkSessionProviderBinding>[1] = {
+              provider: 'gitlab',
+              resource: 'merge-request',
+              subjectId: String(discovery.match.iid),
+              projectId: String(configuredProject),
+            };
+            if (discovery.match.webUrl) { bindingInput.url = discovery.match.webUrl; }
+            addWorkSessionProviderBinding(session.id, bindingInput);
+            target = {
+              iid: discovery.match.iid,
+              projectIdOrPath: String(configuredProject),
+              ...(discovery.match.webUrl ? { providerUrl: discovery.match.webUrl } : {}),
+            };
+            this.log(
+              `GitLab monitoring found MR !${discovery.match.iid} for ${session.ticketKey}.`,
+              `Matched automatically by ${discovery.strategy === 'source-branch' ? 'current branch' : 'ticket key'}; the local session binding was updated.`,
+            );
+          } else {
+            const detail = discovery.ambiguous
+              ? `Found ${discovery.candidateCount} possible open merge requests; Kronos will not guess.`
+              : 'No unique open merge request matched the current branch or ticket key yet.';
+            this.log(`GitLab monitoring is waiting for ${session.ticketKey}.`, detail);
+            return { ...emptyResult(), skipped: 1 };
+          }
+        } catch (error: unknown) {
+          this.log(`GitLab MR discovery failed for ${session.ticketKey}.`, unknownErrorMessage(error, 'GitLab MR discovery failed.'));
+          return { ...emptyResult(), failures: 1 };
+        }
+      }
+    }
     if (!target) {
       if (!binding && !ticket?.mr?.iid) { return emptyResult(); }
       const candidateIid = Number(ticket?.mr?.iid || binding?.subjectId);

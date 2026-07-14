@@ -40,7 +40,7 @@ const allowedDevDependencies = new Set(['@types/node', '@types/vscode', 'typescr
 for (const name of Object.keys(manifest.devDependencies || {})) {
   if (!allowedDevDependencies.has(name)) { fail(`unexpected development dependency: ${name}`); }
 }
-if (manifest.contributes.commands.length !== 27) { fail('expected exactly 27 terminal-first commands'); }
+if (manifest.contributes.commands.length !== 34) { fail('expected exactly 34 terminal-first commands'); }
 if (manifest.contributes.views.kronos.length !== 3) { fail('expected exactly Work, Sessions, and Attention'); }
 if (Object.keys(manifest.contributes.configuration.properties || {}).length !== 10) { fail('expected exactly ten mapped terminal-first settings'); }
 
@@ -80,6 +80,8 @@ for (const expected of [
   'out/services/claudeTerminalLauncher.js',
   'out/services/projectCatalog.js',
   'out/services/projectDiscovery.js',
+  'out/services/projectGitContextStore.js',
+  'out/services/vscodeGitReadService.js',
   'out/services/jiraWorkBoardView.js',
   'media/kronos-action-panel.js',
   'media/kronos-jira-work-board.js',

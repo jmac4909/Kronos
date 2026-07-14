@@ -307,8 +307,8 @@ function buildTicketCardHtml(ticket: BoardTicket): string {
       ${actionButton('openTicketWorkspace', 'Workspace', ticket.key)}
       ${actionButton('manageActiveTerminal', 'Manage Focused', ticket.key)}
       ${actionButton('insertJiraContext', `[${ticket.key}]`, ticket.key)}
-      ${actionButton('insertGitLabContext', 'MR Context', ticket.key)}
-      ${actionButton('insertCiContext', 'CI Context', ticket.key)}
+      ${actionButton('insertGitLabContext', 'Insert MR Evidence', ticket.key)}
+      ${actionButton('insertCiContext', 'Insert CI Evidence', ticket.key)}
     </div>
   </article>`;
 }

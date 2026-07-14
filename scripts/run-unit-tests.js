@@ -16,11 +16,14 @@ const stateStore = require('../out/services/stateStore.js');
 const projectCatalog = require('../out/services/projectCatalog.js');
 const projectDiscovery = require('../out/services/projectDiscovery.js');
 const { JiraRestClient } = require('../out/services/jiraRestClient.js');
+const gitLabRestModule = require('../out/services/gitlabRestClient.js');
+const { GitLabRestClient } = gitLabRestModule;
 const jiraContext = require('../out/services/jiraTicketContext.js');
 const jiraValuePruning = require('../out/services/jiraValuePruning.js');
 const jiraWorkCatalog = require('../out/services/jiraWorkCatalog.js');
 const workTicketFilters = require('../out/services/workTicketFilters.js');
 const jiraContextStore = require('../out/services/jiraContextStore.js');
+const projectGitContextStore = require('../out/services/projectGitContextStore.js');
 const insertion = require('../out/services/terminalContextInsertion.js');
 const { createOperatorTerminalRegistry } = require('../out/services/operatorTerminalRegistry.js');
 const claudeTerminalLauncher = require('../out/services/claudeTerminalLauncher.js');
@@ -34,6 +37,7 @@ const { buildDoctorPanelHtml, buildSetupPanelHtml } = require('../out/services/o
 const { buildContextComposerHtml } = require('../out/services/contextComposerView.js');
 const { buildProjectIntegrationPanelHtml } = require('../out/services/projectIntegrationView.js');
 const managedProviderMonitor = require('../out/services/managedProviderMonitor.js');
+const managedMonitorLease = require('../out/services/managedMonitorLease.js');
 
 function createSymlinkOrSkip(t, target, linkPath, type = 'file') {
   try {
@@ -47,6 +51,30 @@ function createSymlinkOrSkip(t, target, linkPath, type = 'file') {
     throw error;
   }
 }
+
+test('managed monitoring lease omits unsupported open flags on Windows and fails closed on POSIX', () => {
+  assert.equal(managedMonitorLease.managedMonitorNoFollowFlag('win32', undefined), 0);
+  assert.equal(managedMonitorLease.managedMonitorNoFollowFlag('win32', 0x20000), 0);
+  assert.equal(managedMonitorLease.managedMonitorNoFollowFlag('linux', 0x20000), 0x20000);
+  assert.throws(
+    () => managedMonitorLease.managedMonitorNoFollowFlag('linux', undefined),
+    /require O_NOFOLLOW support/,
+  );
+});
+
+test('managed monitoring lease acquires, blocks duplicate owners, renews, and releases', () => {
+  const options = { kronosDir: path.join(tempRoot, 'monitor-lease'), ttlMs: 5_000 };
+  const first = managedMonitorLease.tryAcquireManagedMonitorLease(options);
+  assert.equal(first.acquired, true);
+  const duplicate = managedMonitorLease.tryAcquireManagedMonitorLease(options);
+  assert.equal(duplicate.acquired, false);
+  assert.equal(duplicate.reason, 'active');
+  assert.equal(first.renew({ ttlMs: 5_000 }), true);
+  assert.equal(first.release(), true);
+  const next = managedMonitorLease.tryAcquireManagedMonitorLease(options);
+  assert.equal(next.acquired, true);
+  assert.equal(next.release(), true);
+});
 const {
   normalizeActionPanelMessage,
   normalizeContextComposerMessage,
@@ -100,6 +128,137 @@ function jiraTransport(pages) {
   };
   return { transport, requests };
 }
+
+function gitLabDiscoveryClient(handler) {
+  const requests = [];
+  return {
+    requests,
+    client: new GitLabRestClient({
+      env: { GITLAB_BASE_URL: 'https://gitlab.example', GITLAB_TOKEN: 'test-token' },
+      transport: async request => {
+        requests.push(request);
+        return { statusCode: 200, body: JSON.stringify(handler(new URL(request.url))), headers: {} };
+      },
+    }),
+  };
+}
+
+test('GitLab discovery selects a unique current-branch MR before ticket search', async () => {
+  const fixture = gitLabDiscoveryClient(url => url.searchParams.get('source_branch')
+    ? [{ iid: 42, title: 'JIRA-123 terminal work', description: '', source_branch: 'feature/JIRA-123', target_branch: 'main', web_url: 'https://gitlab.example/team/app/-/merge_requests/42' }]
+    : []);
+  const result = await fixture.client.discoverOpenMergeRequest({
+    projectIdOrPath: 'team/app',
+    ticketKey: 'JIRA-123',
+    sourceBranch: 'feature/JIRA-123',
+  });
+  assert.equal(result.strategy, 'source-branch');
+  assert.equal(result.match.iid, 42);
+  assert.equal(fixture.requests.length, 1);
+  assert.equal(new URL(fixture.requests[0].url).searchParams.get('state'), 'opened');
+});
+
+test('GitLab discovery falls back to ticket key and refuses ambiguous matches', async () => {
+  const fixture = gitLabDiscoveryClient(url => url.searchParams.get('source_branch')
+    ? []
+    : [
+      { iid: 51, title: 'JIRA-123 first', description: '', source_branch: 'one' },
+      { iid: 52, title: 'JIRA-123 second', description: '', source_branch: 'two' },
+    ]);
+  const result = await fixture.client.discoverOpenMergeRequest({
+    projectIdOrPath: 'team/app',
+    ticketKey: 'JIRA-123',
+    sourceBranch: 'feature/JIRA-123',
+  });
+  assert.equal(result.strategy, 'ticket-key');
+  assert.equal(result.match, undefined);
+  assert.equal(result.ambiguous, true);
+  assert.equal(result.candidateCount, 2);
+  assert.equal(fixture.requests.length, 2);
+});
+
+test('managed provider polling automatically discovers and locally binds a project MR', async () => {
+  const projectRoot = path.join(tempRoot, 'auto-discovery-project');
+  fs.mkdirSync(path.join(projectRoot, '.git'), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, '.git', 'HEAD'), 'ref: refs/heads/feature/JIRA-900\n');
+  const state = stateStore.emptyWorkCatalog();
+  state.projects.Application = {
+    path: projectRoot,
+    config: { gitlab_project_path: 'team/application', default_branch: 'main' },
+  };
+  state.tickets['JIRA-900'] = fixtureTicket({
+    summary: 'Automatic MR discovery',
+    projects: ['Application'],
+    launch_project: 'Application',
+  });
+  const session = workSessions.createOrGetWorkSessionByTicket({
+    ticketKey: 'JIRA-900',
+    title: 'Automatic MR discovery',
+    projectName: 'Application',
+    projectPath: projectRoot,
+  });
+  const originalDiscover = gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest;
+  const originalMonitor = gitLabRestModule.gitlabRestClient.mergeRequestMonitor;
+  gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest = async () => ({
+    match: {
+      iid: 90,
+      title: 'JIRA-900 Automatic MR discovery',
+      sourceBranch: 'feature/JIRA-900',
+      targetBranch: 'main',
+      webUrl: 'https://gitlab.example/team/application/-/merge_requests/90',
+    },
+    strategy: 'source-branch',
+    candidateCount: 1,
+    ambiguous: false,
+  });
+  gitLabRestModule.gitlabRestClient.mergeRequestMonitor = async () => ({
+    mr: {
+      iid: 90,
+      state: 'opened',
+      title: 'JIRA-900 Automatic MR discovery',
+      source_branch: 'feature/JIRA-900',
+      target_branch: 'main',
+      web_url: 'https://gitlab.example/team/application/-/merge_requests/90',
+      detailed_merge_status: 'mergeable',
+      reviewers: [],
+      user_notes_count: 0,
+      updated_at: '2026-07-14T12:00:00.000Z',
+    },
+    notes: [],
+    discussions: [],
+    approvals: { approved: true, approvals_required: 0, approvals_left: 0, approved_by: [] },
+    pipelines: [],
+    jobs: [],
+    fetchedAt: '2026-07-14T12:00:00.000Z',
+    responseBytes: 0,
+    completeness: {
+      notesComplete: true,
+      discussionsComplete: true,
+      approvalsComplete: true,
+      pipelinesComplete: true,
+      jobsComplete: true,
+      testsComplete: true,
+      warnings: [],
+    },
+  });
+  try {
+    const monitor = new managedProviderMonitor.ManagedProviderMonitor({ state: () => state });
+    const result = await monitor.poll();
+    assert.equal(result.polled, 1);
+    assert.equal(result.failures, 0);
+    const updated = workSessions.readWorkSession(session.id);
+    assert.ok(updated.providerBindings.some(binding =>
+      binding.provider === 'gitlab'
+        && binding.resource === 'merge-request'
+        && binding.subjectId === '90'
+        && binding.projectId === 'team/application'
+    ));
+  } finally {
+    gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest = originalDiscover;
+    gitLabRestModule.gitlabRestClient.mergeRequestMonitor = originalMonitor;
+    workSessions.removeWorkSession(session.id);
+  }
+});
 
 test('local projects preserve provider bindings and report branch without running Git', () => {
   const projectRoot = path.join(tempRoot, 'project-catalog-fixture');
@@ -813,6 +972,17 @@ test('terminal context insertion is shell-inert and never submits', () => {
     () => insertion.buildJiraContextReference('JIRA-123', path.join(tempRoot, 'JIRA-123', 'prompt-aaaaaaaaaaaaaaaaaaaaaaaa.md;rm')),
     /shell-active|prompt artifact/i,
   );
+
+  const gitArtifact = projectGitContextStore.writeProjectGitContextArtifact(
+    'Kronos',
+    '# Git working tree\n\n-token = glpat-supersecrettoken\n+safe = true\n',
+    { kronosDir: path.join(tempRoot, 'git-context-runtime') },
+  );
+  const gitReference = insertion.buildProjectGitContextReference(gitArtifact.contextId, gitArtifact.promptPath);
+  assert.match(gitReference, /^\[GIT-Kronos\]/);
+  assert.equal(insertion.isSafeTerminalContextReference(gitReference), true);
+  assert.equal(gitArtifact.redacted, true);
+  assert.doesNotMatch(fs.readFileSync(gitArtifact.promptPath, 'utf8'), /glpat-supersecrettoken/);
 });
 
 test('operator terminal registry attaches, resolves, and detaches objects without controlling them', () => {
@@ -844,6 +1014,21 @@ test('work-session lifecycle never requires a terminal process owner', () => {
   assert.equal(session.status, 'closed');
   assert.equal(session.monitoring.enabled, false);
   assert.equal(workSessions.listWorkSessions(options).length, 1);
+});
+
+test('removing a work session deletes its record and colocated snapshots without touching external artifacts', () => {
+  const options = { kronosDir: path.join(tempRoot, 'removed-session-store') };
+  const session = workSessions.createStandaloneWorkSession({ title: 'Disposable session' }, options);
+  const sessionDirectory = workSessions.workSessionDirectory(session.id, options);
+  fs.writeFileSync(path.join(sessionDirectory, 'monitor-snapshot.json'), '{}\n', { mode: 0o600 });
+  const retainedArtifact = path.join(options.kronosDir, 'contexts', 'retained.md');
+  fs.mkdirSync(path.dirname(retainedArtifact), { recursive: true });
+  fs.writeFileSync(retainedArtifact, 'retained\n');
+  const removed = workSessions.removeWorkSession(session.id, options);
+  assert.equal(removed.id, session.id);
+  assert.equal(fs.existsSync(sessionDirectory), false);
+  assert.equal(fs.readFileSync(retainedArtifact, 'utf8'), 'retained\n');
+  assert.equal(workSessions.readWorkSession(session.id, options), null);
 });
 
 test('standalone work sessions persist without fake Jira identities and preserve legacy ticket records', () => {
@@ -1257,6 +1442,11 @@ test('ticket workspace exposes explicit Claude launch, project branch, terminal 
     }),
     nonce: 'abcdef1234567890',
     actionScriptUri: 'vscode-resource://kronos/media/kronos-action-panel.js',
+    providerPolling: [
+      { provider: 'GitLab', state: 'active', detail: 'Polling MR !77.' },
+      { provider: 'Jenkins', state: 'active', detail: 'Polling configured job.' },
+      { provider: 'SonarQube', state: 'discovering', detail: 'Finding branch.' },
+    ],
     localProject: {
       name: 'fixture',
       path: '/workspace/fixture',
@@ -1286,6 +1476,10 @@ test('ticket workspace exposes explicit Claude launch, project branch, terminal 
   assert.ok(html.indexOf('Project: fixture') < html.indexOf('Start Claude for Ticket'));
   assert.match(html, /feature\/terminal-first-context/);
   assert.match(html, /\/workspace\/fixture/);
+  assert.match(html, /Automatic Provider Monitoring/);
+  assert.match(html, /GitLab/);
+  assert.match(html, /Jenkins/);
+  assert.match(html, /SonarQube/);
 
   const locallyConnected = buildTicketWorkspaceHtml({
     ticketKey: 'JIRA-123',

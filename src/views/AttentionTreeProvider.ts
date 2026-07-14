@@ -109,6 +109,7 @@ export class AttentionTreeProvider implements vscode.TreeDataProvider<AttentionT
     return events
       .filter(event => event.type === 'provider.transition')
       .filter(event => !acknowledged.has(attentionEventKey(event.sessionId, event.id)))
+      .filter(event => sessionsById.has(event.sessionId))
       .map(event => {
         const session = sessionsById.get(event.sessionId);
         return {

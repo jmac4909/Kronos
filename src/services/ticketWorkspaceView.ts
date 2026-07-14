@@ -13,6 +13,13 @@ export interface TicketWorkspaceViewInput {
   workSession?: WorkSessionRecord | null;
   liveTerminalCount?: number;
   localProject?: LocalProjectSummary | undefined;
+  providerPolling?: readonly ProviderPollingViewStatus[];
+}
+
+export interface ProviderPollingViewStatus {
+  provider: 'GitLab' | 'Jenkins' | 'SonarQube';
+  state: 'active' | 'discovering' | 'paused' | 'setup';
+  detail: string;
 }
 
 export function buildTicketWorkspaceHtml(input: TicketWorkspaceViewInput): string {
@@ -35,10 +42,10 @@ export function buildTicketWorkspaceHtml(input: TicketWorkspaceViewInput): strin
       : []),
     ticketWorkspaceActionButton(
       'insertGitLabContext',
-      mrIid !== undefined ? `Insert [MR-${mrIid}]` : 'Connect / Insert MR Context',
+      mrIid !== undefined ? `Insert [MR-${mrIid}]` : 'Find & Insert MR Evidence',
       { ticket: ticketKey },
     ),
-    ticketWorkspaceActionButton('insertCiContext', `Insert [CI-${ticketKey}]`, { ticket: ticketKey }),
+    ticketWorkspaceActionButton('insertCiContext', `Insert [CI-${ticketKey}] Evidence`, { ticket: ticketKey }),
   ];
 
   return `<!DOCTYPE html>
@@ -83,7 +90,7 @@ ${ticketWorkspaceActionScript(input.nonce, input.actionScriptUri)}
     <div>
       <div class="kronos-subtitle">Terminal-first ticket workspace</div>
       <h1 class="kronos-title">${escapeHtml(ticketKey)} — ${escapeHtml(summary)}</h1>
-      <div class="kronos-subtitle">Start a new Claude terminal explicitly, or attach one you already own. Jira context is inserted only when you choose an Insert action.</div>
+      <div class="kronos-subtitle">Start a new Claude terminal explicitly, or attach one you already own. Provider polling is automatic for configured ticket sessions; Insert actions only place reviewed evidence in the terminal and never press Enter.</div>
     </div>
   </header>
 
@@ -102,7 +109,7 @@ ${ticketWorkspaceActionScript(input.nonce, input.actionScriptUri)}
       ${buildBuildSummary(ticket)}
     </div>
     <div class="kronos-stack">
-      ${buildMonitoringSummary(workSession)}
+      ${buildMonitoringSummary(workSession, input.providerPolling || [])}
       ${buildArtifactSummary(workSession?.artifacts || [])}
       ${buildProviderBindings(workSession)}
     </div>
@@ -206,15 +213,24 @@ function buildBuildSummary(ticket: Ticket): string {
   </section>`;
 }
 
-function buildMonitoringSummary(workSession: WorkSessionRecord | undefined): string {
+function buildMonitoringSummary(
+  workSession: WorkSessionRecord | undefined,
+  providerPolling: readonly ProviderPollingViewStatus[],
+): string {
   const state = monitoringState(workSession);
+  const providerRows = providerPolling.map(provider => `<div class="workspace-fact">
+    <span>${escapeHtml(provider.provider)}</span>
+    <strong><span class="status-pill ${escapeClass(provider.state === 'active' ? 'healthy' : provider.state === 'discovering' ? 'waiting' : provider.state === 'paused' ? 'off' : 'partial')}">${escapeHtml(provider.state)}</span></strong>
+    <div class="muted">${escapeHtml(singleLine(provider.detail, 500))}</div>
+  </div>`).join('');
   if (!workSession) {
-    return `<section class="kronos-card"><h2>Monitoring</h2><span class="status-pill unmanaged">Ready to connect</span><p class="muted">Manage the focused terminal to associate it with this ticket and monitor linked providers.</p></section>`;
+    return `<section class="kronos-card"><h2>Automatic Provider Monitoring</h2><span class="status-pill unmanaged">Ready to connect</span><p class="muted">Manage the focused terminal to associate it with this ticket and monitor linked providers.</p>${providerRows ? `<div class="workspace-facts kronos-section">${providerRows}</div>` : ''}</section>`;
   }
   const monitoring = workSession.monitoring;
   return `<section class="kronos-card">
-    <h2>Monitoring</h2>
+    <h2>Automatic Provider Monitoring</h2>
     <span class="status-pill ${escapeClass(state.tone)}">${escapeHtml(state.label)}</span>
+    ${providerRows ? `<div class="workspace-facts kronos-section">${providerRows}</div>` : ''}
     <div class="workspace-facts kronos-section">
       ${fact('Last attempt', monitoring.lastAttemptAt ? formatWebviewDateTime(monitoring.lastAttemptAt, 'Unknown') : 'Never')}
       ${fact('Last successful poll', monitoring.lastPolledAt ? formatWebviewDateTime(monitoring.lastPolledAt, 'Unknown') : 'Never')}

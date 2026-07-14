@@ -22,6 +22,13 @@ const EXPECTED_COMMANDS = [
   'kronos.reattachWorkSessionTerminal',
   'kronos.detachWorkSessionTerminal',
   'kronos.closeWorkSession',
+  'kronos.removeWorkSession',
+  'kronos.openProjectGitStatus',
+  'kronos.insertProjectGitContext',
+  'kronos.openProjectMergeRequest',
+  'kronos.insertProjectGitLabContext',
+  'kronos.insertProjectCiContext',
+  'kronos.configureProjectIntegrations',
   'kronos.pauseWorkSessionMonitoring',
   'kronos.resumeWorkSessionMonitoring',
   'kronos.acknowledgeAttention',
@@ -80,6 +87,7 @@ const ALLOWED_CODICONS = new Set([
   'symbol-keyword',
   'sync',
   'terminal',
+  'trash',
   'tools',
 ]);
 

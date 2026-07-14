@@ -748,7 +748,18 @@ function safeWriteFlags(): number {
 }
 
 function noFollowFlag(): number {
-  const flag = fs.constants.O_NOFOLLOW;
+  return managedMonitorNoFollowFlag(process.platform, Reflect.get(fs.constants, 'O_NOFOLLOW'));
+}
+
+/**
+ * Windows does not implement O_NOFOLLOW for fs.open. Lease operations there
+ * use exclusive creation plus lstat/fstat identity checks before every read,
+ * write, renew, and unlink. POSIX hosts keep the stronger kernel flag and fail
+ * closed when it is genuinely unavailable.
+ */
+export function managedMonitorNoFollowFlag(platform: NodeJS.Platform, flagValue: unknown): number {
+  if (platform === 'win32') { return 0; }
+  const flag = flagValue;
   if (typeof flag !== 'number' || flag === 0) {
     throw new Error('Managed monitor leases require O_NOFOLLOW support.');
   }
@@ -756,6 +767,7 @@ function noFollowFlag(): number {
 }
 
 function nonBlockingFlag(): number {
+  if (process.platform === 'win32') { return 0; }
   return typeof fs.constants.O_NONBLOCK === 'number' ? fs.constants.O_NONBLOCK : 0;
 }
 

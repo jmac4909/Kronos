@@ -162,6 +162,41 @@
         "icon": "$(close)"
       },
       {
+        "command": "kronos.removeWorkSession",
+        "title": "Kronos: Remove Session from Kronos",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "kronos.openProjectGitStatus",
+        "title": "Kronos: View Project Git Status and Diff",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "kronos.insertProjectGitContext",
+        "title": "Kronos: Insert Project Working Diff Context",
+        "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "kronos.openProjectMergeRequest",
+        "title": "Kronos: Open or Create Project Merge Request",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "kronos.insertProjectGitLabContext",
+        "title": "Kronos: Insert Project Merge Request Evidence",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "kronos.insertProjectCiContext",
+        "title": "Kronos: Insert Project Jenkins and SonarQube Evidence",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "kronos.configureProjectIntegrations",
+        "title": "Kronos: Configure Project Provider Polling",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "kronos.pauseWorkSessionMonitoring",
         "title": "Kronos: Pause Work Session Monitoring",
         "icon": "$(debug-pause)"
@@ -330,6 +365,41 @@
           "command": "kronos.closeWorkSession",
           "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == standalone_session_attached || viewItem == standalone_session_detached",
           "group": "management@2"
+        },
+        {
+          "command": "kronos.removeWorkSession",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == work_session_closed || viewItem == standalone_session_attached || viewItem == standalone_session_detached || viewItem == standalone_session_closed",
+          "group": "management@3"
+        },
+        {
+          "command": "kronos.openProjectGitStatus",
+          "when": "viewItem == registered_project",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.insertProjectGitContext",
+          "when": "viewItem == registered_project",
+          "group": "inline@2"
+        },
+        {
+          "command": "kronos.openProjectMergeRequest",
+          "when": "viewItem == registered_project",
+          "group": "project@1"
+        },
+        {
+          "command": "kronos.insertProjectGitLabContext",
+          "when": "viewItem == registered_project",
+          "group": "context@1"
+        },
+        {
+          "command": "kronos.insertProjectCiContext",
+          "when": "viewItem == registered_project",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.configureProjectIntegrations",
+          "when": "viewItem == registered_project",
+          "group": "management@1"
         },
         {
           "command": "kronos.acknowledgeAttention",

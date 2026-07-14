@@ -534,6 +534,40 @@ export function closeWorkSession(
   });
 }
 
+/**
+ * Permanently removes one local session record and its colocated monitoring
+ * snapshots. Shared append-only audit events and context artifacts are not
+ * rewritten, and no terminal object or process is touched.
+ */
+export function removeWorkSession(
+  sessionId: string,
+  options: WorkSessionStoreOptions = {},
+): WorkSessionRecord {
+  const record = readWorkSession(sessionId, options);
+  if (!record) { throw new Error(`Work session not found: ${normalizeEntityId(sessionId, 'work session id')}`); }
+  const root = workSessionsDirectory(options);
+  const directory = workSessionDirectory(record.id, options);
+  assertSafeDirectory(root, 'work sessions directory');
+  assertSafeDirectory(directory, 'work session directory');
+  const entries = fs.readdirSync(directory, { withFileTypes: true });
+  for (const entry of entries) {
+    const filePath = path.join(directory, entry.name);
+    if (!entry.isFile() || entry.isSymbolicLink()) {
+      throw new Error(`Work session removal refused an unsafe directory entry: ${filePath}`);
+    }
+    assertSafeRegularFile(filePath, 'work session removal file');
+  }
+  for (const entry of entries) {
+    const filePath = path.join(directory, entry.name);
+    assertSafeRegularFile(filePath, 'work session removal file');
+    fs.unlinkSync(filePath);
+  }
+  assertSafeDirectory(directory, 'work session directory');
+  fs.rmdirSync(directory);
+  assertSafeDirectory(root, 'work sessions directory');
+  return cloneWorkSession(record);
+}
+
 export function reopenWorkSession(
   sessionId: string,
   options: WorkSessionStoreOptions = {},
