@@ -15,6 +15,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Changed
 
+- Introduced shared cross-platform private-file primitives for the monitoring lease and MR/pipeline/CI snapshots, with Windows lstat/fstat identity checks, POSIX `O_NOFOLLOW`, bounded complete reads/writes, same-directory atomic replacement, and stale-state preservation on rejected writes.
 - Defined one hashed Attention stream identity across monitoring and projection, so provider health transitions replace stale health rows, newer pipelines/builds replace older occurrences, and separate MRs or SonarQube branches remain independently actionable.
 - Centralized GitLab merge-request target reconciliation so durable session bindings, catalog evidence, configured project identity, polling, status, and context insertion share one deterministic precedence rule.
 - Split Jira namespace and explicit local repository into independent Work-tree and Jira-board filters, including separately persisted webview choices.

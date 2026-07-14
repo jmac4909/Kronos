@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { privateFileNoFollowFlag } from './privateFilePrimitives';
 import { KRONOS_DIR } from './stateStore';
 
 export interface ManagedMonitorLeaseOptions {
@@ -758,12 +759,7 @@ function noFollowFlag(): number {
  * closed when it is genuinely unavailable.
  */
 export function managedMonitorNoFollowFlag(platform: NodeJS.Platform, flagValue: unknown): number {
-  if (platform === 'win32') { return 0; }
-  const flag = flagValue;
-  if (typeof flag !== 'number' || flag === 0) {
-    throw new Error('Managed monitor leases require O_NOFOLLOW support.');
-  }
-  return flag;
+  return privateFileNoFollowFlag(platform, flagValue);
 }
 
 function nonBlockingFlag(): number {

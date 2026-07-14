@@ -1,7 +1,7 @@
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CiMonitorDigest, normalizeCiMonitorDigest } from './ciTransitions';
+import { readPrivateTextFileIfPresent, writePrivateTextFileAtomically } from './privateFilePrimitives';
 import { WorkSessionStoreOptions, workSessionDirectory } from './workSessionStore';
 
 const DIRECTORY_MODE = 0o700;
@@ -27,17 +27,15 @@ export function readCiMonitorSnapshot(
   assertSafeDirectory(directoryPath, directoryStat);
   assertPrivateMode(directoryPath, directoryStat, DIRECTORY_MODE, 'directory');
 
-  const fileStat = lstatIfPresent(filePath);
-  if (!fileStat) { return null; }
-  assertSafeRegularFile(filePath, fileStat);
-  assertPrivateMode(filePath, fileStat, FILE_MODE, 'snapshot');
-  if (fileStat.size > MAX_SNAPSHOT_BYTES) {
-    throw new Error(`CI monitor snapshot exceeds the ${MAX_SNAPSHOT_BYTES}-byte limit.`);
-  }
-
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readSafeSnapshotFile(filePath)) as unknown;
+    const serialized = readPrivateTextFileIfPresent(filePath, {
+      label: 'CI monitor snapshot',
+      maxBytes: MAX_SNAPSHOT_BYTES,
+      expectedMode: FILE_MODE,
+    });
+    if (serialized === null) { return null; }
+    parsed = JSON.parse(serialized) as unknown;
   } catch (error: unknown) {
     if (error instanceof SyntaxError) {
       throw new Error('CI monitor snapshot contains invalid JSON; provider content is not displayed.');
@@ -68,35 +66,14 @@ export function writeCiMonitorSnapshot(
   assertSafeDirectory(directoryPath, directoryStat);
   setPrivateDirectoryMode(directoryPath);
 
-  const existingStat = lstatIfPresent(filePath);
-  if (existingStat) { assertSafeRegularFile(filePath, existingStat); }
   const serialized = `${JSON.stringify(normalized, null, 2)}\n`;
-  if (Buffer.byteLength(serialized, 'utf8') > MAX_SNAPSHOT_BYTES) {
-    throw new Error(`CI monitor snapshot exceeds the ${MAX_SNAPSHOT_BYTES}-byte limit.`);
-  }
-
-  const temporaryPath = path.join(
-    directoryPath,
-    `.ci-monitor.${process.pid}.${crypto.randomBytes(8).toString('hex')}.tmp`,
-  );
-  let descriptor: number | undefined;
-  try {
-    descriptor = fs.openSync(temporaryPath, 'wx', FILE_MODE);
-    fs.writeFileSync(descriptor, serialized, 'utf8');
-    fs.fsyncSync(descriptor);
-    fs.closeSync(descriptor);
-    descriptor = undefined;
-
-    const targetStat = lstatIfPresent(filePath);
-    if (targetStat) { assertSafeRegularFile(filePath, targetStat); }
-    fs.renameSync(temporaryPath, filePath);
-    setPrivateFileMode(filePath);
-  } catch (error: unknown) {
-    if (descriptor !== undefined) { fs.closeSync(descriptor); }
-    removeIfPresent(temporaryPath);
-    throw error;
-  }
-  return filePath;
+  return writePrivateTextFileAtomically(filePath, serialized, {
+    label: 'CI monitor snapshot',
+    maxBytes: MAX_SNAPSHOT_BYTES,
+    expectedMode: FILE_MODE,
+    temporaryPrefix: 'ci-monitor',
+    fileMode: FILE_MODE,
+  });
 }
 
 function normalizeSessionId(value: string): string {
@@ -123,51 +100,14 @@ function assertSafeDirectory(directoryPath: string, stat: fs.Stats): void {
   }
 }
 
-function assertSafeRegularFile(filePath: string, stat: fs.Stats): void {
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new Error(`CI monitor snapshot is not a safe regular file: ${filePath}`);
-  }
-}
-
 function assertPrivateMode(filePath: string, stat: fs.Stats, expectedMode: number, label: string): void {
   if (process.platform !== 'win32' && (stat.mode & 0o777) !== expectedMode) {
     throw new Error(`CI monitor ${label} does not have private permissions: ${filePath}`);
   }
 }
 
-function readSafeSnapshotFile(filePath: string): string {
-  const noFollow = typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0;
-  const descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | noFollow);
-  try {
-    const stat = fs.fstatSync(descriptor);
-    assertSafeRegularFile(filePath, stat);
-    if (stat.size > MAX_SNAPSHOT_BYTES) {
-      throw new Error(`CI monitor snapshot exceeds the ${MAX_SNAPSHOT_BYTES}-byte limit.`);
-    }
-    const content = fs.readFileSync(descriptor, 'utf8');
-    if (Buffer.byteLength(content, 'utf8') > MAX_SNAPSHOT_BYTES) {
-      throw new Error(`CI monitor snapshot exceeds the ${MAX_SNAPSHOT_BYTES}-byte limit.`);
-    }
-    return content;
-  } finally {
-    fs.closeSync(descriptor);
-  }
-}
-
 function setPrivateDirectoryMode(directoryPath: string): void {
   if (process.platform !== 'win32') { fs.chmodSync(directoryPath, DIRECTORY_MODE); }
-}
-
-function setPrivateFileMode(filePath: string): void {
-  if (process.platform !== 'win32') { fs.chmodSync(filePath, FILE_MODE); }
-}
-
-function removeIfPresent(filePath: string): void {
-  try {
-    fs.unlinkSync(filePath);
-  } catch (error: unknown) {
-    if (errorCode(error) !== 'ENOENT') { throw error; }
-  }
 }
 
 function errorCode(error: unknown): string | undefined {

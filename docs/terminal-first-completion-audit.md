@@ -26,6 +26,7 @@ The repository is ready for the operator-owned human feedback pass in `HUMAN_FEE
 ## Changes Found During This Audit
 
 - Repeated provider-read failures create durable transitions only when the normalized source state or error changes.
+- The monitoring lease and MR, pipeline, read-health, and combined CI snapshots now share one private-file foundation: Windows omits unsupported `O_NOFOLLOW` and compensates with path/descriptor identity verification; POSIX requires the kernel flag; writes are bounded, complete, private, and same-directory atomic.
 - GitLab polling, status, and context insertion now share one target resolver: the newest valid durable binding owns MR identity, matching provider evidence may enrich it, configured local-project identity supplies its read target, and stale catalog MR identity cannot override it.
 - Work catalog schema v2 stores one explicit `linked_local_project`; schema-v1 links migrate, legacy inferred project tags are discarded, unavailable links are cleared with a load issue, and future schemas fail closed.
 - Work filtering now keeps Jira namespaces and explicit local projects in separate typed facets, selectors, persisted board state, and card attributes so one identity cannot satisfy the other filter.

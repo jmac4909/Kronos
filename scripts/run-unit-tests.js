@@ -46,6 +46,7 @@ const { buildContextComposerHtml } = require('../out/services/contextComposerVie
 const { buildProjectIntegrationPanelHtml } = require('../out/services/projectIntegrationView.js');
 const managedProviderMonitor = require('../out/services/managedProviderMonitor.js');
 const managedMonitorLease = require('../out/services/managedMonitorLease.js');
+const privateFilePrimitives = require('../out/services/privateFilePrimitives.js');
 const sensitiveText = require('../out/services/sensitiveText.js');
 const providerUrls = require('../out/services/providerUrls.js');
 
@@ -69,6 +70,53 @@ test('managed monitoring lease omits unsupported open flags on Windows and fails
   assert.throws(
     () => managedMonitorLease.managedMonitorNoFollowFlag('linux', undefined),
     /require O_NOFOLLOW support/,
+  );
+});
+
+test('private file primitives atomically replace bounded state and reject symbolic paths', t => {
+  assert.equal(privateFilePrimitives.privateFileNoFollowFlag('win32', undefined), 0);
+  assert.throws(
+    () => privateFilePrimitives.privateFileNoFollowFlag('linux', undefined),
+    /require O_NOFOLLOW support/,
+  );
+  const directory = path.join(tempRoot, 'private-file-primitives');
+  fs.mkdirSync(directory, { mode: 0o700 });
+  const filePath = path.join(directory, 'snapshot.json');
+  const options = {
+    label: 'Private primitive fixture',
+    maxBytes: 64,
+    expectedMode: 0o600,
+    temporaryPrefix: 'fixture',
+    fileMode: 0o600,
+  };
+  privateFilePrimitives.writePrivateTextFileAtomically(filePath, '{"value":1}\n', options);
+  assert.equal(
+    privateFilePrimitives.readPrivateTextFileIfPresent(filePath, options),
+    '{"value":1}\n',
+  );
+  privateFilePrimitives.writePrivateTextFileAtomically(filePath, '{"value":2}\n', options);
+  assert.equal(privateFilePrimitives.readPrivateTextFileIfPresent(filePath, options), '{"value":2}\n');
+  assert.equal(fs.readdirSync(directory).some(name => name.endsWith('.tmp')), false);
+  if (process.platform !== 'win32') { assert.equal(fs.statSync(filePath).mode & 0o777, 0o600); }
+  assert.throws(
+    () => privateFilePrimitives.writePrivateTextFileAtomically(filePath, 'x'.repeat(65), options),
+    /64-byte limit/,
+  );
+  assert.equal(
+    privateFilePrimitives.readPrivateTextFileIfPresent(filePath, options),
+    '{"value":2}\n',
+    'a rejected replacement leaves the prior complete state intact',
+  );
+
+  const symlinkPath = path.join(directory, 'linked.json');
+  if (!createSymlinkOrSkip(t, filePath, symlinkPath)) { return; }
+  assert.throws(
+    () => privateFilePrimitives.readPrivateTextFileIfPresent(symlinkPath, options),
+    /symbolic link/,
+  );
+  assert.throws(
+    () => privateFilePrimitives.writePrivateTextFileAtomically(symlinkPath, '{"value":3}\n', options),
+    /symbolic link/,
   );
 });
 
