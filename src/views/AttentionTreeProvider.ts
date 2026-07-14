@@ -11,6 +11,7 @@ import {
   newestWorkSessionProviderBinding,
 } from '../services/workSessionStore';
 import { normalizeProviderPublicUrl } from '../services/providerUrls';
+import { isProviderReadTransitionKind, providerReadStateSignature } from '../services/providerReadTransitions';
 
 export interface AttentionCommandTarget {
   eventId: string;
@@ -116,8 +117,7 @@ export class AttentionTreeProvider implements vscode.TreeDataProvider<AttentionT
 
     const sessions = this.safeLoadWorkSessions();
     const sessionsById = new Map(sessions.map(session => [session.id, session]));
-    return events
-      .filter(event => event.type === 'provider.transition')
+    return collapseRepeatedProviderReadTransitions(events)
       .filter(event => !acknowledged.has(attentionEventKey(event.sessionId, event.id)))
       .filter(event => sessionsById.has(event.sessionId))
       .map(event => {
@@ -143,6 +143,32 @@ export class AttentionTreeProvider implements vscode.TreeDataProvider<AttentionT
       return [];
     }
   }
+}
+
+function collapseRepeatedProviderReadTransitions(events: readonly MonitorEvent[]): MonitorEvent[] {
+  const transitions = events.filter(event => event.type === 'provider.transition');
+  const chronological = transitions
+    .map((event, index) => ({ event, index }))
+    .sort((left, right) => left.event.at.localeCompare(right.event.at) || right.index - left.index);
+  const lastStateBySubject = new Map<string, string>();
+  const retained = new Set<string>();
+  for (const { event } of chronological) {
+    if (!isProviderReadTransitionKind(event.metadata?.['transitionKind'])) {
+      retained.add(event.id);
+      continue;
+    }
+    const subjectKey = [event.sessionId, event.source, event.subject?.kind || '', event.subject?.id || ''].join('\u0000');
+    const signature = providerReadStateSignature(
+      event.metadata?.['readState'],
+      event.after?.state,
+      event.metadata?.['readReason'],
+      event.metadata?.['readComponents'],
+    );
+    if (lastStateBySubject.get(subjectKey) === signature) { continue; }
+    lastStateBySubject.set(subjectKey, signature);
+    retained.add(event.id);
+  }
+  return transitions.filter(event => retained.has(event.id));
 }
 
 export type AttentionTreeItem = AttentionGroupTreeItem | AttentionEventTreeItem | AttentionMessageTreeItem;

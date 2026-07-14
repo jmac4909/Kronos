@@ -436,6 +436,64 @@ test('managed provider polling backfills a durable binding from a catalog MR tar
   }
 });
 
+test('managed provider polling suppresses unchanged legacy provider-read failures', async () => {
+  const state = stateStore.emptyWorkCatalog();
+  state.projects.Application = { config: { gitlab_project_path: 'team/application' } };
+  state.tickets['JIRA-904'] = fixtureTicket({
+    summary: 'Provider failure deduplication',
+    projects: ['Application'],
+    mr: {
+      iid: 94,
+      state: 'opened',
+      review_status: 'pending_review',
+      url: 'https://gitlab.example/team/application/-/merge_requests/94',
+    },
+  });
+  const session = workSessions.createOrGetWorkSessionByTicket({
+    ticketKey: 'JIRA-904',
+    title: 'Provider failure deduplication',
+    projectName: 'Application',
+  });
+  monitorEventStore.appendMonitorEvent({
+    id: 'legacy-gitlab-timeout-jira-904',
+    at: '2026-07-14T14:00:00.000Z',
+    sessionId: session.id,
+    type: 'provider.transition',
+    source: 'gitlab',
+    summary: 'JIRA-904 provider read failed (request timed out).',
+    subject: { kind: 'merge-request', id: '94', ticketKey: 'JIRA-904' },
+    after: { state: 'monitoring/failed', fingerprint: 'legacy-timeout-fingerprint' },
+    metadata: {
+      transitionKind: 'provider_read_failed',
+      readState: 'failed',
+      readReason: 'timeout',
+      readComponents: 'merge-request',
+      readGeneration: 77,
+    },
+  });
+  const originalMonitor = gitLabRestModule.gitlabRestClient.mergeRequestMonitor;
+  let failure = new Error('request timed out');
+  gitLabRestModule.gitlabRestClient.mergeRequestMonitor = async () => { throw failure; };
+  try {
+    const monitor = new managedProviderMonitor.ManagedProviderMonitor({ state: () => state });
+    const duplicate = await monitor.poll();
+    assert.equal(duplicate.failures, 1);
+    assert.equal(duplicate.transitions, 0, 'the same source and normalized error must not create another transition');
+    assert.equal(mergeRequestMonitorStore.readGitLabMergeRequestReadStatus(session.id).reason, 'timeout');
+
+    failure = new Error('GitLab HTTP 401');
+    const changed = await monitor.poll();
+    assert.equal(changed.transitions, 1, 'a changed failure reason is a real transition');
+    assert.equal(mergeRequestMonitorStore.readGitLabMergeRequestReadStatus(session.id).reason, 'authentication');
+
+    const repeatedChanged = await monitor.poll();
+    assert.equal(repeatedChanged.transitions, 0, 'the changed error is emitted only once while it remains current');
+  } finally {
+    gitLabRestModule.gitlabRestClient.mergeRequestMonitor = originalMonitor;
+    workSessions.removeWorkSession(session.id);
+  }
+});
+
 test('managed SonarQube polling persists a branch-qualified dashboard binding', async () => {
   const state = stateStore.emptyWorkCatalog();
   state.projects.Application = {
@@ -2225,6 +2283,42 @@ test('extension activation registers the bounded surface and explicit launch com
       .contributes.commands.map(command => command.command);
     assert.deepEqual(registeredCommands, expectedCommands);
 
+    const failureSession = workSessions.createOrGetWorkSessionByTicket({
+      ticketKey: 'JIRA-654',
+      title: 'Attention failure deduplication fixture',
+    });
+    const failureEvent = (id, at, state, reason, generation) => monitorEventStore.appendMonitorEvent({
+      id,
+      at,
+      sessionId: failureSession.id,
+      type: 'provider.transition',
+      source: 'jenkins',
+      summary: `JIRA-654 Jenkins provider read ${state}.`,
+      subject: { kind: 'provider-read', id: 'jenkins', ticketKey: 'JIRA-654' },
+      after: { state: `monitoring/${state}`, fingerprint: `${state}-${reason}-${generation}` },
+      metadata: {
+        transitionKind: state === 'complete' ? 'provider_read_recovered' : 'provider_read_failed',
+        readState: state,
+        readReason: reason,
+        readComponents: 'none',
+        readGeneration: generation,
+      },
+    });
+    failureEvent('attention-repeat-failure-1', '2026-07-14T10:00:00.000Z', 'failed', 'timeout', 1);
+    failureEvent('attention-repeat-failure-2', '2026-07-14T10:01:00.000Z', 'failed', 'timeout', 2);
+    failureEvent('attention-read-recovery', '2026-07-14T10:02:00.000Z', 'complete', 'complete', 3);
+    failureEvent('attention-failure-after-recovery', '2026-07-14T10:03:00.000Z', 'failed', 'timeout', 4);
+    const attentionProvider = registeredTreeProviders.get('kronosAttention');
+    const failureGroup = attentionProvider.getChildren().find(item => item.ticketKey === 'JIRA-654');
+    const retainedFailureItems = attentionProvider.getChildren(failureGroup);
+    assert.equal(retainedFailureItems.length, 3, 'legacy consecutive duplicate failures collapse to one Attention item');
+    assert.deepEqual(
+      retainedFailureItems.map(item => item.entry.event.id),
+      ['attention-failure-after-recovery', 'attention-read-recovery', 'attention-repeat-failure-1'],
+      'a recovery makes the same later failure a real new transition',
+    );
+    workSessions.removeWorkSession(failureSession.id);
+
     const attentionSession = workSessions.createOrGetWorkSessionByTicket({
       ticketKey: 'JIRA-321',
       title: 'Attention branch picker fixture',
@@ -2255,7 +2349,6 @@ test('extension activation registers the bounded surface and explicit launch com
       after: { state: 'ERROR', fingerprint: 'attention-branch-picker-fingerprint' },
       metadata: { transitionKind: 'sonar_gate_failed', projectKey: 'fixture', branch: 'feature/one' },
     });
-    const attentionProvider = registeredTreeProviders.get('kronosAttention');
     const attentionGroup = attentionProvider.getChildren().find(item => item.ticketKey === 'JIRA-321');
     const attentionItem = attentionProvider.getChildren(attentionGroup)[0];
     assert.deepEqual(attentionItem.providerChoices.map(choice => choice.label), ['feature/one', 'feature/two']);

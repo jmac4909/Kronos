@@ -69,6 +69,7 @@ import { optionalTrimmedStringFromUnknown } from './records';
 import { unknownErrorMessage } from './errorUtils';
 import { projectConfigurationForTicket, readProjectGitBranch } from './projectCatalog';
 import { latestGitLabMergeRequestBinding } from './ticketMergeRequestProjection';
+import { isProviderReadTransitionKind, providerReadStateSignature } from './providerReadTransitions';
 
 export interface ManagedProviderPollResult {
   polled: number;
@@ -1007,6 +1008,7 @@ interface AppendTransitionInput {
 }
 
 function appendTransitionOnce(input: AppendTransitionInput): MonitorEvent | null {
+  if (repeatsCurrentProviderReadState(input)) { return null; }
   const id = deterministicEventId(
     input.session.id,
     input.source,
@@ -1030,6 +1032,35 @@ function appendTransitionOnce(input: AppendTransitionInput): MonitorEvent | null
     eventInput.before = { state: input.beforeState, fingerprint: input.beforeFingerprint };
   }
   return appendMonitorEvent(eventInput);
+}
+
+function repeatsCurrentProviderReadState(input: AppendTransitionInput): boolean {
+  const transitionKind = input.metadata['transitionKind'];
+  if (transitionKind !== 'provider_read_failed'
+    && transitionKind !== 'provider_read_partial'
+    && transitionKind !== 'provider_read_recovered') {
+    return false;
+  }
+  const previous = listMonitorEvents({
+    sessionId: input.session.id,
+    source: input.source,
+    types: ['provider.transition'],
+    limit: 2000,
+  }).find(event => event.subject?.kind === input.subject.kind
+    && event.subject.id === input.subject.id
+    && isProviderReadTransitionKind(event.metadata?.['transitionKind']));
+  if (!previous) { return false; }
+  return providerReadStateSignature(
+    previous.metadata?.['readState'],
+    previous.after?.state,
+    previous.metadata?.['readReason'],
+    previous.metadata?.['readComponents'],
+  ) === providerReadStateSignature(
+    input.metadata['readState'],
+    input.state,
+    input.metadata['readReason'],
+    input.metadata['readComponents'],
+  );
 }
 
 function deterministicEventId(...parts: string[]): string {
