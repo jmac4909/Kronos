@@ -58,6 +58,9 @@ export interface GitLabMergeRequestDigest {
   fingerprint: string;
   url?: string;
   sha?: string;
+  title?: string;
+  sourceBranch?: string;
+  targetBranch?: string;
 }
 
 export interface GitLabMergeRequestTransition {
@@ -84,6 +87,9 @@ interface GitLabMergeRequestDigestMaterial {
   updatedAt: string;
   url?: string;
   sha?: string;
+  title?: string;
+  sourceBranch?: string;
+  targetBranch?: string;
 }
 
 const MAX_SOURCE_NOTES = 2_000;
@@ -93,6 +99,8 @@ const MAX_ID_CHARS = 256;
 const MAX_STATE_CHARS = 128;
 const MAX_URL_CHARS = 8_192;
 const MAX_SHA_CHARS = 128;
+const MAX_TITLE_CHARS = 2_000;
+const MAX_BRANCH_CHARS = 1_024;
 const MAX_FETCHED_AT_CHARS = 128;
 const MAX_COUNT = 1_000_000_000;
 
@@ -140,6 +148,9 @@ export function normalizeGitLabMergeRequestDigest(
   };
   assignString(material, 'url', safeProviderUrl(mr['web_url']));
   assignString(material, 'sha', boundedString(mr['sha'], MAX_SHA_CHARS));
+  assignString(material, 'title', boundedString(mr['title'], MAX_TITLE_CHARS));
+  assignString(material, 'sourceBranch', boundedString(mr['source_branch'], MAX_BRANCH_CHARS));
+  assignString(material, 'targetBranch', boundedString(mr['target_branch'], MAX_BRANCH_CHARS));
   return buildDigest(material, boundedString(root['fetchedAt'], MAX_FETCHED_AT_CHARS));
 }
 
@@ -165,6 +176,9 @@ export function normalizeStoredGitLabMergeRequestDigest(value: unknown): GitLabM
   };
   assignString(material, 'url', safeProviderUrl(value['url']));
   assignString(material, 'sha', boundedString(value['sha'], MAX_SHA_CHARS));
+  assignString(material, 'title', boundedString(value['title'], MAX_TITLE_CHARS));
+  assignString(material, 'sourceBranch', boundedString(value['sourceBranch'], MAX_BRANCH_CHARS));
+  assignString(material, 'targetBranch', boundedString(value['targetBranch'], MAX_BRANCH_CHARS));
   return buildDigest(material, boundedString(value['fetchedAt'], MAX_FETCHED_AT_CHARS));
 }
 
@@ -288,6 +302,9 @@ function materialFromDigest(digest: GitLabMergeRequestDigest): GitLabMergeReques
   };
   assignString(material, 'url', digest.url);
   assignString(material, 'sha', digest.sha);
+  assignString(material, 'title', digest.title);
+  assignString(material, 'sourceBranch', digest.sourceBranch);
+  assignString(material, 'targetBranch', digest.targetBranch);
   return material;
 }
 

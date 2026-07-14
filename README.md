@@ -46,6 +46,8 @@ Each session reports whether the terminal is attached, which providers are bound
 
 From Sessions, the operator can focus or reattach the terminal, poll providers, pause or resume monitoring, inspect the audit, detach the terminal, stop management, or explicitly remove an old local session record. Detaching, stopping, and removal never close the terminal. Removal deletes that session's local record and colocated monitor snapshots after confirmation while retaining shared audit history and saved context artifacts.
 
+Automatic GitLab discovery is stored with the ticket's local work session and monitor snapshot. `work.json` stays the Jira catalog; Work, the board, filtering, and the ticket workspace compose the newest local MR binding and matching poll digest when they render, so a discovered MR does not disappear on the next Jira refresh.
+
 Each registered Project shows its current branch and change count when the repository is already known to VS Code. Expand it to explicitly open that repository in VS Code's built-in Git model and view a read-only status/diff, insert a secret-redacted `[GIT-project]` working-tree snapshot into one attached project session, open an existing MR or a prefilled GitLab new-MR page, insert MR or Jenkins/SonarQube evidence, or edit provider polling setup. Opening the new-MR page is explicit browser navigation; Kronos never posts or creates the MR itself.
 
 After VS Code reloads, persisted history remains but the live terminal starts detached. Kronos does not trust a saved terminal name or process ID as proof of identity. Select the Session: if exactly one unclaimed terminal is open it reconnects and opens it; otherwise choose the intended terminal from the list.

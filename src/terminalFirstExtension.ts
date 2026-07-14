@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
-import type { ProjectConfig, Ticket } from './state/types';
+import type { KronosState, ProjectConfig, Ticket } from './state/types';
 import { TerminalFirstState } from './state/TerminalFirstState';
 import { WorkTreeProvider } from './views/WorkTreeProvider';
 import { ManagedSessionTreeProvider, type RegisteredProjectCommandTarget } from './views/ManagedSessionTreeProvider';
@@ -121,6 +121,11 @@ import {
   buildProjectIntegrationPanelHtml,
   type ProjectIntegrationFormProject,
 } from './services/projectIntegrationView';
+import { readGitLabMergeRequestMonitorSnapshot } from './services/gitlabMergeRequestMonitorStore';
+import {
+  latestGitLabMergeRequestBinding,
+  withEffectiveTicketMergeRequest,
+} from './services/ticketMergeRequestProjection';
 
 const TICKET_WORKSPACE_ACTIONS = new Set([
   'startClaudeForTicket',
@@ -215,7 +220,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private readonly workTree = new WorkTreeProvider(this.state, {
     hideCompletedByDefault: () => this.hideCompletedJiraWork(),
     doneStatusNames: () => this.completedJiraStatuses(),
-  });
+  }, (ticketKey, ticket) => this.effectiveTicket(ticketKey, ticket));
   private readonly sessionTree = new ManagedSessionTreeProvider(
     this.operatorTerminals,
     () => listWorkSessions(),
@@ -866,7 +871,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     ).toString();
     record.panel.webview.html = withWebviewCsp(
       buildJiraWorkBoardHtml({
-        state: this.state.state,
+        state: this.effectiveState(),
         nonce: record.nonce,
         scriptUri,
         doneStatusNames: this.completedJiraStatuses(),
@@ -933,7 +938,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
   }
 
   private renderTicketPanel(ticketKey: string, record: TicketPanelRecord): void {
-    const ticket = this.state.state?.tickets[ticketKey];
+    const storedTicket = this.state.state?.tickets[ticketKey];
+    const ticket = storedTicket ? this.effectiveTicket(ticketKey, storedTicket) : undefined;
     if (!ticket) {
       record.panel.webview.html = '<!DOCTYPE html><html><body><p>This ticket is no longer present in the local Work state.</p></body></html>';
       return;
@@ -960,6 +966,32 @@ class TerminalFirstRuntime implements vscode.Disposable {
 
   private refreshTicketPanels(): void {
     for (const [ticketKey, record] of this.ticketPanels) { this.renderTicketPanel(ticketKey, record); }
+  }
+
+  private effectiveState(): KronosState | null {
+    const state = this.state.state;
+    if (!state) { return null; }
+    const tickets = Object.fromEntries(Object.entries(state.tickets)
+      .map(([ticketKey, ticket]) => [ticketKey, this.effectiveTicket(ticketKey, ticket)]));
+    return { ...state, tickets };
+  }
+
+  private effectiveTicket(ticketKey: string, ticket: Ticket): Ticket {
+    const session = getWorkSessionByTicket(ticketKey);
+    if (!session) { return ticket; }
+    try {
+      return withEffectiveTicketMergeRequest(
+        ticket,
+        session,
+        readGitLabMergeRequestMonitorSnapshot(session.id),
+      );
+    } catch (error: unknown) {
+      this.log(
+        `Could not project the locally monitored merge request for ${ticketKey}.`,
+        unknownErrorMessage(error, 'The local merge-request snapshot is invalid.'),
+      );
+      return withEffectiveTicketMergeRequest(ticket, session, null);
+    }
   }
 
   private providerPollingViewStatus(
@@ -1259,7 +1291,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       if (ticket.jira_url) { binding.url = ticket.jira_url; }
       updated = this.requireTicketSession(addWorkSessionProviderBinding(updated.id, binding));
     }
-    if (ticket.mr?.iid) {
+    if (ticket.mr?.iid && !latestGitLabMergeRequestBinding(updated)) {
       const binding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
         provider: 'gitlab',
         resource: 'merge-request',
@@ -1954,8 +1986,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
       ticket.launch_project === project.projectName || ticket.projects.includes(project.projectName)
     );
     const ticketMrUrl = linkedTicket?.mr?.url;
-    if (ticketMrUrl || knownUrl) {
-      await this.openHttpUrl(ticketMrUrl || knownUrl || '');
+    if (knownUrl || ticketMrUrl) {
+      await this.openHttpUrl(knownUrl || ticketMrUrl || '');
       return;
     }
 
@@ -2500,24 +2532,23 @@ class TerminalFirstRuntime implements vscode.Disposable {
     ticketKey: string,
     ticket: Ticket,
   ): Promise<GitLabInsertionTarget | undefined> {
-    const configuredProject = this.gitLabProjectId(ticket);
-    if (ticket.mr?.iid && configuredProject) {
-      return { iid: ticket.mr.iid, projectIdOrPath: configuredProject, url: ticket.mr.url };
-    }
-
     const session = getWorkSessionByTicket(ticketKey);
-    const savedBinding = [...(session?.providerBindings || [])]
-      .reverse()
-      .find(binding => binding.provider === 'gitlab' && binding.resource === 'merge-request');
+    const savedBinding = latestGitLabMergeRequestBinding(session);
+    const configuredProject = this.gitLabProjectId(ticket);
     if (savedBinding && /^[1-9][0-9]*$/.test(savedBinding.subjectId)) {
       const iid = Number(savedBinding.subjectId);
       const projectIdOrPath = savedBinding.projectId
-        || configuredGitLabProjectPathFromMergeRequestUrl(savedBinding.url, process.env);
+        || configuredGitLabProjectPathFromMergeRequestUrl(savedBinding.url, process.env)
+        || configuredProject;
       if (Number.isSafeInteger(iid) && projectIdOrPath) {
         const target: GitLabInsertionTarget = { iid, projectIdOrPath };
         if (savedBinding.url) { target.url = savedBinding.url; }
         return target;
       }
+    }
+
+    if (ticket.mr?.iid && configuredProject) {
+      return { iid: ticket.mr.iid, projectIdOrPath: configuredProject, url: ticket.mr.url };
     }
 
     if (!configuredProject) {

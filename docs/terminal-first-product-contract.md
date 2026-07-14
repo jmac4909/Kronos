@@ -154,6 +154,7 @@ Monitoring is read-only and belongs to an active provider-bound work session. A 
 - The operator can pause, resume, or poll a session immediately.
 - A private cross-window lease prevents duplicate concurrent polling against one Kronos data directory. POSIX uses `O_NOFOLLOW`; Windows, where that flag is unsupported, uses exclusive creation and lstat/fstat identity verification around every lease read, write, renewal, and unlink.
 - Monitoring baselines contain bounded normalized digests, not full provider responses.
+- `work.json` remains the Jira Work catalog. A ticket's displayed merge request is projected at read time from its catalog value, newest local session binding, and matching monitor digest, so automatic discovery appears consistently without rewriting Jira state. A newer binding wins stale catalog identity, and a digest is used only when its MR IID matches that identity.
 - Incomplete provider components do not erase the last complete component or create false recovery events.
 - Losing lease ownership stops persistence and prevents the next provider request from starting.
 - Provider errors affect readiness and Attention; they do not trigger remediation.

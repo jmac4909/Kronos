@@ -66,6 +66,7 @@ import {
 import { optionalTrimmedStringFromUnknown } from './records';
 import { unknownErrorMessage } from './errorUtils';
 import { projectConfigurationForTicket, readProjectGitBranch } from './projectCatalog';
+import { latestGitLabMergeRequestBinding } from './ticketMergeRequestProjection';
 
 export interface ManagedProviderPollResult {
   polled: number;
@@ -197,9 +198,7 @@ export class ManagedProviderMonitor {
     session: TicketWorkSessionRecord,
     retainLease: () => boolean,
   ): Promise<ManagedProviderPollResult> {
-    const binding = [...session.providerBindings].reverse().find(candidate =>
-      candidate.provider === 'gitlab' && candidate.resource === 'merge-request'
-    );
+    const binding = latestGitLabMergeRequestBinding(session);
     const state = this.options.state();
     const ticket = state?.tickets[session.ticketKey];
     let target = configuredGitLabPollingTarget(state, session);
@@ -251,7 +250,7 @@ export class ManagedProviderMonitor {
     }
     if (!target) {
       if (!binding && !ticket?.mr?.iid) { return emptyResult(); }
-      const candidateIid = Number(ticket?.mr?.iid || binding?.subjectId);
+      const candidateIid = Number(binding?.subjectId || ticket?.mr?.iid);
       const detail = Number.isSafeInteger(candidateIid) && candidateIid > 0
         ? 'No GitLab project ID or path is configured for the current merge request.'
         : 'The current merge request has no valid IID.';
@@ -1250,19 +1249,20 @@ export function configuredGitLabPollingTarget(
   session: TicketWorkSessionRecord,
 ): ConfiguredGitLabPollingTarget | null {
   const ticket = state?.tickets[session.ticketKey];
-  const binding = [...session.providerBindings].reverse().find(candidate =>
-    candidate.provider === 'gitlab' && candidate.resource === 'merge-request'
-  );
+  const binding = latestGitLabMergeRequestBinding(session);
   const ticketIid = ticket?.mr?.iid;
-  const iid = Number(Number.isSafeInteger(ticketIid) && Number(ticketIid) > 0 ? ticketIid : binding?.subjectId);
+  const boundIid = Number(binding?.subjectId);
+  const useBinding = Number.isSafeInteger(boundIid) && boundIid > 0;
+  const iid = Number(useBinding ? boundIid : ticketIid);
   const config = projectConfigurationForTicket(state, ticket);
   const configuredProject = config.gitlab_project_id || config.gitlab_project_path;
-  const projectIdOrPath = (configuredProject ? String(configuredProject) : undefined)
-    || binding?.projectId
-    || configuredGitLabProjectPathFromMergeRequestUrl(ticket?.mr?.url, process.env)
-    || configuredGitLabProjectPathFromMergeRequestUrl(binding?.url, process.env);
+  const catalogMatches = Number.isSafeInteger(ticketIid) && ticketIid === iid;
+  const projectIdOrPath = (useBinding ? binding?.projectId : undefined)
+    || (useBinding ? configuredGitLabProjectPathFromMergeRequestUrl(binding?.url, process.env) : undefined)
+    || (configuredProject ? String(configuredProject) : undefined)
+    || (catalogMatches ? configuredGitLabProjectPathFromMergeRequestUrl(ticket?.mr?.url, process.env) : undefined);
   if (!Number.isSafeInteger(iid) || iid <= 0 || !projectIdOrPath) { return null; }
-  const providerUrl = ticket?.mr?.url || binding?.url;
+  const providerUrl = (useBinding ? binding?.url : undefined) || (catalogMatches ? ticket?.mr?.url : undefined);
   return {
     iid,
     projectIdOrPath,

@@ -31,6 +31,7 @@ const workSessions = require('../out/services/workSessionStore.js');
 const pipelineTransitions = require('../out/services/pipelineTransitions.js');
 const mergeRequestTransitions = require('../out/services/gitlabMergeRequestTransitions.js');
 const mergeRequestMonitorStore = require('../out/services/gitlabMergeRequestMonitorStore.js');
+const ticketMergeRequestProjection = require('../out/services/ticketMergeRequestProjection.js');
 const ciTransitions = require('../out/services/ciTransitions.js');
 const { buildTicketWorkspaceHtml } = require('../out/services/ticketWorkspaceView.js');
 const { buildDoctorPanelHtml, buildSetupPanelHtml } = require('../out/services/operationsPanelView.js');
@@ -253,11 +254,89 @@ test('managed provider polling automatically discovers and locally binds a proje
         && binding.subjectId === '90'
         && binding.projectId === 'team/application'
     ));
+    const digest = mergeRequestMonitorStore.readGitLabMergeRequestMonitorSnapshot(session.id);
+    const projected = ticketMergeRequestProjection.withEffectiveTicketMergeRequest(
+      state.tickets['JIRA-900'],
+      updated,
+      digest,
+    );
+    assert.deepEqual(projected.mr, {
+      iid: 90,
+      state: 'opened',
+      review_status: 'approved',
+      url: 'https://gitlab.example/team/application/-/merge_requests/90',
+      title: 'JIRA-900 Automatic MR discovery',
+      source_branch: 'feature/JIRA-900',
+      sourceBranch: 'feature/JIRA-900',
+      target_branch: 'main',
+      targetBranch: 'main',
+      unresolved_discussion_count: 0,
+      discussions_resolved: true,
+    });
   } finally {
     gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest = originalDiscover;
     gitLabRestModule.gitlabRestClient.mergeRequestMonitor = originalMonitor;
     workSessions.removeWorkSession(session.id);
   }
+});
+
+test('effective ticket MR rejects stale catalog and monitor identities after a newer local binding', () => {
+  const staleDigest = mergeRequestTransitions.normalizeGitLabMergeRequestDigest({
+    mr: {
+      iid: 77,
+      state: 'merged',
+      title: 'Stale MR title',
+      source_branch: 'old-branch',
+      target_branch: 'main',
+      web_url: 'https://gitlab.example/team/application/-/merge_requests/77',
+      detailed_merge_status: 'mergeable',
+      reviewers: [],
+      updated_at: '2026-07-14T11:00:00.000Z',
+    },
+    approvals: { approved: true, approvals_required: 0, approvals_left: 0, approved_by: [] },
+    notes: [],
+    discussions: [],
+    fetchedAt: '2026-07-14T11:00:00.000Z',
+    completeness: { approvalsComplete: true, discussionsComplete: true, notesComplete: true },
+  });
+  const ticket = fixtureTicket({
+    mr: {
+      iid: 77,
+      state: 'merged',
+      review_status: 'approved',
+      url: 'https://gitlab.example/team/application/-/merge_requests/77',
+      title: 'Stale MR title',
+    },
+  });
+  const session = {
+    providerBindings: [
+      {
+        provider: 'gitlab',
+        resource: 'merge-request',
+        subjectId: '88',
+        projectId: 'team/application',
+        url: 'https://gitlab.example/team/application/-/merge_requests/88',
+        attachedAt: '2026-07-14T13:00:00.000Z',
+      },
+      {
+        provider: 'gitlab',
+        resource: 'merge-request',
+        subjectId: '99',
+        projectId: 'team/application',
+        url: 'https://gitlab.example/team/application/-/merge_requests/99',
+        attachedAt: '2026-07-14T12:00:00.000Z',
+      },
+    ],
+  };
+  assert.deepEqual(
+    ticketMergeRequestProjection.effectiveTicketMergeRequest(ticket, session, staleDigest),
+    {
+      iid: 88,
+      state: 'opened',
+      review_status: 'pending_review',
+      url: 'https://gitlab.example/team/application/-/merge_requests/88',
+    },
+  );
 });
 
 test('local projects preserve provider bindings and report branch without running Git', () => {
@@ -375,9 +454,9 @@ test('project integration setup validates provider identifiers and launch-projec
     ],
   };
   assert.deepEqual(managedProviderMonitor.configuredGitLabPollingTarget(configured, existingSession), {
-    iid: 88,
-    projectIdOrPath: 'group/application',
-    providerUrl: 'https://gitlab.example/group/application/-/merge_requests/88',
+    iid: 77,
+    projectIdOrPath: 'old/project',
+    providerUrl: 'https://gitlab.example/old/project/-/merge_requests/77',
   });
   assert.deepEqual(managedProviderMonitor.configuredCiPollingTargets(configured, existingSession), {
     jenkinsUrl: 'https://jenkins.example/job/team/job/application',
@@ -1510,7 +1589,8 @@ test('ticket workspace exposes explicit Claude launch, project branch, terminal 
     },
   });
   assert.match(locallyConnected, /Insert \[MR-88\]/);
-  assert.match(locallyConnected, /Connected locally to this work session/);
+  assert.match(locallyConnected, /Merge Request !88/);
+  assert.match(locallyConnected, /pending_review/);
   assert.match(locallyConnected, /Open MR/);
 });
 

@@ -4,6 +4,7 @@ import { ticketWorkspaceActionButton, ticketWorkspaceActionScript } from './oper
 import { formatWebviewDateTime } from './webviewFormat';
 import { escapeAttr, escapeClass, escapeHtml, kronosWebviewBaseCss, safeHttpHref } from './webviewHtml';
 import type { LocalProjectSummary } from './projectCatalog';
+import { effectiveTicketMergeRequest } from './ticketMergeRequestProjection';
 
 export interface TicketWorkspaceViewInput {
   ticketKey: string;
@@ -24,7 +25,10 @@ export interface ProviderPollingViewStatus {
 
 export function buildTicketWorkspaceHtml(input: TicketWorkspaceViewInput): string {
   const ticketKey = singleLine(input.ticketKey, 160) || 'Ticket';
-  const ticket = input.ticket;
+  const ticket = {
+    ...input.ticket,
+    mr: effectiveTicketMergeRequest(input.ticket, input.workSession, null),
+  };
   const summary = singleLine(ticket.summary, 1_000) || 'Untitled ticket';
   const workSession = input.workSession || undefined;
   const liveTerminalCount = resolveLiveTerminalCount(workSession, input.liveTerminalCount);

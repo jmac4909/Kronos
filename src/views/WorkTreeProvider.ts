@@ -26,6 +26,8 @@ export interface WorkTreePreferencesSource {
   doneStatusNames(): readonly string[];
 }
 
+export type WorkTicketProjector = (ticketKey: string, ticket: Ticket) => Ticket;
+
 const DEFAULT_PREFERENCES: WorkTreePreferencesSource = {
   hideCompletedByDefault: () => true,
   doneStatusNames: () => [],
@@ -40,6 +42,7 @@ export class WorkTreeProvider implements vscode.TreeDataProvider<WorkTreeItem>, 
   constructor(
     private readonly stateSource: WorkTreeStateSource,
     private readonly preferences: WorkTreePreferencesSource = DEFAULT_PREFERENCES,
+    private readonly projectTicket: WorkTicketProjector = (_ticketKey, ticket) => ticket,
   ) {
     this.stateSubscription = stateSource.onDidChange(() => this.changeEmitter.fire(undefined));
   }
@@ -54,7 +57,8 @@ export class WorkTreeProvider implements vscode.TreeDataProvider<WorkTreeItem>, 
       return [new WorkTreeMessageItem('Getting your work ready…', 'loading~spin')];
     }
 
-    const allTickets = Object.entries(state.tickets);
+    const allTickets = Object.entries(state.tickets)
+      .map(([ticketKey, ticket]): [string, Ticket] => [ticketKey, this.projectTicket(ticketKey, ticket)]);
     if (allTickets.length === 0) {
       return [new WorkTreeMessageItem(
         'No tickets yet — select here to refresh Jira.',
@@ -112,7 +116,9 @@ export class WorkTreeProvider implements vscode.TreeDataProvider<WorkTreeItem>, 
   }
 
   getFilterOptions(): WorkTicketFilterOptions {
-    return collectWorkTicketFilterOptions(this.stateSource.state?.tickets || {});
+    const tickets = Object.fromEntries(Object.entries(this.stateSource.state?.tickets || {})
+      .map(([ticketKey, ticket]) => [ticketKey, this.projectTicket(ticketKey, ticket)]));
+    return collectWorkTicketFilterOptions(tickets);
   }
 
   refresh(): void {
