@@ -20,8 +20,8 @@ The repository is ready for the operator-owned human feedback pass in `HUMAN_FEE
 | Jenkins and SonarQube | Tests cover bounded Jenkins/Sonar reads, retained Jenkins build targets, deterministic latest-first choices, Sonar branch dashboard links, branch choices, literal `sonar.projectKey` discovery from Jenkins XML, and rejection of expression-only values. | Pass |
 | Attention | Tests cover real transitions, initial MR observation, provider failures/recoveries, acknowledgements, grouping, provider target choices, and suppression/collapse of unchanged same-source provider failures. | Pass |
 | Setup and Doctor | DOM and activation tests cover dedicated dashboards, allowlisted actions, credential-readiness reporting, and no credential values in UI. | Pass |
-| Security and dependencies | Security and context-governance gates pass. Runtime dependencies are empty; only TypeScript and Node/VS Code type packages are development dependencies. `npm audit` reports zero known vulnerabilities. | Pass |
-| Packaging | `npm run feedback:ready` compiles, tests, packages, checks the VSIX contents, rejects legacy/development files, and creates a safe synthetic feedback state. | Final gate |
+| Security and dependencies | Public-surface, security, and context-governance gates pass. Runtime dependencies are empty; only TypeScript and Node/VS Code type packages are development dependencies. `npm audit` reports zero known vulnerabilities. | Pass |
+| Packaging | `npm run feedback:ready` compiles, tests, packages, checks the VSIX contents, rejects legacy/development/local-state files, and creates a safe synthetic feedback state. | Final gate |
 
 ## Changes Found During This Audit
 
@@ -33,6 +33,9 @@ The repository is ready for the operator-owned human feedback pass in `HUMAN_FEE
 - Direct command coverage now exercises project Git/MR actions and the session pause, resume, detach, stop, and remove workflow.
 - The activation harness now exercises all 34 contributed commands, including synthetic successful Jira refresh, MR/CI context insertion, project-routed provider context, and manual provider polling without using a live endpoint.
 - The safe feedback state now includes validated paused/detached ticket and standalone Sessions plus synthetic MR, Jenkins, SonarQube, and repeated-failure Attention evidence. This supports visual review without launching a terminal or contacting a provider.
+- The public-surface gate now rejects local-state paths, machine-specific home paths, known employer identifiers, private-key material, and high-confidence token shapes before the remaining test suite runs.
+- VS Code types are pinned to the advertised 1.85 minimum. Optional terminal shell-integration metadata is read through a compatibility shim so newer editors retain the extra CWD detail without making that later API mandatory.
+- Recruiter-facing product renders use only synthetic `DEMO-*` records, generic project names, and example-only provider state; their editable SVG sources are excluded from the packaged VSIX.
 
 ## Operator-Only Signoff Still Required
 

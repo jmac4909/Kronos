@@ -1267,7 +1267,12 @@ class TerminalFirstRuntime implements vscode.Disposable {
     const input: Parameters<typeof attachWorkSessionTerminal>[1] = { name: terminal.name };
     if (previous?.sessionId === session.id) { input.bindingId = previous.bindingId; }
     if (processId !== undefined) { input.processId = processId; }
-    const cwd = terminal.shellIntegration?.cwd?.fsPath;
+    // shellIntegration was added after the declared VS Code 1.85 minimum.
+    // Read it opportunistically on newer editors without making it a required API.
+    const shellIntegration = (terminal as vscode.Terminal & {
+      readonly shellIntegration?: { readonly cwd?: vscode.Uri };
+    }).shellIntegration;
+    const cwd = shellIntegration?.cwd?.fsPath;
     if (cwd) { input.cwd = cwd; }
     const updated = attachWorkSessionTerminal(session.id, input);
     const persisted = input.bindingId

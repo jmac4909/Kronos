@@ -4,20 +4,40 @@
   "description": "Terminal-first Jira, merge-request, pipeline, and audit context for interactive sessions. Kronos reads, inserts, monitors, audits, and launches Claude only from an explicit operator action.",
   "version": "0.1.0",
   "publisher": "jmacke01",
+  "author": {
+    "name": "jmac4909",
+    "url": "https://github.com/jmac4909"
+  },
   "license": "UNLICENSED",
+  "preview": true,
+  "homepage": "https://github.com/jmac4909/Kronos#readme",
+  "bugs": {
+    "url": "https://github.com/jmac4909/Kronos/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/jmac4909/kronos.git"
   },
   "keywords": [
+    "vscode-extension",
+    "typescript",
     "terminal",
     "jira",
     "gitlab",
     "jenkins",
     "sonarqube",
     "pipeline",
-    "audit"
+    "audit",
+    "claude-code",
+    "ai-assisted-development",
+    "developer-tools",
+    "human-in-the-loop"
   ],
+  "icon": "media/kronos-marketplace-icon.png",
+  "galleryBanner": {
+    "color": "#0b1220",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -178,7 +198,7 @@
       },
       {
         "command": "kronos.openProjectMergeRequest",
-        "title": "Kronos: Open or Create Project Merge Request",
+        "title": "Kronos: Open Project Merge Request Page",
         "icon": "$(git-merge)"
       },
       {
@@ -515,7 +535,8 @@
     "compile": "node scripts/clean-output.js && node node_modules/typescript/bin/tsc -p ./",
     "watch": "node scripts/clean-output.js && node node_modules/typescript/bin/tsc -watch -p ./",
     "package": "npx --yes @vscode/vsce@3.9.2 package --no-dependencies --allow-missing-repository",
-    "test": "node scripts/check-manifest.js && node scripts/check-runtime-graph.js && node scripts/check-security.js && node scripts/check-context-governance.js && npm run compile && node scripts/run-unit-tests.js && npm run webview:dom && npm run webview:jira-board",
+    "test": "npm run public:check && node scripts/check-manifest.js && node scripts/check-runtime-graph.js && node scripts/check-security.js && node scripts/check-context-governance.js && npm run compile && node scripts/run-unit-tests.js && npm run webview:dom && npm run webview:jira-board",
+    "public:check": "node scripts/check-public-surface.js",
     "webview:dom": "node scripts/run-webview-dom-tests.js",
     "webview:jira-board": "node scripts/run-jira-work-board-tests.js",
     "feedback:state": "node scripts/create-feedback-state.js",
@@ -525,7 +546,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "1.85.0",
     "typescript": "^5.4.0"
   }
 }

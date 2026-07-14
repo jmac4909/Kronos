@@ -18,6 +18,8 @@ CLAUDE.md
 *.log
 .env*
 out/**/*.map
+docs/assets/*.svg
+media/kronos-marketplace-icon.svg
 push-master.sh
 cache-github-token.sh
 tsconfig.json

@@ -290,15 +290,18 @@ export function kronosWebviewBaseCss(): string {
   .kronos-pill.pass,
   .kronos-pill.good,
   .kronos-pill.ok,
-  .kronos-pill.info,
   .kronos-pill.low,
   .pill.pass,
   .pill.good,
   .pill.ok,
-  .pill.info,
   .pill.low {
     color: var(--k-ok);
     background: var(--k-ok-bg);
+  }
+  .kronos-pill.info,
+  .pill.info {
+    color: var(--k-info);
+    background: var(--k-info-bg);
   }
   .kronos-pill.warn,
   .kronos-pill.warning,

@@ -2,9 +2,9 @@
 
 Kronos is a terminal-first VS Code extension for a Jira board and operator-controlled Claude sessions. The operator may attach an existing terminal or explicitly create a standalone or ticket-linked Claude terminal. Kronos also reads bounded provider context, inserts editable references without submission, monitors provider state, and keeps a private local audit.
 
-## Current Host Notes
+## Repository Safety Notes
 
-The repository root is `/home/ec2-user/kronos`. Do not move or reclassify it during workspace cleanup. Keep credentials, provider payloads, context artifacts, work-session records, and feedback fixtures out of Git.
+Keep credentials, provider payloads, context artifacts, work-session records, generated feedback state, and machine-specific paths out of Git. Work from a normal clone of this repository; do not assume a particular host, home directory, or workspace layout.
 
 Read `README.md`, `docs/terminal-first-product-contract.md`, and `HUMAN_FEEDBACK_CHECKLIST.md` before significant work.
 

@@ -1,8 +1,13 @@
 node_modules/
 out/
 *.vsix
+.env
+.env.local
+.env.*.local
 .claude/
 .kronos/
 .vscode-test/
 __pycache__/
 *.pyc
+push-master.sh
+cache-github-token.sh

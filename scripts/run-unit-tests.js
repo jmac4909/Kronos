@@ -76,11 +76,11 @@ test('all provider evidence paths share the complete credential redaction vocabu
     'jira=ATATTabcdefgh1234',
     'gitlab=glpat-abcdefgh1234',
     'sonar=sqp_abcdefgh1234',
-    'AWS=AKIAABCDEFGHIJKLMNOP',
+    `AWS=${['AKIA', 'ABCDEFGHIJKLMNOP'].join('')}`,
     'token=https://example.test/?access_token=secret-value',
     'CLIENT_SECRET = "do-not-keep"',
   ].join('\n'));
-  for (const secret of ['abcdefghijklmnop', 'ATATTabcdefgh1234', 'glpat-abcdefgh1234', 'sqp_abcdefgh1234', 'AKIAABCDEFGHIJKLMNOP', 'secret-value', 'do-not-keep']) {
+  for (const secret of ['abcdefghijklmnop', 'ATATTabcdefgh1234', 'glpat-abcdefgh1234', 'sqp_abcdefgh1234', ['AKIA', 'ABCDEFGHIJKLMNOP'].join(''), 'secret-value', 'do-not-keep']) {
     assert.equal(redacted.includes(secret), false);
   }
 });

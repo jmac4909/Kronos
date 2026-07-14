@@ -1,118 +1,136 @@
 # Kronos — Terminal Work Companion
 
-Kronos is a terminal-first VS Code companion for organizing Jira work and interactive Claude sessions. The operator can attach a terminal they already own or explicitly ask Kronos to create and focus a new Claude terminal. Kronos reads Jira, GitLab, Jenkins, and SonarQube context; inserts editable context references without submitting them; monitors provider status; and keeps a private audit trail.
+<p align="center">
+  <img src="media/kronos-marketplace-icon.png" alt="Kronos terminal companion icon" width="112">
+</p>
 
-## Product Boundary
+<p align="center">
+  A terminal-first VS Code companion that brings Jira, GitLab, Jenkins, and SonarQube evidence into operator-controlled Claude sessions.
+</p>
 
-Kronos **organizes, explicitly starts Claude, reads, inserts, monitors, and audits**.
+<p align="center">
+  <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178C6">
+  <img alt="VS Code 1.85 or newer" src="https://img.shields.io/badge/VS%20Code-%5E1.85-23A8F2">
+  <img alt="Zero third-party runtime dependencies" src="https://img.shields.io/badge/runtime%20dependencies-0-22C55E">
+  <img alt="65 automated tests" src="https://img.shields.io/badge/automated%20tests-65-22C55E">
+  <img alt="Preview status" src="https://img.shields.io/badge/status-preview-F59E0B">
+</p>
 
-Kronos never:
+> **Preview software.** Kronos is ready for local evaluation, not represented as a Marketplace release or production service. The repository is source-available for portfolio review under the included all-rights-reserved [license](LICENSE).
 
-- launches anything automatically;
-- executes an arbitrary command: the two explicit Claude-start actions accept only a validated `claude` or `claude-*` executable plus a narrow allowlist of interactive, non-escalating flags;
-- reads terminal input, output, or scrollback;
-- submits inserted provider context or presses Enter for the operator;
-- runs project tests, builds, scans, deployments, or remediation commands;
-- creates, switches, commits, pushes, merges, or otherwise changes Git branches or worktrees;
-- changes Jira, GitLab, Jenkins, SonarQube, or database state.
+![Kronos Jira Work Board with synthetic tickets, sessions, and provider state](docs/assets/kronos-work-board.png)
 
-The operator chooses every launch, owns the resulting interactive session, edits every inserted reference, decides when to submit it, directs the work, and can stop Kronos management without closing the terminal.
+Kronos solves a narrow enterprise-development problem: the evidence needed for a coding task is spread across work tracking, source control, builds, and code quality tools, while the actual AI-assisted work happens in an interactive terminal. Kronos organizes that evidence without turning the editor into an autonomous executor.
 
-The normative boundary and navigation model are in [docs/terminal-first-product-contract.md](docs/terminal-first-product-contract.md).
+## What Kronos Delivers
 
-## Three Views
+| Surface | Outcome |
+| --- | --- |
+| **Work** | Search and filter Jira work, link a local project and branch, then open a focused ticket workspace. |
+| **Sessions** | Track standalone and ticket-linked Claude terminals without reading terminal contents or taking ownership away from the operator. |
+| **Attention** | Surface meaningful MR review, pipeline, Jenkins, and SonarQube transitions with a private local audit trail. |
+| **Context composer** | Review fetched evidence, edit the focus, and place one shell-inert line in the chosen terminal with submission disabled. |
 
-### Work
+### A 60-second workflow
 
-Work is a Jira board with search, status, project, and label filters. Completed work is hidden by default and can be shown explicitly. Refresh the board, combine or clear filters, open one ticket workspace, then either attach an existing focused terminal or choose **Start Claude for Ticket**. Ticket association is created only from this ticket path, never by standalone **New Claude**.
+1. Select a Jira ticket and its local project.
+2. Attach a terminal you already own, or explicitly choose **Start Claude for Ticket**.
+3. Fetch bounded Jira, GitLab, Jenkins, or SonarQube evidence.
+4. Review the normalized evidence as untrusted data and edit the operator focus.
+5. Choose **Place in Terminal**. Kronos inserts the line with execution disabled.
+6. Decide whether to press Enter yourself; later provider changes appear in **Attention** and the session audit.
 
-Use **Choose Project Discovery Folders** from the Work toolbar or Setup to select multiple parent folders in VS Code's native folder picker—for example, `IdeaProjects` and `PycharmProjects`. Kronos saves those machine-local roots and immediately opens **Discover and Manage Local Projects**. Registered projects appear first and checked; newly discovered projects follow unchecked. Accepting the picker registers checked projects and unregisters unchecked ones. Newly registered projects then open a guided **Project Integration Setup** for their GitLab project ID/path, Jenkins job URL, SonarQube project key, and default monitoring branch. The same editor can be reopened for all projects from Setup or from the project itself. It reports whether the private global provider credentials are ready but stores only the project-specific identifiers and never displays a token. Removing a ticket-linked project requires confirmation and clears only that local launch link. Settings control root removal, scan depth, and result limit. Discovery is bounded and read-only. Each Jira card has an **Add Project** control in its top row; once linked it shows the current project name. Kronos reads lightweight branch metadata directly from `.git/HEAD`; the Projects area can additionally read status and a bounded diff through VS Code's built-in Git model. Kronos never invokes a Git mutation or changes the repository. Future ticket-launched Claude terminals start in the linked folder. Existing terminals are never moved or sent a `cd` command. The linked project's integration values take precedence when Kronos polls that ticket's providers.
+![Kronos context composer beside an operator-owned terminal, using synthetic data](docs/assets/kronos-context-composer.png)
 
-From a ticket workspace, explicitly insert the context needed for the next instruction:
+The product renders above use deliberately synthetic `DEMO-*` records and example-only provider state. They contain no live credentials, employer data, usernames, or machine paths.
 
-- `[JIRA-123]` for Jira fields, description, comments, custom fields, and paths to bounded raw attachment files of any type;
-- `[MR-77]` for GitLab merge-request, review, diff, pipeline, job, and test evidence;
-- `[CI-JIRA-123]` for Jenkins build/test/stage and SonarQube gate/measure/issue evidence.
+## Human-in-the-Loop by Construction
 
-Jira and MR insertion first opens a composer containing an escaped preview of the fetched description, comments, notes, and completeness warnings. The private artifact reference is fixed, while **Operator focus** is editable. **Place in Terminal** or Ctrl/Cmd+Enter inserts one shell-quoted line with execution disabled; ordinary Enter edits the textarea. CI insertion uses the same non-submitting terminal boundary. In every case, only the operator can press Enter in the terminal.
+Kronos has two intentional terminal-write boundaries:
 
-**Refresh Jira Tickets** uses Jira Cloud's bounded read-only JQL search directly from the extension. Set `JIRA_JQL` to choose the Work list; otherwise Kronos reads unresolved work plus the last 30 days of resolved work assigned to the current Jira user, and the board hides completed rows locally by default. A partial paginated read retains prior rows instead of silently dropping them. Jira values are pruned recursively before storage and display: `null`, empty strings, empty arrays, empty objects, and recursively empty rich text disappear, while meaningful `false` and `0` values remain.
+| Boundary | Allowed behavior | Guardrail |
+| --- | --- | --- |
+| Explicit Claude launch | Create and focus a new terminal after **New Claude** or **Start Claude for Ticket** | Accepts only a validated `claude` or `claude-*` executable and narrowly allowlisted, non-escalating interactive flags |
+| Context insertion | Place a reviewed reference and editable focus in an attached terminal | Uses shell-inert quoting and VS Code's `sendText(..., false)`; Kronos never presses Enter |
 
-### Sessions
+Kronos reads, organizes, inserts, monitors, and audits. It does **not**:
 
-The Sessions view contains two ordered sections: interactive **Sessions** first and registered **Projects** below it. Sessions shows both standalone Claude sessions and ticket-linked work sessions with their ephemeral live-terminal attachment. **New Claude** creates and focuses a standalone terminal without inventing a Jira key or ticket link. **Start Claude for Ticket** creates the same operator-owned terminal experience but records the selected ticket association.
+- launch automatically or expose a generic command runner;
+- read terminal input, output, or scrollback;
+- submit inserted text;
+- run project tests, builds, scans, deployments, or remediation;
+- create, switch, commit, push, merge, or otherwise mutate Git;
+- write to Jira, GitLab, Jenkins, SonarQube, or a database;
+- close an operator's terminal.
 
-Each session reports whether the terminal is attached, which providers are bound, context freshness, monitoring health, and the latest poll result where applicable. Selecting a Session opens its attached terminal immediately. If the live attachment was lost after reload, Kronos lets you choose which currently open terminal to reconnect and then opens it. A Kronos-created terminal tab includes the Git branch read from its actual launch directory—for example, `Claude · JIRA-123 @ feature/context` or `Claude @ main`—without invoking Git or renaming an existing terminal.
+The complete normative boundary is in the [terminal-first product contract](docs/terminal-first-product-contract.md).
 
-From Sessions, the operator can focus or reattach the terminal, poll providers, pause or resume monitoring, inspect the audit, detach the terminal, stop management, or explicitly remove an old local session record. Detaching, stopping, and removal never close the terminal. Removal deletes that session's local record and colocated monitor snapshots after confirmation while retaining shared audit history and saved context artifacts.
+## Architecture
 
-Automatic GitLab discovery is stored with the ticket's local work session and monitor snapshot. `work.json` stays the Jira catalog; Work, the board, filtering, and the ticket workspace compose the newest local MR binding and matching poll digest when they render, so a discovered MR does not disappear on the next Jira refresh.
+```mermaid
+flowchart LR
+    O[Operator] --> UI[VS Code: Work / Sessions / Attention]
+    UI --> C[Command and service layer]
 
-Each registered Project shows its current branch and change count when the repository is already known to VS Code. Expand it to explicitly open that repository in VS Code's built-in Git model and view a read-only status/diff, insert a secret-redacted `[GIT-project]` working-tree snapshot into one attached project session, open an existing MR or a prefilled GitLab new-MR page, insert MR or Jenkins/SonarQube evidence, or edit provider polling setup. Opening the new-MR page is explicit browser navigation; Kronos never posts or creates the MR itself.
+    C -->|bounded GET reads| P[Jira / GitLab / Jenkins / SonarQube]
+    C -->|VS Code Git API + .git/HEAD| G[Local project evidence]
+    C --> S[Private local artifacts and audit]
+    S --> M[Provider monitor]
+    M --> UI
 
-After VS Code reloads, persisted history remains but the live terminal starts detached. Kronos does not trust a saved terminal name or process ID as proof of identity. Select the Session: if exactly one unclaimed terminal is open it reconnects and opens it; otherwise choose the intended terminal from the list.
+    C -->|explicit validated start| T[Operator-owned Claude terminal]
+    C -->|reviewed text, execute=false| T
 
-### Attention
+    classDef boundary fill:#102f46,stroke:#38bdf8,color:#eaf6ff;
+    classDef local fill:#153322,stroke:#4ade80,color:#effff4;
+    class C,T boundary;
+    class G,S,M local;
+```
 
-Attention is the session- and ticket-aware inbox for meaningful provider changes and monitoring problems: the first successful observation of a merge request, later merge-request review changes, pipeline failures or recoveries, Jenkins test/stage changes, SonarQube gate or issue changes, partial provider reads, and monitoring blockers. The initial MR item is informational when healthy and a warning when it already needs review, so an MR first found in a mergeable state is still visible once.
+The installed extension uses the VS Code API and Node built-ins only. It has **zero third-party runtime dependencies** and does not bundle an agent SDK, subprocess helper, or provider client library.
 
-An attention item can open the originating provider page, open its ticket workspace when ticket-linked, insert applicable fresh MR or CI context into the managed terminal, or be acknowledged. When more than one retained SonarQube branch or Jenkins build is available, opening the provider first presents a native branch/build picker. SonarQube dashboard links retain only the non-secret `id` and `branch` routing parameters. Acknowledgement changes only the local audit state.
+### Engineering proof
 
-## Typical Journey
+| Measure | Current preview |
+| --- | ---: |
+| Enterprise provider integrations | 4 |
+| Focused VS Code views | 3 |
+| Audited terminal-write paths | 2 |
+| Manifest-covered commands | 34 |
+| Manifest-covered settings | 10 |
+| Reachable runtime modules checked for cycles/dead exports | 59 |
+| Third-party runtime dependencies | 0 |
+| Automated Node/DOM/board tests | 65 |
 
-1. Open **Kronos > Work**, choose discovery folders, register the projects you need, and complete their optional provider-polling identifiers; then use the Jira board filters and select a ticket.
-2. Choose the ticket's local project/branch, then choose **Start Claude for Ticket**, or focus an existing terminal and choose **Manage Focused Terminal**.
-3. For an explicit start, Kronos validates the configured executable and approved interactive flags, terminal name, and working directory; it then creates and focuses one VS Code terminal and executes that command once.
-4. Choose **Insert `[JIRA-123]`**. Kronos writes a private context artifact and opens the context composer.
-5. Review the fetched evidence, add an optional operator focus, choose **Place in Terminal** (or Ctrl/Cmd+Enter), then press Enter in the terminal yourself and continue directing the interactive session normally.
-6. Once a project and ticket session are configured, Kronos immediately begins read-only provider polling and continues on the configured interval. GitLab finds a unique open MR by current branch first and Jira key second; it refuses ambiguous matches. When a Jenkins job is configured but SonarQube is not, Kronos makes a bounded best-effort read of the job's `/config.xml` and can use a literal `sonar.projectKey` plus optional literal `sonar.branch.name` to discover the SonarQube target in the same polling cycle. Raw XML is not retained, and expression-valued properties are ignored. The MR/CI buttons are evidence insertion actions, not connection steps.
-7. Respond to meaningful changes from **Attention** by opening the provider, inserting fresh context, or acknowledging the event.
-8. Use **Sessions > Open Work Session Audit** to inspect context provenance, completeness, transitions, and acknowledgements. Terminal contents are never part of the audit.
-9. Choose **Stop Managing Work Session** when finished. The terminal remains open and under operator control.
+Automated gates also cover the runtime graph, security boundary, context governance, activation surface, provider transitions, private state, credential redaction, and packaged extension contents.
 
-For work that does not begin with Jira, choose **Sessions > New Claude**. The resulting session is standalone and receives no ticket identity. A ticket association is created only through a separate ticket action from Work.
+## Try It Locally
 
-## Runtime, Local Data, and Credentials
+Requirements:
 
-The installed extension has **zero third-party runtime dependencies**. Its implementation uses the VS Code API and Node built-ins only; it does not use helper scripts, subprocess libraries, or a bundled agent SDK. The sole external program it can start is the operator-configured Claude executable, through a newly created VS Code terminal and only after **New Claude** or **Start Claude for Ticket** is clicked. TypeScript and the official VS Code type packages are development-only tooling. Release packaging uses the pinned official VS Code Extension Manager CLI (`@vscode/vsce@3.9.2`), which is not shipped in the extension.
-
-Kronos uses local operator state under `~/.kronos` by default, or the explicitly configured `KRONOS_DIR`. Provider credentials are inherited from the extension environment and, when present, `~/.kronos/.env` (or `KRONOS_ENV_FILE`). Credential values are not written to context artifacts, work-session records, or audit events. The cross-window monitoring lease uses `O_NOFOLLOW` on supporting POSIX systems; Windows omits that unsupported open flag and instead relies on exclusive file creation plus pre/post-open file-identity checks.
-
-Common read-only configuration variables are:
-
-- Jira: `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, optional `JIRA_JQL`;
-- GitLab: `GITLAB_TOKEN` and `GITLAB_API_BASE_URL` or `GITLAB_BASE_URL`;
-- Jenkins: `JENKINS_URL`, plus optional `JENKINS_USER`/`JENKINS_USERNAME` and `JENKINS_API_TOKEN`/`JENKINS_TOKEN`;
-- SonarQube: `SONAR_HOST_URL`/`SONAR_URL` and `SONAR_TOKEN`.
-
-Structured context artifacts are bounded, normalized, secret-redacted, wrapped as untrusted provider data, and stored in private per-user files where the platform supports private file permissions. Jira attachments are downloaded byte-for-byte without a MIME allowlist or bundled parser, stored separately as private files, and referenced by a sanitized local path plus SHA-256. Raw attachments are intentionally not transformed or secret-redacted, may contain sensitive or malicious content, and must never be executed. One explicit Jira insertion reads at most 100 files, 25 MiB per file, and 100 MiB total. Provider reads remain pinned to the configured origin when credentials are sent. Kronos does not fetch GitLab job traces or Jenkins console logs.
-
-Use **Kronos: Setup** for a guided dashboard covering Claude, discovery folders, registered projects, Jira, monitoring providers, and private local state. **Kronos: Doctor** opens a dedicated readiness dashboard with blocked and warning checks first, safe repair links, and no credential values. Both panels can refresh in place and link to the Jira board or relevant Settings. Use **Kronos: Settings** to change:
-
-- project discovery roots selected through the native multi-folder picker, plus depth and result limit;
-- whether completed Jira work is hidden by default and any team-specific completed status names;
-- the validated Claude command, terminal name, and launch-directory behavior;
-- Jira refresh and managed-provider polling intervals.
-
-## Install for Local Evaluation
+- Node.js 20 or newer
+- VS Code 1.85 or newer
+- the Claude CLI only if you choose to exercise explicit terminal launch
 
 ```bash
-npm install
-npm run compile
+git clone https://github.com/jmac4909/Kronos.git
+cd Kronos
+npm ci
+npm test
 npm run package
 code --install-extension kronos-0.1.0.vsix --force
 ```
 
-Reload VS Code, open the Kronos activity icon, and confirm exactly three views appear: **Work**, **Sessions**, and **Attention**.
+Reload VS Code and open the Kronos activity icon. The extension exposes exactly three views: **Work**, **Sessions**, and **Attention**.
 
-For an isolated local fixture:
+### Isolated synthetic fixture
 
 ```bash
 npm run feedback:state
 KRONOS_DIR="$PWD/.kronos/feedback-state" code .
 ```
 
-On Windows PowerShell:
+PowerShell:
 
 ```powershell
 npm run feedback:state
@@ -120,19 +138,66 @@ $env:KRONOS_DIR = "$PWD\.kronos\feedback-state"
 code .
 ```
 
-Fixture data is synthetic. It includes paused, detached ticket/standalone Sessions and retained MR/Jenkins/Sonar Attention evidence, including one repeated provider failure for visual deduplication review. Provider URLs use `.invalid`; no terminal or provider request starts automatically. Do not use the fixture to post or mutate real provider state.
+The fixture uses `.invalid` provider URLs. It must not contact or mutate real systems, and it never starts a terminal automatically.
 
-## Developer Validation
+## Configuration
 
-These commands validate and package the extension itself; they are run manually by a developer. The installed Kronos runtime never invokes project tests, builds, or deployments.
+Kronos reads provider credentials from the extension process environment and, when present, `~/.kronos/.env` or `KRONOS_ENV_FILE`. Credential values are never written to context artifacts, work-session records, URLs, or audit events.
+
+| Provider | Required values | Optional values |
+| --- | --- | --- |
+| Jira | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | `JIRA_JQL` |
+| GitLab | `GITLAB_TOKEN` | `GITLAB_API_BASE_URL` or `GITLAB_BASE_URL` |
+| Jenkins | `JENKINS_URL` | `JENKINS_USER` / `JENKINS_USERNAME`, `JENKINS_API_TOKEN` / `JENKINS_TOKEN` |
+| SonarQube | `SONAR_HOST_URL` or `SONAR_URL`, `SONAR_TOKEN` | project and branch bindings configured per local project |
+
+Use **Kronos: Setup** for guided configuration and **Kronos: Doctor** for readiness checks. Neither surface displays credential values.
+
+Local state is stored under `~/.kronos` by default or an explicitly configured `KRONOS_DIR`. Provider payloads are normalized, bounded, secret-redacted, wrapped as untrusted data, and written to private per-user files where the platform supports private permissions.
+
+## Validation
 
 ```bash
-npm run compile
+npm ci
 npm test
-npm run webview:dom
 npm run feedback:smoke
 npm run package
 npm run feedback:ready
 ```
 
-Use [HUMAN_FEEDBACK_CHECKLIST.md](HUMAN_FEEDBACK_CHECKLIST.md) for the terminal-first evaluation pass.
+`npm test` begins with a public-surface gate that rejects tracked local-state directories, machine-specific home paths, employer identifiers, private-key material, and high-confidence token shapes. The remaining checks enforce the manifest allowlist, reachable runtime graph, explicit-launch boundary, context governance, strict TypeScript compilation, unit behavior, and dependency-free webviews.
+
+For the interactive pass, use [HUMAN_FEEDBACK_CHECKLIST.md](HUMAN_FEEDBACK_CHECKLIST.md). Real-provider, terminal-focus, and Windows feedback remain explicit human gates; see the [completion audit](docs/terminal-first-completion-audit.md).
+
+## Repository Map
+
+```text
+src/extension.ts                         thin activation entry point
+src/terminalFirstExtension.ts            command registration and orchestration
+src/services/*RestClient.ts              bounded read-only provider clients
+src/services/*View.ts                    pure HTML builders for editor surfaces
+src/services/terminalContextInsertion.ts non-submitting terminal insertion
+src/services/claudeTerminalLauncher.ts   explicit validated Claude launch
+src/state/                               terminal-first state model
+media/                                   extension runtime and icon assets
+scripts/                                 validation, packaging, and fixture tools
+docs/                                    product contract, audit, and preview assets
+```
+
+## Current Limits
+
+- Kronos is a local VS Code extension preview, not a hosted backend or autonomous software-development agent.
+- Marketplace publication, adoption, production-scale operation, and live-provider compatibility are not claimed.
+- Real VS Code/Claude, provider, focus/reattachment, and Windows checks require recorded human feedback.
+- Raw Jira attachments are stored byte-for-byte under strict count and size limits; they are never parsed or executed by Kronos.
+- This repository is source-available for review, not open source.
+
+## Project Information
+
+- [Changelog](CHANGELOG.md)
+- [Security policy](SECURITY.md)
+- [Support and feedback](SUPPORT.md)
+- [Contribution guide](CONTRIBUTING.md)
+- [Human feedback checklist](HUMAN_FEEDBACK_CHECKLIST.md)
+
+Copyright © 2026 Kronos authors. All rights reserved.
