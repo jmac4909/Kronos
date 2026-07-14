@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
 import type { KronosState, ProjectConfig } from '../state/types';
-import { isGitLabRestConfigured } from '../services/gitlabRestClient';
-import { isJenkinsRestConfigured } from '../services/jenkinsRestClient';
 import { listLocalProjects } from '../services/projectCatalog';
-import { isSonarRestConfigured } from '../services/sonarRestClient';
+import { providerReadiness } from '../services/providerReadiness';
 import {
   readProjectGitEvidence,
   type ProjectGitEvidence,
@@ -92,10 +90,11 @@ class RegisteredProjectTreeItem extends vscode.TreeItem {
     this.contextValue = 'registered_project';
     this.iconPath = projectIcon(evidence);
     this.description = `${evidence.branch || 'branch unavailable'} • ${projectStatusLabel(evidence)}`;
+    const readiness = providerReadiness();
     const providers = [
-      providerStatus('GitLab', Boolean(config.gitlab_project_id || config.gitlab_project_path), isGitLabRestConfigured(), linkedSessionCount),
-      providerStatus('Jenkins', Boolean(config.jenkins_url), isJenkinsRestConfigured(), linkedSessionCount),
-      providerStatus('SonarQube', Boolean(config.sonar_project_key), isSonarRestConfigured(), linkedSessionCount),
+      providerStatus('GitLab', Boolean(config.gitlab_project_id || config.gitlab_project_path), readiness.gitlab.configured, linkedSessionCount),
+      providerStatus('Jenkins', Boolean(config.jenkins_url), readiness.jenkins.configured, linkedSessionCount),
+      providerStatus('SonarQube', Boolean(config.sonar_project_key), readiness.sonar.configured, linkedSessionCount),
     ];
     this.tooltip = [
       `Project: ${target.projectName}`,

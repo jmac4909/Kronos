@@ -51,6 +51,8 @@ const privateFilePrimitives = require('../out/services/privateFilePrimitives.js'
 const errorUtils = require('../out/services/errorUtils.js');
 const sensitiveText = require('../out/services/sensitiveText.js');
 const providerUrls = require('../out/services/providerUrls.js');
+const providerReadiness = require('../out/services/providerReadiness.js');
+const operationsReadiness = require('../out/services/operationsReadiness.js');
 
 function createSymlinkOrSkip(t, target, linkPath, type = 'file') {
   try {
@@ -1411,6 +1413,88 @@ test('provider environment parsing preserves values and rejects malformed keys',
   assert.equal(env.NODE_OPTIONS, undefined);
 });
 
+test('provider readiness is shared, secret-free, and distinguishes missing from invalid configuration', () => {
+  const missing = providerReadiness.providerReadiness({});
+  assert.equal(missing.jira.state, 'missing');
+  assert.equal(missing.gitlab.credentialPresence, 'missing');
+  assert.equal(missing.jenkins.state, 'missing');
+  assert.equal(missing.sonar.configured, false);
+
+  const secret = 'never-render-this-token';
+  const ready = providerReadiness.providerReadiness({
+    JIRA_BASE_URL: 'https://jira.example.test',
+    JIRA_EMAIL: 'operator@example.test',
+    JIRA_API_TOKEN: secret,
+    GITLAB_API_BASE_URL: 'https://gitlab.example.test/api/v4',
+    GITLAB_TOKEN: secret,
+    JENKINS_URL: 'https://jenkins.example.test',
+    JENKINS_USER: 'operator',
+    JENKINS_API_TOKEN: secret,
+    SONAR_HOST_URL: 'https://sonar.example.test',
+    SONAR_TOKEN: secret,
+  });
+  assert.deepEqual(Object.values(ready).map(item => item.state), ['ready', 'ready', 'ready', 'ready']);
+  assert.doesNotMatch(JSON.stringify(ready), new RegExp(secret));
+  assert.match(ready.jira.detail, /Credential presence: present/);
+
+  const invalid = providerReadiness.providerReadiness({
+    JIRA_BASE_URL: 'ftp://jira.invalid',
+    JIRA_EMAIL: 'operator@example.test',
+    JIRA_API_TOKEN: secret,
+    JENKINS_URL: 'https://jenkins.example.test',
+    JENKINS_USER: 'operator',
+  });
+  assert.equal(invalid.jira.state, 'invalid-needs-test');
+  assert.equal(invalid.jira.credentialPresence, 'invalid-needs-test');
+  assert.equal(invalid.jenkins.state, 'invalid-needs-test');
+  assert.doesNotMatch(JSON.stringify(invalid), new RegExp(secret));
+});
+
+test('one readiness snapshot feeds Setup and Doctor and gives every non-ready row an action', () => {
+  const providers = Object.values(providerReadiness.providerReadiness({}));
+  const snapshot = operationsReadiness.buildOperationsReadiness({
+    claude: { status: 'pass', detail: 'Claude is ready.' },
+    providerEnvironment: { present: false, invalid: 0, configuredProviders: 0, path: '/private/.env' },
+    discovery: { roots: 0, depth: 2, limit: 100, hasWorkspaceFolders: false },
+    projects: {
+      count: 0,
+      unavailable: 0,
+      detail: 'No projects.',
+      configuredIntegrations: 0,
+      gitlabTargets: 0,
+      jenkinsTargets: 0,
+      sonarTargets: 0,
+    },
+    workCatalog: { available: true, tickets: 0, issues: 0 },
+    jiraVisibility: { hideCompleted: true, additionalCompletedStatuses: 0 },
+    providers,
+    polling: { activeTargets: 0, detail: 'No active polling.' },
+    sessions: { count: 0, issues: 0 },
+  });
+  const setupIds = snapshot.filter(item => item.surfaces.includes('setup')).map(item => item.id);
+  const doctorIds = snapshot.filter(item => item.surfaces.includes('doctor')).map(item => item.id);
+  assert.deepEqual(setupIds, doctorIds.filter(id => id !== 'jira-visibility'));
+  assert.ok(snapshot.filter(item => item.status !== 'pass').every(item => item.action && item.actionLabel));
+  assert.equal(snapshot.find(item => item.id === 'provider-jira').status, 'warn');
+  assert.equal(snapshot.find(item => item.id === 'automatic-polling').action, 'pollProvidersNow');
+});
+
+test('opening provider configuration creates one private comment-only template without replacing existing content', () => {
+  const filePath = path.join(tempRoot, 'provider-env-template', '.env');
+  const created = providerEnv.ensureProviderEnvTemplate(filePath);
+  assert.deepEqual(created, { path: filePath, created: true });
+  const template = fs.readFileSync(filePath, 'utf8');
+  assert.match(template, /# JIRA_BASE_URL=/);
+  assert.match(template, /# GITLAB_TOKEN=/);
+  assert.doesNotMatch(template, /^GITLAB_TOKEN=/m);
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(filePath).mode & 0o777, 0o600);
+  }
+  fs.writeFileSync(filePath, 'KEEP_ME=true\n', { mode: 0o600 });
+  assert.deepEqual(providerEnv.ensureProviderEnvTemplate(filePath), { path: filePath, created: false });
+  assert.equal(fs.readFileSync(filePath, 'utf8'), 'KEEP_ME=true\n');
+});
+
 test('provider environment reads are bounded and retain the exact allowlist', () => {
   const fixtureRoot = path.join(tempRoot, 'provider-env-safety');
   const realParent = path.join(fixtureRoot, 'real-parent');
@@ -2649,8 +2733,20 @@ test('Setup and Doctor render bounded operation dashboards with allowlisted acti
   const doctor = buildDoctorPanelHtml({
     checks: [
       { name: 'Ready check', status: 'pass', detail: 'available' },
-      { name: 'Blocked check', status: 'fail', detail: 'repair this' },
-      { name: 'Review check', status: 'warn', detail: 'optional configuration' },
+      {
+        name: 'Blocked check',
+        status: 'fail',
+        detail: 'repair this',
+        action: 'openProviderEnvironment',
+        actionLabel: 'Repair Private Config',
+      },
+      {
+        name: 'Review check',
+        status: 'warn',
+        detail: 'optional configuration',
+        action: 'pollProvidersNow',
+        actionLabel: 'Poll Now',
+      },
     ],
     nonce: 'doctor-nonce',
     actionScriptUri: 'vscode-webview://fixture/kronos-action-panel.js',
@@ -2661,6 +2757,8 @@ test('Setup and Doctor render bounded operation dashboards with allowlisted acti
   assert.match(doctor, /<strong>1<\/strong><span>Blocked<\/span>/);
   assert.ok(doctor.indexOf('Blocked check') < doctor.indexOf('Review check'));
   assert.ok(doctor.indexOf('Review check') < doctor.indexOf('Ready check'));
+  assert.match(doctor, /data-action="openProviderEnvironment"/);
+  assert.match(doctor, /data-action="pollProvidersNow"/);
 
   assert.deepEqual(
     normalizeOperationsActionMessage({ command: 'openDoctor', ticket: 'JIRA-123', runId: 'legacy' }, new Set(['openDoctor'])),

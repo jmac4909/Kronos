@@ -1,5 +1,7 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { unknownErrorMessage } from './errorUtils';
+import { writePrivateTextFileAtomically } from './privateFilePrimitives';
 import { KRONOS_DIR, readBoundedPrivateUtf8File } from './stateStore';
 
 export interface ProviderEnvLoadResult {
@@ -26,6 +28,29 @@ interface ParsedDotEnv {
 }
 
 export const MAX_PROVIDER_ENV_BYTES = 256 * 1024;
+const PROVIDER_ENV_TEMPLATE = `# Kronos private provider configuration.
+# Uncomment only the providers you use. Never commit this file.
+
+# Jira
+# JIRA_BASE_URL=https://jira.example.com
+# JIRA_EMAIL=you@example.com
+# JIRA_API_TOKEN=
+# JIRA_JQL=assignee = currentUser() ORDER BY updated DESC
+
+# GitLab
+# GITLAB_API_BASE_URL=https://gitlab.example.com/api/v4
+# GITLAB_TOKEN=
+
+# Jenkins (credentials may be omitted only for anonymous read access)
+# JENKINS_URL=https://jenkins.example.com
+# JENKINS_USER=
+# JENKINS_API_TOKEN=
+# JENKINS_TLS_REJECT_UNAUTHORIZED=true
+
+# SonarQube
+# SONAR_HOST_URL=https://sonar.example.com
+# SONAR_TOKEN=
+`;
 
 const SUPPORTED_PROVIDER_ENV_KEYS = new Set([
   'JIRA_BASE_URL',
@@ -50,6 +75,33 @@ const SUPPORTED_PROVIDER_ENV_KEYS = new Set([
 
 export function defaultProviderEnvPath(): string {
   return process.env['KRONOS_ENV_FILE']?.trim() || path.join(KRONOS_DIR, '.env');
+}
+
+/** Creates an explicit, comment-only private template when the file is absent. */
+export function ensureProviderEnvTemplate(filePath = defaultProviderEnvPath()): {
+  path: string;
+  created: boolean;
+} {
+  try {
+    readBoundedPrivateUtf8File(filePath, MAX_PROVIDER_ENV_BYTES, 'Kronos provider environment file');
+    return { path: filePath, created: false };
+  } catch (error: unknown) {
+    if (!hasErrorCode(error, 'ENOENT')) { throw error; }
+  }
+  const directoryPath = path.dirname(path.resolve(filePath));
+  fs.mkdirSync(directoryPath, { recursive: true, mode: 0o700 });
+  const directory = fs.lstatSync(directoryPath);
+  if (!directory.isDirectory() || directory.isSymbolicLink()) {
+    throw new Error('Kronos provider environment directory must be a real directory.');
+  }
+  if (process.platform !== 'win32') { fs.chmodSync(directoryPath, 0o700); }
+  writePrivateTextFileAtomically(filePath, PROVIDER_ENV_TEMPLATE, {
+    label: 'Kronos provider environment file',
+    maxBytes: MAX_PROVIDER_ENV_BYTES,
+    temporaryPrefix: 'provider-env',
+    fileMode: 0o600,
+  });
+  return { path: filePath, created: true };
 }
 
 export function loadProviderEnv(options: ProviderEnvLoadOptions = {}): ProviderEnvLoadResult {

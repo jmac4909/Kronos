@@ -22,6 +22,8 @@ export interface DoctorCheck {
   name: string;
   detail: string;
   status: OperationsStatus;
+  action?: string;
+  actionLabel?: string;
 }
 
 export interface DoctorPanelInput {
@@ -116,6 +118,9 @@ export function buildDoctorPanelHtml(input: DoctorPanelInput): string {
     <div>
       <h2>${escapeHtml(check.name)}</h2>
       <div class="doctor-detail">${escapeHtml(check.detail)}</div>
+      ${check.action && check.actionLabel
+        ? `<div class="doctor-action">${operationsActionButton(check.action, check.actionLabel)}</div>`
+        : ''}
     </div>
   </article>`).join('');
   const tone = summary.fail > 0 ? 'fail' : summary.warn > 0 ? 'warn' : 'pass';
@@ -143,6 +148,7 @@ ${operationsPanelCss()}
 .doctor-check.fail { border-left-color: var(--k-danger); }
 .doctor-check h2 { margin: 0 0 3px; font-size: 13px; font-weight: 650; }
 .doctor-detail { color: var(--k-muted); font-size: 12px; line-height: 1.45; word-break: break-word; }
+.doctor-action { margin-top: 9px; }
 .privacy-note { margin: 15px 0 0; color: var(--k-muted); font-size: 12px; }
 @media (max-width: 620px) {
   .doctor-summary { grid-template-columns: 1fr; }

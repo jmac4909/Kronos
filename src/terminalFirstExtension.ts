@@ -6,7 +6,12 @@ import { WorkTreeProvider } from './views/WorkTreeProvider';
 import { ManagedSessionTreeProvider } from './views/ManagedSessionTreeProvider';
 import { ProjectTreeProvider, type RegisteredProjectCommandTarget } from './views/ProjectTreeProvider';
 import { AttentionTreeProvider } from './views/AttentionTreeProvider';
-import { defaultProviderEnvPath, loadProviderEnv } from './services/providerEnv';
+import {
+  defaultProviderEnvPath,
+  ensureProviderEnvTemplate,
+  loadProviderEnv,
+  type ProviderEnvLoadResult,
+} from './services/providerEnv';
 import { boundedOperationFailure, unknownErrorMessage } from './services/errorUtils';
 import { buildFallbackJiraTicketContext, normalizeJiraTicketContext, type JiraTicketContext } from './services/jiraTicketContext';
 import { isJiraRestConfigured, jiraRestClient, type JiraAttachmentContentSnapshot } from './services/jiraRestClient';
@@ -114,9 +119,13 @@ import {
   buildDoctorPanelHtml,
   buildSetupPanelHtml,
   type DoctorCheck,
-  type OperationsStatus,
   type SetupStep,
 } from './services/operationsPanelView';
+import {
+  buildOperationsReadiness,
+  type OperationsReadinessItem,
+} from './services/operationsReadiness';
+import { providerReadiness } from './services/providerReadiness';
 import {
   CONTEXT_COMPOSER_SCRIPT,
   buildContextComposerHtml,
@@ -152,10 +161,12 @@ const OPERATIONS_PANEL_ACTIONS = new Set([
   'openDoctor',
   'openSettings',
   'openClaudeSettings',
+  'openProviderEnvironment',
   'chooseProjectDiscoveryFolders',
   'manageLocalProjects',
   'configureProjectIntegrations',
   'openJiraBoard',
+  'pollProvidersNow',
 ]);
 const CLAUDE_LAUNCH_COOLDOWN_MS = 1_000;
 
@@ -256,6 +267,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private refreshTimer: NodeJS.Timeout | undefined;
   private providerTimer: NodeJS.Timeout | undefined;
   private ticketRefreshRunning = false;
+  private providerEnvironmentLoad: ProviderEnvLoadResult | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.loadProviderEnvironment();
@@ -279,8 +291,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
         this.projectTree.refresh();
         this.refreshTicketPanels();
         this.renderJiraBoardPanel();
-        this.renderSetupPanel();
-        this.renderDoctorPanel();
+        this.renderOperationsPanels();
       }),
       vscode.window.onDidCloseTerminal(terminal => this.handleClosedTerminal(terminal)),
       vscode.workspace.onDidChangeConfiguration(event => {
@@ -294,8 +305,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
           this.renderJiraBoardPanel();
         }
         if (event.affectsConfiguration('kronos')) {
-          this.renderSetupPanel();
-          this.renderDoctorPanel();
+          this.renderOperationsPanels();
         }
       }),
     );
@@ -378,6 +388,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
 
   private loadProviderEnvironment(): void {
     const result = loadProviderEnv();
+    this.providerEnvironmentLoad = result;
     if (result.error) {
       this.log('Could not load the local provider environment.', result.error);
       void vscode.window.showWarningMessage('Kronos could not load its provider environment file. Provider reads may be unavailable; run Kronos: Doctor.');
@@ -749,26 +760,24 @@ class TerminalFirstRuntime implements vscode.Disposable {
     const scriptUri = panel.webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', PROJECT_INTEGRATION_SCRIPT),
     ).toString();
-    const gitLabReady = isGitLabRestConfigured();
-    const jenkinsReady = isJenkinsRestConfigured();
-    const sonarReady = isSonarRestConfigured();
+    const readiness = providerReadiness();
     panel.webview.html = withWebviewCsp(buildProjectIntegrationPanelHtml({
       projects,
       providerReadiness: [
         {
           name: 'GitLab credentials',
-          ready: gitLabReady,
-          detail: gitLabReady ? 'Read-only REST environment is ready.' : 'Add a GitLab URL and token in private Setup.',
+          ready: readiness.gitlab.configured,
+          detail: readiness.gitlab.detail,
         },
         {
           name: 'Jenkins access',
-          ready: jenkinsReady,
-          detail: jenkinsReady ? 'Jenkins base URL is available.' : 'Add JENKINS_URL in private Setup.',
+          ready: readiness.jenkins.configured,
+          detail: readiness.jenkins.detail,
         },
         {
           name: 'SonarQube credentials',
-          ready: sonarReady,
-          detail: sonarReady ? 'Read-only REST environment is ready.' : 'Add a SonarQube URL and token in private Setup.',
+          ready: readiness.sonar.configured,
+          detail: readiness.sonar.detail,
         },
       ],
       nonce: record.nonce,
@@ -2368,6 +2377,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
         await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:jmacke01.kronos');
       } else if (action === 'openClaudeSettings') {
         await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:jmacke01.kronos claude');
+      } else if (action === 'openProviderEnvironment') {
+        await this.openProviderEnvironment();
       } else if (action === 'chooseProjectDiscoveryFolders') {
         await this.configureProjectDiscoveryFolders();
       } else if (action === 'manageLocalProjects') {
@@ -2376,9 +2387,10 @@ class TerminalFirstRuntime implements vscode.Disposable {
         this.openProjectIntegrationSetup();
       } else if (action === 'openJiraBoard') {
         await this.openJiraBoard();
+      } else if (action === 'pollProvidersNow') {
+        await this.pollProviders(true);
       }
-      this.renderSetupPanel();
-      this.renderDoctorPanel();
+      this.renderOperationsPanels();
     } catch (error: unknown) {
       const detail = boundedOperationFailure(error, `Kronos ${source} action failed.`).display;
       this.log(`Kronos ${source} action failed.`, detail);
@@ -2388,26 +2400,79 @@ class TerminalFirstRuntime implements vscode.Disposable {
     }
   }
 
-  private renderSetupPanel(): void {
+  private async openProviderEnvironment(): Promise<void> {
+    const result = ensureProviderEnvTemplate();
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(result.path));
+    await vscode.window.showTextDocument(document, { preview: false });
+    if (result.created) {
+      void vscode.window.showInformationMessage(
+        'Created a private, comment-only Kronos provider template. Uncomment only the providers you use, save it, then use Refresh in Setup or Doctor.',
+      );
+    }
+  }
+
+  private renderOperationsPanels(): void {
+    const readiness = this.operationsReadiness();
+    this.renderSetupPanel(readiness);
+    this.renderDoctorPanel(readiness);
+  }
+
+  private renderSetupPanel(readiness = this.operationsReadiness()): void {
     const record = this.setupPanel;
     if (!record) { return; }
     const actionScriptUri = record.panel.webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', WEBVIEW_ACTION_PANEL_SCRIPT),
     ).toString();
     record.panel.webview.html = withWebviewCsp(buildSetupPanelHtml({
-      steps: this.setupSteps(),
+      steps: this.setupSteps(readiness),
       providerEnvPath: defaultProviderEnvPath(),
       nonce: record.nonce,
       actionScriptUri,
     }), webviewScriptCspOptions(record.panel.webview.cspSource, record.nonce));
   }
 
-  private setupSteps(): SetupStep[] {
+  private setupSteps(readiness: readonly OperationsReadinessItem[]): SetupStep[] {
+    return readiness
+      .filter(item => item.surfaces.includes('setup'))
+      .map(item => ({
+        title: item.title,
+        detail: item.detail,
+        status: item.status,
+        action: item.action,
+        actionLabel: item.actionLabel,
+      }));
+  }
+
+  private renderDoctorPanel(readiness = this.operationsReadiness()): void {
+    const record = this.doctorPanel;
+    if (!record) { return; }
+    const actionScriptUri = record.panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', WEBVIEW_ACTION_PANEL_SCRIPT),
+    ).toString();
+    record.panel.webview.html = withWebviewCsp(buildDoctorPanelHtml({
+      checks: this.doctorChecks(readiness),
+      nonce: record.nonce,
+      actionScriptUri,
+    }), webviewScriptCspOptions(record.panel.webview.cspSource, record.nonce));
+  }
+
+  private doctorChecks(readiness: readonly OperationsReadinessItem[]): DoctorCheck[] {
+    return readiness
+      .filter(item => item.surfaces.includes('doctor'))
+      .map(item => ({
+        name: item.title,
+        status: item.status,
+        detail: item.detail,
+        action: item.action,
+        actionLabel: item.actionLabel,
+      }));
+  }
+
+  private operationsReadiness(): OperationsReadinessItem[] {
     const projects = listLocalProjects(this.state.state);
     const unavailableProjects = projects.filter(project => !project.available);
     const discovery = this.projectDiscoverySettings();
     const claude = this.claudeReadinessCheck();
-    const jiraConfigured = isJiraRestConfigured();
     const sessions = listWorkSessions();
     const sessionIssues = listWorkSessionStoreIssues();
     const integrationCounts = projects.reduce((counts, project) => {
@@ -2422,160 +2487,67 @@ class TerminalFirstRuntime implements vscode.Disposable {
         sonar: counts.sonar + (sonar ? 1 : 0),
       };
     }, { projects: 0, gitlab: 0, jenkins: 0, sonar: 0 });
-    const configuredMonitoringProviders = [
-      isGitLabRestConfigured() ? 'GitLab' : '',
-      isJenkinsRestConfigured() ? 'Jenkins' : '',
-      isSonarRestConfigured() ? 'SonarQube' : '',
-    ].filter(Boolean);
     const activePolling = this.activeProviderPollingSummary();
-    const stateIssueCount = this.state.loadIssues.length + sessionIssues.length;
+    const environment = this.providerEnvironmentLoad || {
+      path: defaultProviderEnvPath(),
+      present: false,
+      parsed: 0,
+      loaded: 0,
+      skippedExisting: 0,
+      invalid: 0,
+    };
     const ticketCount = Object.keys(this.state.state?.tickets || {}).length;
-    return [
-      {
-        title: 'Claude terminal launch',
-        detail: claude.detail,
-        status: claude.status,
-        action: 'openClaudeSettings',
-        actionLabel: 'Claude Settings',
+    const readiness = providerReadiness();
+    return buildOperationsReadiness({
+      claude: { status: claude.status, detail: claude.detail },
+      providerEnvironment: {
+        path: environment.path,
+        present: environment.present,
+        invalid: environment.invalid,
+        configuredProviders: [readiness.jira, readiness.gitlab, readiness.jenkins, readiness.sonar]
+          .filter(provider => provider.configured).length,
+        ...(environment.error ? { error: environment.error } : {}),
       },
-      {
-        title: 'Project discovery folders',
-        detail: `${discovery.roots.length} selected parent folder${discovery.roots.length === 1 ? '' : 's'}; scan depth ${discovery.depth}; result limit ${discovery.limit}. Open workspace folders are included automatically.`,
-        status: discovery.roots.length > 0 || Boolean(vscode.workspace.workspaceFolders?.length) ? 'pass' : 'warn',
-        action: 'chooseProjectDiscoveryFolders',
-        actionLabel: 'Choose Folders',
+      discovery: {
+        roots: discovery.roots.length,
+        depth: discovery.depth,
+        limit: discovery.limit,
+        hasWorkspaceFolders: Boolean(vscode.workspace.workspaceFolders?.length),
       },
-      {
-        title: 'Registered local projects',
+      projects: {
+        count: projects.length,
+        unavailable: unavailableProjects.length,
         detail: projects.length === 0
           ? 'No local project is registered yet.'
-          : `${projects.length} registered; ${unavailableProjects.length} unavailable. Current branches are read directly from Git HEAD without running Git.`,
-        status: unavailableProjects.length > 0 ? 'fail' : projects.length > 0 ? 'pass' : 'warn',
-        action: 'manageLocalProjects',
-        actionLabel: 'Manage Projects',
+          : `${projects.length} registered; ${unavailableProjects.length} unavailable. ${projects.map(project => `${project.name}: ${project.branch || (project.available ? 'Git branch unavailable' : 'folder unavailable')}`).join('; ')}.`,
+        configuredIntegrations: integrationCounts.projects,
+        gitlabTargets: integrationCounts.gitlab,
+        jenkinsTargets: integrationCounts.jenkins,
+        sonarTargets: integrationCounts.sonar,
       },
-      {
-        title: 'Jira work board',
-        detail: jiraConfigured
-          ? `Jira read access is configured; ${ticketCount} ticket${ticketCount === 1 ? '' : 's'} currently loaded.`
-          : 'Jira read access needs JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN in the private provider environment.',
-        status: jiraConfigured ? 'pass' : 'warn',
-        action: 'openJiraBoard',
-        actionLabel: 'Open Jira Board',
+      workCatalog: {
+        available: this.state.state !== null,
+        tickets: ticketCount,
+        issues: this.state.loadIssues.length,
+        ...(this.state.loadIssues[0]
+          ? { firstIssue: `${this.state.loadIssues[0].filePath}: ${this.state.loadIssues[0].detail}` }
+          : {}),
       },
-      {
-        title: 'Project polling configuration',
-        detail: projects.length === 0
-          ? 'Register a local project before adding provider identifiers.'
-          : `${integrationCounts.projects}/${projects.length} registered project${projects.length === 1 ? '' : 's'} have at least one optional polling target; GitLab ${integrationCounts.gitlab}, Jenkins ${integrationCounts.jenkins}, SonarQube ${integrationCounts.sonar}.`,
-        status: projects.length > 0 && integrationCounts.projects === projects.length ? 'pass' : 'warn',
-        action: 'configureProjectIntegrations',
-        actionLabel: 'Configure Integrations',
+      jiraVisibility: {
+        hideCompleted: this.hideCompletedJiraWork(),
+        additionalCompletedStatuses: this.completedJiraStatuses().length,
       },
-      {
-        title: 'MR and pipeline monitoring',
-        detail: configuredMonitoringProviders.length > 0
-          ? `${configuredMonitoringProviders.join(', ')} read-only access configured. ${activePolling.detail}`
-          : 'No optional GitLab, Jenkins, or SonarQube monitoring provider is fully configured yet.',
-        status: configuredMonitoringProviders.length > 0 ? 'pass' : 'warn',
-        action: 'openDoctor',
-        actionLabel: 'Check Providers',
-      },
-      {
-        title: 'Private local state',
-        detail: stateIssueCount === 0
-          ? `${sessions.length} managed session record${sessions.length === 1 ? '' : 's'}; local state is readable.`
-          : `${stateIssueCount} local state issue${stateIssueCount === 1 ? '' : 's'} needs attention.`,
-        status: stateIssueCount === 0 ? 'pass' : 'fail',
-        action: 'openDoctor',
-        actionLabel: 'Inspect with Doctor',
-      },
-    ];
-  }
-
-  private renderDoctorPanel(): void {
-    const record = this.doctorPanel;
-    if (!record) { return; }
-    const actionScriptUri = record.panel.webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'media', WEBVIEW_ACTION_PANEL_SCRIPT),
-    ).toString();
-    record.panel.webview.html = withWebviewCsp(buildDoctorPanelHtml({
-      checks: this.doctorChecks(),
-      nonce: record.nonce,
-      actionScriptUri,
-    }), webviewScriptCspOptions(record.panel.webview.cspSource, record.nonce));
-  }
-
-  private doctorChecks(): DoctorCheck[] {
-    const stateIssues = this.state.loadIssues;
-    const sessionIssues = listWorkSessionStoreIssues();
-    const discoverySettings = this.projectDiscoverySettings();
-    const projects = listLocalProjects(this.state.state);
-    const unavailableProjects = projects.filter(project => !project.available);
-    const ticketCount = Object.keys(this.state.state?.tickets || {}).length;
-    const completedStatuses = this.completedJiraStatuses();
-    const sessions = listWorkSessions();
-    const jiraConfigured = isJiraRestConfigured();
-    const gitLabConfigured = isGitLabRestConfigured();
-    const jenkinsConfigured = isJenkinsRestConfigured();
-    const sonarConfigured = isSonarRestConfigured();
-    const activePolling = this.activeProviderPollingSummary();
-    const workCatalogStatus: OperationsStatus = this.state.state === null || stateIssues.length > 0
-      ? 'fail'
-      : ticketCount > 0 ? 'pass' : 'warn';
-    return [
-      {
-        name: 'Work catalog',
-        status: workCatalogStatus,
-        detail: `${ticketCount} Jira ticket${ticketCount === 1 ? '' : 's'}; ${stateIssues.length} local issue${stateIssues.length === 1 ? '' : 's'}${stateIssues[0] ? ` — ${stateIssues[0].filePath}: ${stateIssues[0].detail}` : ''}`,
-      },
-      {
-        name: 'Local projects and Git branches',
-        status: unavailableProjects.length > 0 ? 'fail' : projects.length > 0 ? 'pass' : 'warn',
-        detail: projects.map(project => `${project.name}: ${project.branch || (project.available ? 'Git branch unavailable' : 'folder unavailable')}`).join('; ') || 'No local projects registered.',
-      },
-      {
-        name: 'Project discovery settings',
-        status: discoverySettings.roots.length > 0 || Boolean(vscode.workspace.workspaceFolders?.length) ? 'pass' : 'warn',
-        detail: `${discoverySettings.roots.length} configured root${discoverySettings.roots.length === 1 ? '' : 's'}; depth ${discoverySettings.depth}; limit ${discoverySettings.limit}.`,
-      },
-      {
-        name: 'Jira visibility settings',
-        status: 'pass',
-        detail: `${this.hideCompletedJiraWork() ? 'Completed work hidden by default' : 'Completed work shown by default'}; ${completedStatuses.length} additional completed status name${completedStatuses.length === 1 ? '' : 's'}.`,
-      },
-      this.claudeReadinessCheck(),
-      {
-        name: 'Jira REST',
-        status: jiraConfigured ? 'pass' : 'warn',
-        detail: jiraConfigured ? 'Configured for bounded read-only Jira access.' : 'Requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN.',
-      },
-      {
-        name: 'GitLab REST',
-        status: gitLabConfigured ? 'pass' : 'warn',
-        detail: gitLabConfigured ? 'Configured for bounded read-only merge-request and pipeline access.' : 'Requires a GitLab URL and token; project identity comes from a binding or MR URL.',
-      },
-      {
-        name: 'Jenkins REST',
-        status: jenkinsConfigured ? 'pass' : 'warn',
-        detail: jenkinsConfigured ? 'Configured for bounded read-only build and test access.' : 'Requires JENKINS_URL; credentials are optional when the server permits anonymous reads.',
-      },
-      {
-        name: 'SonarQube REST',
-        status: sonarConfigured ? 'pass' : 'warn',
-        detail: sonarConfigured ? 'Configured for bounded read-only quality-gate access.' : 'Requires a SonarQube URL and token plus a project/branch binding.',
-      },
-      {
-        name: 'Automatic provider polling',
-        status: activePolling.sessions > 0 && (activePolling.gitlab + activePolling.jenkins + activePolling.sonar) > 0 ? 'pass' : 'warn',
+      providers: [readiness.jira, readiness.gitlab, readiness.jenkins, readiness.sonar],
+      polling: {
+        activeTargets: activePolling.gitlab + activePolling.jenkins + activePolling.sonar,
         detail: activePolling.detail,
       },
-      {
-        name: 'Private work-session state',
-        status: sessionIssues.length === 0 ? 'pass' : 'fail',
-        detail: `${sessions.length} session${sessions.length === 1 ? '' : 's'}; ${sessionIssues.length} invalid record${sessionIssues.length === 1 ? '' : 's'}${sessionIssues[0] ? ` — ${sessionIssues[0].filePath}: ${sessionIssues[0].detail}` : ''}`,
+      sessions: {
+        count: sessions.length,
+        issues: sessionIssues.length,
+        ...(sessionIssues[0] ? { firstIssue: `${sessionIssues[0].filePath}: ${sessionIssues[0].detail}` } : {}),
       },
-    ];
+    });
   }
 
   private claudeReadinessCheck(): DoctorCheck {
@@ -2815,8 +2787,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     this.attentionTree.refresh();
     this.refreshTicketPanels();
     this.renderJiraBoardPanel();
-    this.renderSetupPanel();
-    this.renderDoctorPanel();
+    this.renderOperationsPanels();
   }
 
   private async runProgress(

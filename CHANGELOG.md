@@ -15,6 +15,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Changed
 
+- Unified Setup, Doctor, Projects, and project integration around one secret-free provider-readiness model; added direct private-config editing with a comment-only private template, immediate Poll Now verification, and one bounded action on every readiness row.
 - Added one redacted actionable failure vocabulary for provider reads and common operator workflows, distinguishing configuration, authentication, permission, timeout, DNS, TLS, redirect, rate limit, not found, response bound, malformed response, pagination, lease contention, local state, network, and unknown availability failures.
 - Added one Session lifecycle projection shared by Sessions, polling readiness, and command guards; terminal exit is now durable `closed` history, explicit detach remains `detached`, and stopping management detaches metadata without falsely claiming that the operator-owned terminal closed.
 - Introduced shared cross-platform private-file primitives for the monitoring lease and MR/pipeline/CI snapshots, with Windows lstat/fstat identity checks, POSIX `O_NOFOLLOW`, bounded complete reads/writes, same-directory atomic replacement, and stale-state preservation on rejected writes.
