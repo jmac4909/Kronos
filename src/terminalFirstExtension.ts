@@ -15,7 +15,7 @@ import {
   gitlabRestClient,
   isGitLabRestConfigured,
 } from './services/gitlabRestClient';
-import { normalizeGitLabMergeRequestContext } from './services/gitlabMergeRequestContext';
+import { normalizeGitLabMergeRequestContext, type GitLabMergeRequestContext } from './services/gitlabMergeRequestContext';
 import { writeGitLabContextArtifacts } from './services/gitlabContextStore';
 import { isJenkinsRestConfigured, jenkinsRestClient, type JenkinsBuildContext } from './services/jenkinsRestClient';
 import { isSonarRestConfigured, sonarRestClient, type SonarBranchContext } from './services/sonarRestClient';
@@ -24,6 +24,7 @@ import {
   buildCiContextReference,
   buildGitLabMergeRequestContextReference,
   buildJiraContextReference,
+  insertEditableTerminalContextReference,
   insertTerminalContextReference,
 } from './services/terminalContextInsertion';
 import {
@@ -83,9 +84,20 @@ import {
   webviewScriptCspOptions,
   withWebviewCsp,
 } from './services/webviewSecurity';
-import { normalizeActionPanelMessage, normalizeOperationsActionMessage } from './services/webviewMessages';
+import {
+  normalizeActionPanelMessage,
+  normalizeContextComposerMessage,
+  normalizeOperationsActionMessage,
+  normalizeProjectIntegrationMessage,
+} from './services/webviewMessages';
 import { isRecord } from './services/records';
-import { listLocalProjects, readProjectGitBranch, ticketLocalProject, type LocalProjectSummary } from './services/projectCatalog';
+import {
+  listLocalProjects,
+  projectConfigurationForTicket,
+  readProjectGitBranch,
+  ticketLocalProject,
+  type LocalProjectSummary,
+} from './services/projectCatalog';
 import { discoverLocalProjects, type DiscoveredProject } from './services/projectDiscovery';
 import {
   buildDoctorPanelHtml,
@@ -94,6 +106,16 @@ import {
   type OperationsStatus,
   type SetupStep,
 } from './services/operationsPanelView';
+import {
+  CONTEXT_COMPOSER_SCRIPT,
+  buildContextComposerHtml,
+  type ContextComposerEvidenceItem,
+} from './services/contextComposerView';
+import {
+  PROJECT_INTEGRATION_SCRIPT,
+  buildProjectIntegrationPanelHtml,
+  type ProjectIntegrationFormProject,
+} from './services/projectIntegrationView';
 
 const TICKET_WORKSPACE_ACTIONS = new Set([
   'startClaudeForTicket',
@@ -112,6 +134,7 @@ const OPERATIONS_PANEL_ACTIONS = new Set([
   'openClaudeSettings',
   'chooseProjectDiscoveryFolders',
   'manageLocalProjects',
+  'configureProjectIntegrations',
   'openJiraBoard',
 ]);
 const CLAUDE_LAUNCH_COOLDOWN_MS = 1_000;
@@ -129,6 +152,37 @@ interface JiraBoardPanelRecord {
 interface OperationsPanelRecord {
   panel: vscode.WebviewPanel;
   nonce: string;
+}
+
+interface ContextComposerPanelRecord {
+  panel: vscode.WebviewPanel;
+  nonce: string;
+  selection: TerminalSelection;
+  reference: string;
+  promptPath: string;
+  onInserted: () => void | Promise<void>;
+  inserting: boolean;
+}
+
+interface ContextComposerRequest {
+  key: string;
+  panelTitle: string;
+  title: string;
+  subtitle: string;
+  sourceLabel: string;
+  reference: string;
+  promptPath: string;
+  suggestedFocus: string;
+  evidence: ContextComposerEvidenceItem[];
+  warnings: string[];
+  selection: TerminalSelection;
+  onInserted: () => void | Promise<void>;
+}
+
+interface ProjectIntegrationPanelRecord {
+  panel: vscode.WebviewPanel;
+  nonce: string;
+  projectNames: Set<string>;
 }
 
 interface TerminalSelection {
@@ -164,11 +218,13 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private readonly ticketPanels = new Map<string, TicketPanelRecord>();
   private readonly ticketPanelActionsInFlight = new Set<string>();
   private readonly operationsPanelActionsInFlight = new Set<string>();
+  private readonly contextComposerPanels = new Map<string, ContextComposerPanelRecord>();
   private readonly claudeLaunchesInFlight = new Set<string>();
   private readonly claudeLaunchCooldownUntil = new Map<string, number>();
   private jiraBoardPanel: JiraBoardPanelRecord | undefined;
   private setupPanel: OperationsPanelRecord | undefined;
   private doctorPanel: OperationsPanelRecord | undefined;
+  private projectIntegrationPanel: ProjectIntegrationPanelRecord | undefined;
   private readonly monitor: ManagedProviderMonitor;
   private refreshTimer: NodeJS.Timeout | undefined;
   private providerTimer: NodeJS.Timeout | undefined;
@@ -228,6 +284,10 @@ class TerminalFirstRuntime implements vscode.Disposable {
     this.setupPanel = undefined;
     this.doctorPanel?.panel.dispose();
     this.doctorPanel = undefined;
+    for (const record of this.contextComposerPanels.values()) { record.panel.dispose(); }
+    this.contextComposerPanels.clear();
+    this.projectIntegrationPanel?.panel.dispose();
+    this.projectIntegrationPanel = undefined;
     for (const disposable of this.disposables.splice(0)) { disposable.dispose(); }
     this.operatorTerminals.clear();
     this.workTree.dispose();
@@ -481,6 +541,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       if (action !== 'Unregister and Unlink') { return; }
     }
     const registrations = this.projectRegistrations(selected.map(item => item.project));
+    const newlyRegistered = registrations.filter(project => !registeredPathKeys.has(localProjectPathKey(project.path)));
     this.state.replaceRegisteredLocalProjects(registrations);
     for (const ticketKey of linkedTicketKeys) {
       const session = getWorkSessionByTicket(ticketKey);
@@ -490,6 +551,9 @@ class TerminalFirstRuntime implements vscode.Disposable {
     void vscode.window.showInformationMessage(
       `${registrations.length} local project${registrations.length === 1 ? ' is' : 's are'} registered; ${removedProjects.length} unregistered${linkedTicketKeys.length > 0 ? ` and unlinked from ${linkedTicketKeys.length} ticket${linkedTicketKeys.length === 1 ? '' : 's'}` : ''}${discovery.truncated ? ' from bounded discovery results' : ''}.`,
     );
+    if (newlyRegistered.length > 0) {
+      this.openProjectIntegrationSetup(newlyRegistered.map(project => project.name));
+    }
   }
 
   private async configureProjectDiscoveryFolders(): Promise<void> {
@@ -548,6 +612,114 @@ class TerminalFirstRuntime implements vscode.Disposable {
       names.set(name.toLocaleLowerCase(), project.path);
       return { name, path: project.path };
     });
+  }
+
+  private openProjectIntegrationSetup(projectNames?: readonly string[]): void {
+    const localProjects = listLocalProjects(this.state.state);
+    const requested = projectNames ? new Set(projectNames) : undefined;
+    const selectedProjects = requested
+      ? localProjects.filter(project => requested.has(project.name))
+      : localProjects;
+    if (selectedProjects.length === 0) {
+      void vscode.window.showWarningMessage('Register at least one local project before configuring provider polling.');
+      return;
+    }
+    this.projectIntegrationPanel?.panel.dispose();
+    const panel = vscode.window.createWebviewPanel(
+      'kronosProjectIntegrationSetup',
+      'Kronos — Project Integration Setup',
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        enableCommandUris: false,
+        localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
+      },
+    );
+    panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'kronos-icon.svg');
+    const record: ProjectIntegrationPanelRecord = {
+      panel,
+      nonce: createWebviewNonce(),
+      projectNames: new Set(selectedProjects.map(project => project.name)),
+    };
+    this.projectIntegrationPanel = record;
+    panel.onDidDispose(() => {
+      if (this.projectIntegrationPanel?.panel === panel) { this.projectIntegrationPanel = undefined; }
+    });
+    panel.webview.onDidReceiveMessage(async raw => {
+      if (isRecord(raw) && raw['command'] === WEBVIEW_READY_COMMAND) { return; }
+      const message = normalizeProjectIntegrationMessage(raw);
+      if (!message) {
+        void vscode.window.showWarningMessage('Kronos ignored an invalid project-integration request.');
+        return;
+      }
+      if (message.command === 'cancel') {
+        panel.dispose();
+        return;
+      }
+      const submittedNames = new Set(message.projects.map(project => project.name));
+      if (message.projects.length !== submittedNames.size
+        || submittedNames.size !== record.projectNames.size
+        || [...record.projectNames].some(name => !submittedNames.has(name))) {
+        void vscode.window.showWarningMessage('Kronos refused project integration values for an unexpected project set.');
+        return;
+      }
+      try {
+        this.state.setLocalProjectIntegrations(message.projects);
+        this.refreshTerminalFirstViews();
+        panel.dispose();
+        void vscode.window.showInformationMessage(
+          `Saved read-only provider polling setup for ${message.projects.length} project${message.projects.length === 1 ? '' : 's'}. Run Doctor to verify credentials and remaining prerequisites.`,
+        );
+      } catch (error: unknown) {
+        const detail = unknownErrorMessage(error, 'Project integration setup could not be saved.');
+        this.log('Project integration setup could not be saved.', detail);
+        void vscode.window.showErrorMessage(detail);
+      }
+    });
+    const projects: ProjectIntegrationFormProject[] = selectedProjects.map(project => {
+      const config = this.state.state?.projects[project.name]?.config || {};
+      return {
+        name: project.name,
+        path: project.path,
+        ...(project.branch ? { branch: project.branch } : {}),
+        ...((config.gitlab_project_id || config.gitlab_project_path)
+          ? { gitlabProject: String(config.gitlab_project_id || config.gitlab_project_path) }
+          : {}),
+        ...(config.jenkins_url ? { jenkinsUrl: config.jenkins_url } : {}),
+        ...(config.sonar_project_key ? { sonarProjectKey: config.sonar_project_key } : {}),
+        ...((config.default_branch || config.base_branch)
+          ? { defaultBranch: config.default_branch || config.base_branch }
+          : {}),
+      };
+    });
+    const scriptUri = panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', PROJECT_INTEGRATION_SCRIPT),
+    ).toString();
+    const gitLabReady = isGitLabRestConfigured();
+    const jenkinsReady = isJenkinsRestConfigured();
+    const sonarReady = isSonarRestConfigured();
+    panel.webview.html = withWebviewCsp(buildProjectIntegrationPanelHtml({
+      projects,
+      providerReadiness: [
+        {
+          name: 'GitLab credentials',
+          ready: gitLabReady,
+          detail: gitLabReady ? 'Read-only REST environment is ready.' : 'Add a GitLab URL and token in private Setup.',
+        },
+        {
+          name: 'Jenkins access',
+          ready: jenkinsReady,
+          detail: jenkinsReady ? 'Jenkins base URL is available.' : 'Add JENKINS_URL in private Setup.',
+        },
+        {
+          name: 'SonarQube credentials',
+          ready: sonarReady,
+          detail: sonarReady ? 'Read-only REST environment is ready.' : 'Add a SonarQube URL and token in private Setup.',
+        },
+      ],
+      nonce: record.nonce,
+      scriptUri,
+    }), webviewScriptCspOptions(panel.webview.cspSource, record.nonce));
   }
 
   private async chooseTicketProject(argument: unknown): Promise<void> {
@@ -1029,7 +1201,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
         resource: 'merge-request',
         subjectId: String(ticket.mr.iid),
       };
-      if (config?.gitlab_project_id) { binding.projectId = String(config.gitlab_project_id); }
+      const gitLabProject = config?.gitlab_project_id || config?.gitlab_project_path;
+      if (gitLabProject) { binding.projectId = String(gitLabProject); }
       if (ticket.mr.url) { binding.url = ticket.mr.url; }
       updated = this.requireTicketSession(addWorkSessionProviderBinding(updated.id, binding));
     }
@@ -1059,6 +1232,90 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private requireTicketSession(session: WorkSessionRecord): TicketWorkSessionRecord {
     if (session.kind !== 'ticket') { throw new Error('Expected a ticket-linked work session.'); }
     return session;
+  }
+
+  private openContextComposer(request: ContextComposerRequest): void {
+    this.contextComposerPanels.get(request.key)?.panel.dispose();
+    const panel = vscode.window.createWebviewPanel(
+      'kronosContextComposer',
+      request.panelTitle,
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        enableCommandUris: false,
+        localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
+      },
+    );
+    panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'kronos-icon.svg');
+    const record: ContextComposerPanelRecord = {
+      panel,
+      nonce: createWebviewNonce(),
+      selection: request.selection,
+      reference: request.reference,
+      promptPath: request.promptPath,
+      onInserted: request.onInserted,
+      inserting: false,
+    };
+    this.contextComposerPanels.set(request.key, record);
+    panel.onDidDispose(() => {
+      if (this.contextComposerPanels.get(request.key)?.panel === panel) {
+        this.contextComposerPanels.delete(request.key);
+      }
+    });
+    panel.webview.onDidReceiveMessage(async raw => {
+      if (isRecord(raw) && raw['command'] === WEBVIEW_READY_COMMAND) { return; }
+      const message = normalizeContextComposerMessage(raw);
+      if (!message) {
+        void vscode.window.showWarningMessage('Kronos ignored an invalid context-composer request.');
+        return;
+      }
+      if (message.command === 'cancel') {
+        panel.dispose();
+        return;
+      }
+      if (message.command === 'openArtifact') {
+        await this.openLocalArtifact(record.promptPath);
+        return;
+      }
+      if (message.command !== 'insertDraft') { return; }
+      if (record.inserting) { return; }
+      if (!this.insertionTerminalUnchanged(record.selection)) {
+        void vscode.window.showWarningMessage('The managed terminal attachment changed while this context was being edited. Reopen the composer from the intended ticket or session.');
+        return;
+      }
+      record.inserting = true;
+      let inserted = false;
+      try {
+        insertEditableTerminalContextReference(record.selection.terminal, record.reference, message.focus);
+        inserted = true;
+        await record.onInserted();
+        panel.dispose();
+      } catch (error: unknown) {
+        const detail = unknownErrorMessage(error, 'Context insertion failed.');
+        this.log(inserted ? 'Context was inserted but its local audit update failed.' : 'Context composer insertion failed.', detail);
+        void vscode.window.showErrorMessage(inserted
+          ? `The context was inserted without submission, but Kronos could not finish its local audit update: ${detail}`
+          : detail);
+        if (inserted) { panel.dispose(); }
+      } finally {
+        record.inserting = false;
+      }
+    });
+    const scriptUri = panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', CONTEXT_COMPOSER_SCRIPT),
+    ).toString();
+    panel.webview.html = withWebviewCsp(buildContextComposerHtml({
+      title: request.title,
+      subtitle: request.subtitle,
+      sourceLabel: request.sourceLabel,
+      terminalName: request.selection.terminal.name,
+      reference: request.reference,
+      suggestedFocus: request.suggestedFocus,
+      evidence: request.evidence,
+      warnings: request.warnings,
+      nonce: record.nonce,
+      scriptUri,
+    }), webviewScriptCspOptions(panel.webview.cspSource, record.nonce));
   }
 
   private async insertJiraContext(argument: unknown): Promise<void> {
@@ -1093,38 +1350,42 @@ class TerminalFirstRuntime implements vscode.Disposable {
       }
       progress.report({ message: 'Writing private content-addressed context and attachment files...' });
       const artifact = writeJiraContextArtifacts(jiraContext, { attachmentContents });
-      if (!this.insertionTerminalUnchanged(selection)) {
-        void vscode.window.showWarningMessage(`${ticketKey} context was saved, but the terminal attachment changed. Reattach the intended terminal and insert again.`);
-        return;
-      }
-      insertTerminalContextReference(selection.terminal, buildJiraContextReference(ticketKey, artifact.promptPath));
-      if (selection.workSession) {
-        recordWorkSessionContextArtifact(selection.workSession.id, {
-          id: `jira-${ticketKey}`,
-          kind: 'jira-ticket',
-          label: `[${ticketKey}] Jira context`,
-          promptPath: artifact.promptPath,
-          fetchedAt: jiraContext.fetchedAt,
-          complete: jiraContext.completeness.complete,
-          warnings: jiraContext.completeness.warnings,
-          contentSha256: artifact.contentSha256,
-        });
-        this.appendContextEvent(selection.workSession, 'jira', ticketKey, artifact.promptPath, artifact.contentSha256);
-      }
-      this.refreshTerminalFirstViews();
       const summary = `${jiraContext.completeness.fieldCount} fields (${jiraContext.completeness.customFieldCount} custom), ${jiraContext.comments.length} comments, ${jiraContext.completeness.attachmentBodiesCaptured}/${jiraContext.completeness.attachmentsTotal} attachment files downloaded`;
-      const message = `Inserted [${ticketKey}] into ${selection.terminal.name} without submitting it (${summary}).`;
-      if (jiraContext.completeness.complete) {
-        void vscode.window.showInformationMessage(`${message} Review or extend it, then press Enter yourself.`);
-      } else {
-        const action = await vscode.window.showWarningMessage(
-          `${message} Cached or partial context was used; review its warnings.`,
-          'Open Context',
-          'Run Doctor',
-        );
-        if (action === 'Open Context') { await this.openLocalArtifact(artifact.promptPath); }
-        if (action === 'Run Doctor') { await vscode.commands.executeCommand('kronos.doctor'); }
-      }
+      this.openContextComposer({
+        key: `jira:${ticketKey}`,
+        panelTitle: `${ticketKey} — Compose Jira Context`,
+        title: `${ticketKey}: ${jiraContext.summary || ticket.summary}`,
+        subtitle: `${summary}. Review fetched details, edit the focus instruction, then insert one non-submitting line.`,
+        sourceLabel: jiraContext.completeness.complete ? 'Jira ready' : 'Jira partial',
+        reference: buildJiraContextReference(ticketKey, artifact.promptPath),
+        promptPath: artifact.promptPath,
+        suggestedFocus: 'Review the ticket description, acceptance criteria, latest comments, and relevant attachments before making changes.',
+        evidence: jiraComposerEvidence(jiraContext),
+        warnings: jiraContext.completeness.warnings,
+        selection,
+        onInserted: () => {
+          if (selection.workSession) {
+            recordWorkSessionContextArtifact(selection.workSession.id, {
+              id: `jira-${ticketKey}`,
+              kind: 'jira-ticket',
+              label: `[${ticketKey}] Jira context`,
+              promptPath: artifact.promptPath,
+              fetchedAt: jiraContext.fetchedAt,
+              complete: jiraContext.completeness.complete,
+              warnings: jiraContext.completeness.warnings,
+              contentSha256: artifact.contentSha256,
+            });
+            this.appendContextEvent(selection.workSession, 'jira', ticketKey, artifact.promptPath, artifact.contentSha256);
+          }
+          this.refreshTerminalFirstViews();
+          const message = `Inserted edited [${ticketKey}] context into ${selection.terminal.name} without submitting it (${summary}).`;
+          if (jiraContext.completeness.complete) {
+            void vscode.window.showInformationMessage(`${message} Review the terminal line, then press Enter yourself.`);
+          } else {
+            void vscode.window.showWarningMessage(`${message} Cached or partial context was used; review the saved warnings.`);
+          }
+        },
+      });
     });
   }
 
@@ -1143,50 +1404,61 @@ class TerminalFirstRuntime implements vscode.Disposable {
       const snapshot = await gitlabRestClient.mergeRequestContext({ projectIdOrPath, iid });
       const context = normalizeGitLabMergeRequestContext(ticketKey, iid, snapshot);
       const artifact = writeGitLabContextArtifacts(context);
-      if (!this.insertionTerminalUnchanged(selection)) {
-        void vscode.window.showWarningMessage(`MR-${iid} context was saved, but the terminal attachment changed. Reattach and insert again.`);
-        return;
-      }
-      insertTerminalContextReference(selection.terminal, buildGitLabMergeRequestContextReference(iid, artifact.promptPath));
-      if (selection.workSession) {
-        const mergeRequestBinding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
-          provider: 'gitlab',
-          resource: 'merge-request',
-          subjectId: String(iid),
-          projectId: projectIdOrPath,
-        };
-        if (target.url) { mergeRequestBinding.url = target.url; }
-        let session = addWorkSessionProviderBinding(selection.workSession.id, mergeRequestBinding);
-        if (context.pipeline) {
-          const pipelineBinding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
-            provider: 'gitlab',
-            resource: 'pipeline',
-            subjectId: String(context.pipeline.id),
-          };
-          if (context.pipeline.projectId) { pipelineBinding.projectId = String(context.pipeline.projectId); }
-          if (context.pipeline.webUrl) { pipelineBinding.url = context.pipeline.webUrl; }
-          session = addWorkSessionProviderBinding(session.id, pipelineBinding);
-        }
-        recordWorkSessionContextArtifact(session.id, {
-          id: `gitlab-mr-${iid}`,
-          kind: 'gitlab-merge-request',
-          label: `[MR-${iid}] GitLab MR and pipeline context`,
-          promptPath: artifact.promptPath,
-          fetchedAt: context.fetchedAt,
-          complete: context.completeness.complete,
-          warnings: context.completeness.warnings,
-          contentSha256: artifact.contentSha256,
-        });
-        this.appendContextEvent(session, 'gitlab', String(iid), artifact.promptPath, artifact.contentSha256);
-      }
-      this.refreshTerminalFirstViews();
       const failedTests = context.testReport?.failedCount ?? context.testReportSummary?.failedCount ?? 0;
-      const message = `Inserted [MR-${iid}] into ${selection.terminal.name} without submitting it (${context.notes.length} notes, ${context.jobs.length} jobs, ${failedTests} failed tests).`;
-      if (context.completeness.complete) {
-        void vscode.window.showInformationMessage(`${message} Review it, then press Enter yourself.`);
-      } else {
-        void vscode.window.showWarningMessage(`${message} The saved MR context is partial; review its warnings.`);
-      }
+      const summary = `${context.notes.length} notes, ${context.discussions.length} discussions, ${context.jobs.length} jobs, ${failedTests} failed tests`;
+      this.openContextComposer({
+        key: `gitlab:${ticketKey}:${iid}`,
+        panelTitle: `MR-${iid} — Compose GitLab Context`,
+        title: `MR-${iid}: ${context.mergeRequest.title}`,
+        subtitle: `${summary}. Review fetched details, edit the focus instruction, then insert one non-submitting line.`,
+        sourceLabel: context.completeness.complete ? 'GitLab ready' : 'GitLab partial',
+        reference: buildGitLabMergeRequestContextReference(iid, artifact.promptPath),
+        promptPath: artifact.promptPath,
+        suggestedFocus: 'Review the merge request description, unresolved discussions, latest comments, pipeline failures, and test evidence before responding.',
+        evidence: gitLabComposerEvidence(context),
+        warnings: context.completeness.warnings,
+        selection,
+        onInserted: () => {
+          if (selection.workSession) {
+            const mergeRequestBinding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
+              provider: 'gitlab',
+              resource: 'merge-request',
+              subjectId: String(iid),
+              projectId: projectIdOrPath,
+            };
+            if (target.url) { mergeRequestBinding.url = target.url; }
+            let session = addWorkSessionProviderBinding(selection.workSession.id, mergeRequestBinding);
+            if (context.pipeline) {
+              const pipelineBinding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
+                provider: 'gitlab',
+                resource: 'pipeline',
+                subjectId: String(context.pipeline.id),
+              };
+              if (context.pipeline.projectId) { pipelineBinding.projectId = String(context.pipeline.projectId); }
+              if (context.pipeline.webUrl) { pipelineBinding.url = context.pipeline.webUrl; }
+              session = addWorkSessionProviderBinding(session.id, pipelineBinding);
+            }
+            recordWorkSessionContextArtifact(session.id, {
+              id: `gitlab-mr-${iid}`,
+              kind: 'gitlab-merge-request',
+              label: `[MR-${iid}] GitLab MR and pipeline context`,
+              promptPath: artifact.promptPath,
+              fetchedAt: context.fetchedAt,
+              complete: context.completeness.complete,
+              warnings: context.completeness.warnings,
+              contentSha256: artifact.contentSha256,
+            });
+            this.appendContextEvent(session, 'gitlab', String(iid), artifact.promptPath, artifact.contentSha256);
+          }
+          this.refreshTerminalFirstViews();
+          const message = `Inserted edited [MR-${iid}] context into ${selection.terminal.name} without submitting it (${summary}).`;
+          if (context.completeness.complete) {
+            void vscode.window.showInformationMessage(`${message} Review the terminal line, then press Enter yourself.`);
+          } else {
+            void vscode.window.showWarningMessage(`${message} The saved MR context is partial; review its warnings.`);
+          }
+        },
+      });
     });
   }
 
@@ -1608,6 +1880,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
         await this.configureProjectDiscoveryFolders();
       } else if (action === 'manageLocalProjects') {
         await this.registerWorkspaceProject();
+      } else if (action === 'configureProjectIntegrations') {
+        this.openProjectIntegrationSetup();
       } else if (action === 'openJiraBoard') {
         await this.openJiraBoard();
       }
@@ -1644,6 +1918,15 @@ class TerminalFirstRuntime implements vscode.Disposable {
     const jiraConfigured = isJiraRestConfigured();
     const sessions = listWorkSessions();
     const sessionIssues = listWorkSessionStoreIssues();
+    const integrationReadyCount = projects.filter(project => {
+      const config = this.state.state?.projects[project.name]?.config;
+      return Boolean(
+        (config?.gitlab_project_id || config?.gitlab_project_path)
+        && config?.jenkins_url
+        && config?.sonar_project_key
+        && (config?.default_branch || config?.base_branch),
+      );
+    }).length;
     const configuredMonitoringProviders = [
       isGitLabRestConfigured() ? 'GitLab' : '',
       isJenkinsRestConfigured() ? 'Jenkins' : '',
@@ -1683,6 +1966,15 @@ class TerminalFirstRuntime implements vscode.Disposable {
         status: jiraConfigured ? 'pass' : 'warn',
         action: 'openJiraBoard',
         actionLabel: 'Open Jira Board',
+      },
+      {
+        title: 'Project polling configuration',
+        detail: projects.length === 0
+          ? 'Register a local project before adding provider identifiers.'
+          : `${integrationReadyCount}/${projects.length} registered project${projects.length === 1 ? '' : 's'} have GitLab, Jenkins, SonarQube, and branch identifiers filled in.`,
+        status: projects.length > 0 && integrationReadyCount === projects.length ? 'pass' : 'warn',
+        action: 'configureProjectIntegrations',
+        actionLabel: 'Configure Integrations',
       },
       {
         title: 'MR and pipeline monitoring',
@@ -1871,7 +2163,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
 
   private gitLabProjectId(ticket: Ticket): string | undefined {
     const config = this.projectConfig(ticket);
-    if (config?.gitlab_project_id) { return String(config.gitlab_project_id); }
+    const configuredProject = config?.gitlab_project_id || config?.gitlab_project_path;
+    if (configuredProject) { return String(configuredProject); }
     return configuredGitLabProjectPathFromMergeRequestUrl(ticket.mr?.url, process.env);
   }
 
@@ -1935,15 +2228,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
   }
 
   private projectConfig(ticket: Ticket): ProjectConfig | undefined {
-    const config: ProjectConfig = {};
-    let found = false;
-    for (const projectName of [...ticket.projects].reverse()) {
-      const projectConfig = this.state.state?.projects[projectName]?.config;
-      if (!projectConfig) { continue; }
-      Object.assign(config, projectConfig);
-      found = true;
-    }
-    return found ? config : undefined;
+    const config = projectConfigurationForTicket(this.state.state, ticket);
+    return Object.keys(config).length > 0 ? config : undefined;
   }
 
   private appendContextEvent(
@@ -2094,4 +2380,59 @@ function buildClaudeTerminalTitle(baseName: string, ticketKey?: string, branch?:
     : context;
   const maximumBaseLength = Math.max(1, 80 - separator.length - boundedContext.length);
   return `${baseName.slice(0, maximumBaseLength)}${separator}${boundedContext}`;
+}
+
+function jiraComposerEvidence(context: JiraTicketContext): ContextComposerEvidenceItem[] {
+  const evidence: ContextComposerEvidenceItem[] = [];
+  const facts = [
+    context.status ? `Status: ${context.status}` : '',
+    context.priority ? `Priority: ${context.priority}` : '',
+    context.assignee ? `Assignee: ${context.assignee}` : '',
+    context.updated ? `Updated: ${context.updated}` : '',
+  ].filter(Boolean).join(' • ');
+  if (facts) { evidence.push({ label: 'Ticket facts', detail: facts }); }
+  if (context.description) {
+    evidence.push({ label: 'Description', detail: contextComposerPreview(context.description) });
+  }
+  for (const comment of context.comments.slice(-10).reverse()) {
+    const label = [comment.author || 'Jira comment', comment.created || comment.updated || ''].filter(Boolean).join(' • ');
+    evidence.push({ label, detail: contextComposerPreview(comment.body) });
+  }
+  return evidence;
+}
+
+function gitLabComposerEvidence(context: GitLabMergeRequestContext): ContextComposerEvidenceItem[] {
+  const evidence: ContextComposerEvidenceItem[] = [];
+  const mergeRequest = context.mergeRequest;
+  evidence.push({
+    label: 'Merge request facts',
+    detail: `${mergeRequest.state} • ${mergeRequest.sourceBranch} → ${mergeRequest.targetBranch}${mergeRequest.draft ? ' • draft' : ''}`,
+  });
+  if (mergeRequest.description) {
+    evidence.push({ label: 'Description', detail: contextComposerPreview(mergeRequest.description) });
+  }
+  const discussionNotes = context.discussions
+    .flatMap(discussion => discussion.notes.map(note => ({ note, resolved: discussion.resolved })))
+    .slice(-6)
+    .reverse();
+  for (const { note, resolved } of discussionNotes) {
+    const author = note.author?.name || note.author?.username || 'GitLab discussion';
+    evidence.push({
+      label: `${author}${resolved === false ? ' • unresolved' : resolved === true ? ' • resolved' : ''}${note.createdAt ? ` • ${note.createdAt}` : ''}`,
+      detail: contextComposerPreview(note.body),
+    });
+  }
+  for (const note of context.notes.slice(-6).reverse()) {
+    const author = note.author?.name || note.author?.username || 'GitLab note';
+    evidence.push({
+      label: `${author}${note.createdAt ? ` • ${note.createdAt}` : ''}`,
+      detail: contextComposerPreview(note.body),
+    });
+  }
+  return evidence.slice(0, 20);
+}
+
+function contextComposerPreview(value: string, maxLength = 4_000): string {
+  const normalized = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u2028\u2029]/g, ' ').trim();
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, Math.max(1, maxLength - 1))}…`;
 }

@@ -26,7 +26,7 @@ The normative boundary and navigation model are in [docs/terminal-first-product-
 
 Work is a Jira board with search, status, project, and label filters. Completed work is hidden by default and can be shown explicitly. Refresh the board, combine or clear filters, open one ticket workspace, then either attach an existing focused terminal or choose **Start Claude for Ticket**. Ticket association is created only from this ticket path, never by standalone **New Claude**.
 
-Use **Choose Project Discovery Folders** from the Work toolbar or Setup to select multiple parent folders in VS Code's native folder picker—for example, `IdeaProjects` and `PycharmProjects`. Kronos saves those machine-local roots and immediately opens **Discover and Manage Local Projects**. Registered projects appear first and checked; newly discovered projects follow unchecked. Accepting the picker registers checked projects and unregisters unchecked ones. Removing a ticket-linked project requires confirmation and clears only that local launch link. Settings control root removal, scan depth, and result limit. Discovery is bounded and read-only. Each Jira card has an **Add Project** control in its top row; once linked it shows the current project name. Kronos shows the project's current Git branch by reading `.git/HEAD` with Node built-ins; it never invokes Git or changes the repository. Future ticket-launched Claude terminals start in the linked folder. Existing terminals are never moved or sent a `cd` command.
+Use **Choose Project Discovery Folders** from the Work toolbar or Setup to select multiple parent folders in VS Code's native folder picker—for example, `IdeaProjects` and `PycharmProjects`. Kronos saves those machine-local roots and immediately opens **Discover and Manage Local Projects**. Registered projects appear first and checked; newly discovered projects follow unchecked. Accepting the picker registers checked projects and unregisters unchecked ones. Newly registered projects then open a guided **Project Integration Setup** for their GitLab project ID/path, Jenkins job URL, SonarQube project key, and default monitoring branch. The same editor can be reopened for all projects from Setup. It reports whether the private global provider credentials are ready but stores only the project-specific identifiers and never displays a token. Removing a ticket-linked project requires confirmation and clears only that local launch link. Settings control root removal, scan depth, and result limit. Discovery is bounded and read-only. Each Jira card has an **Add Project** control in its top row; once linked it shows the current project name. Kronos shows the project's current Git branch by reading `.git/HEAD` with Node built-ins; it never invokes Git or changes the repository. Future ticket-launched Claude terminals start in the linked folder. Existing terminals are never moved or sent a `cd` command. The linked project's integration values take precedence when Kronos polls that ticket's providers.
 
 From a ticket workspace, explicitly insert the context needed for the next instruction:
 
@@ -34,7 +34,7 @@ From a ticket workspace, explicitly insert the context needed for the next instr
 - `[MR-77]` for GitLab merge-request, review, diff, pipeline, job, and test evidence;
 - `[CI-JIRA-123]` for Jenkins build/test/stage and SonarQube gate/measure/issue evidence.
 
-Every insertion is one editable line and is sent with execution disabled. The operator reviews it and presses Enter only when ready.
+Jira and MR insertion first opens a composer containing an escaped preview of the fetched description, comments, notes, and completeness warnings. The private artifact reference is fixed, while **Operator focus** is editable. **Place in Terminal** or Ctrl/Cmd+Enter inserts one shell-quoted line with execution disabled; ordinary Enter edits the textarea. CI insertion uses the same non-submitting terminal boundary. In every case, only the operator can press Enter in the terminal.
 
 **Refresh Jira Tickets** uses Jira Cloud's bounded read-only JQL search directly from the extension. Set `JIRA_JQL` to choose the Work list; otherwise Kronos reads unresolved work plus the last 30 days of resolved work assigned to the current Jira user, and the board hides completed rows locally by default. A partial paginated read retains prior rows instead of silently dropping them. Jira values are pruned recursively before storage and display: `null`, empty strings, empty arrays, empty objects, and recursively empty rich text disappear, while meaningful `false` and `0` values remain.
 
@@ -56,11 +56,11 @@ An attention item can open the originating provider page, open its ticket worksp
 
 ## Typical Journey
 
-1. Open **Kronos > Work**, choose discovery folders and register the projects you need, then use the Jira board filters and select a ticket.
+1. Open **Kronos > Work**, choose discovery folders, register the projects you need, and complete their optional provider-polling identifiers; then use the Jira board filters and select a ticket.
 2. Choose the ticket's local project/branch, then choose **Start Claude for Ticket**, or focus an existing terminal and choose **Manage Focused Terminal**.
 3. For an explicit start, Kronos validates the configured executable and approved interactive flags, terminal name, and working directory; it then creates and focuses one VS Code terminal and executes that command once.
-4. Choose **Insert `[JIRA-123]`**. Kronos writes a private context artifact and inserts its non-submitting reference.
-5. Edit the line if needed, press Enter yourself, and continue directing the interactive session normally.
+4. Choose **Insert `[JIRA-123]`**. Kronos writes a private context artifact and opens the context composer.
+5. Review the fetched evidence, add an optional operator focus, choose **Place in Terminal** (or Ctrl/Cmd+Enter), then press Enter in the terminal yourself and continue directing the interactive session normally.
 6. When an MR or CI provider is linked, Kronos monitors its bounded structural status in the background.
 7. Respond to meaningful changes from **Attention** by opening the provider, inserting fresh context, or acknowledging the event.
 8. Use **Sessions > Open Work Session Audit** to inspect context provenance, completeness, transitions, and acknowledgements. Terminal contents are never part of the audit.

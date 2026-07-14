@@ -7,6 +7,7 @@ export interface TerminalContextInsertionTarget {
 
 const REFERENCE_SUFFIX = ' before answering.';
 const MAX_REFERENCE_LENGTH = 8192;
+const MAX_OPERATOR_FOCUS_LENGTH = 2000;
 const SAFE_PROMPT_PATH_PATTERN = /^[\p{L}\p{N} /\\:._@+-]+$/u;
 const PROMPT_ARTIFACT_NAME_PATTERN = /^prompt(?:-[a-f0-9]{24})?\.md$/i;
 
@@ -42,7 +43,32 @@ export function insertTerminalContextReference(
   reference: string,
 ): void {
   assertSafeTerminalContextReference(reference);
-  terminal.sendText(reference, false);
+  sendNonSubmittingReference(terminal, reference);
+}
+
+/**
+ * Adds operator-authored focus text to a validated provider reference while
+ * keeping the resulting line shell-inert and non-submitting.
+ */
+export function buildEditableTerminalContextReference(reference: string, focusValue: unknown): string {
+  assertSafeTerminalContextReference(reference);
+  const focus = normalizeOperatorFocus(focusValue);
+  if (!focus) { return reference; }
+  const editableReference = `${reference} Operator focus: ${shellQuotedLiteral(focus)}`;
+  if (editableReference.length > MAX_REFERENCE_LENGTH) {
+    throw new Error(`Edited context reference exceeds the ${MAX_REFERENCE_LENGTH}-character safety limit.`);
+  }
+  return editableReference;
+}
+
+export function insertEditableTerminalContextReference(
+  terminal: TerminalContextInsertionTarget,
+  reference: string,
+  focusValue: unknown,
+): string {
+  const editableReference = buildEditableTerminalContextReference(reference, focusValue);
+  sendNonSubmittingReference(terminal, editableReference);
+  return editableReference;
 }
 
 export function isSafeTerminalContextReference(reference: string): boolean {
@@ -135,4 +161,25 @@ function assertShellInertPromptPath(promptPath: string): void {
   if (!SAFE_PROMPT_PATH_PATTERN.test(promptPath)) {
     throw new Error('Context artifact path contains shell-active characters and cannot be inserted safely.');
   }
+}
+
+function normalizeOperatorFocus(value: unknown): string {
+  if (value === undefined || value === null) { return ''; }
+  if (typeof value !== 'string') { throw new Error('Context focus must be text.'); }
+  const focus = value
+    .replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (focus.length > MAX_OPERATOR_FOCUS_LENGTH) {
+    throw new Error(`Context focus must be ${MAX_OPERATOR_FOCUS_LENGTH} characters or fewer.`);
+  }
+  return focus;
+}
+
+function shellQuotedLiteral(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function sendNonSubmittingReference(terminal: TerminalContextInsertionTarget, reference: string): void {
+  terminal.sendText(reference, false);
 }

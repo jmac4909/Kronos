@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { KronosState, Project, Ticket } from '../state/types';
+import type { KronosState, Project, ProjectConfig, Ticket } from '../state/types';
+import { normalizeJenkinsJobUrl } from './jenkinsRestClient';
 import { readBoundedPrivateUtf8File } from './stateStore';
 
 const MAX_GIT_POINTER_BYTES = 4 * 1024;
@@ -12,6 +13,14 @@ export interface LocalProjectSummary {
   branch?: string;
   detached: boolean;
   available: boolean;
+}
+
+export interface LocalProjectIntegrationInput {
+  name: string;
+  gitlabProject?: string;
+  jenkinsUrl?: string;
+  sonarProjectKey?: string;
+  defaultBranch?: string;
 }
 
 export function registerLocalProject(
@@ -111,6 +120,74 @@ export function setTicketLocalProject(
       [ticketKey]: nextTicket,
     },
   };
+}
+
+export function setLocalProjectIntegrations(
+  state: KronosState,
+  values: readonly LocalProjectIntegrationInput[],
+): KronosState {
+  const projects = Object.fromEntries(Object.entries(state.projects).map(([name, project]) => [
+    name,
+    { ...project, config: { ...project.config } },
+  ]));
+  for (const value of values.slice(0, MAX_LOCAL_PROJECTS)) {
+    const name = requiredSingleLine(value.name, 'project name', 200);
+    const project = projects[name];
+    if (!project?.path) { throw new Error(`Local project is not registered: ${name}`); }
+    const config = project.config;
+    delete config.gitlab_project_id;
+    delete config.gitlab_project_path;
+    delete config.jenkins_url;
+    delete config.sonar_project_key;
+    delete config.default_branch;
+    delete config.base_branch;
+
+    const gitLabProject = safeSingleLine(value.gitlabProject, 512);
+    if (gitLabProject) {
+      if (/^[1-9][0-9]*$/.test(gitLabProject)) {
+        const projectId = Number(gitLabProject);
+        if (!Number.isSafeInteger(projectId)) { throw new Error(`${name} GitLab project ID is too large.`); }
+        config.gitlab_project_id = projectId;
+      } else if (/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+$/.test(gitLabProject)) {
+        config.gitlab_project_path = gitLabProject;
+      } else {
+        throw new Error(`${name} GitLab project must be a numeric ID or group/project path.`);
+      }
+    }
+    const jenkinsUrl = normalizeOptionalHttpUrl(value.jenkinsUrl, `${name} Jenkins job URL`);
+    if (jenkinsUrl) { config.jenkins_url = jenkinsUrl; }
+    const sonarProjectKey = safeSingleLine(value.sonarProjectKey, 400);
+    if (sonarProjectKey) {
+      if (!/^[A-Za-z0-9_.:-]+$/.test(sonarProjectKey)) {
+        throw new Error(`${name} SonarQube project key contains unsupported characters.`);
+      }
+      config.sonar_project_key = sonarProjectKey;
+    }
+    const defaultBranch = safeSingleLine(value.defaultBranch, 500);
+    if (defaultBranch) { config.default_branch = defaultBranch; }
+  }
+  return {
+    ...state,
+    projects,
+    tickets: Object.fromEntries(Object.entries(state.tickets).map(([key, ticket]) => [
+      key,
+      { ...ticket, projects: [...ticket.projects] },
+    ])),
+  };
+}
+
+/** Provider associations are merged first; the explicit launch project wins. */
+export function projectConfigurationForTicket(
+  state: KronosState | null | undefined,
+  ticket: Ticket | null | undefined,
+): ProjectConfig {
+  if (!state || !ticket) { return {}; }
+  const config: ProjectConfig = {};
+  for (const name of [...new Set(ticket.projects.filter(name => name !== ticket.launch_project))]) {
+    Object.assign(config, state.projects[name]?.config || {});
+  }
+  if (ticket.launch_project) { Object.assign(config, state.projects[ticket.launch_project]?.config || {}); }
+  return config;
 }
 
 export function listLocalProjects(state: KronosState | null | undefined): LocalProjectSummary[] {
@@ -231,4 +308,20 @@ function safeSingleLine(value: unknown, maxLength: number): string {
   return typeof value === 'string'
     ? value.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength)
     : '';
+}
+
+function normalizeOptionalHttpUrl(value: unknown, label: string): string | undefined {
+  const candidate = safeSingleLine(value, 4_000);
+  if (!candidate) { return undefined; }
+  try {
+    const url = new URL(candidate);
+    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password) {
+      throw new Error('unsupported URL');
+    }
+    const normalized = normalizeJenkinsJobUrl(url.toString());
+    if (!normalized) { throw new Error('unsupported URL'); }
+    return normalized;
+  } catch {
+    throw new Error(`${label} must be an HTTPS URL (or loopback HTTP URL) without embedded credentials.`);
+  }
 }

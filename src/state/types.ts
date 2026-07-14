@@ -16,6 +16,7 @@ export interface ProjectConfig {
   jira_project_key?: string;
   jira_ticket_filter?: string;
   gitlab_project_id?: number;
+  gitlab_project_path?: string;
   jenkins_url?: string;
   sonar_project_key?: string;
   base_branch?: string;

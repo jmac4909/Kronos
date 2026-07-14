@@ -7,7 +7,9 @@ const TERMINAL_INSERTION_FILE = 'src/services/terminalContextInsertion.ts';
 const CLAUDE_LAUNCHER_FILE = 'src/services/claudeTerminalLauncher.ts';
 const PACKAGED_WEBVIEW_FILES = [
   'media/kronos-action-panel.js',
+  'media/kronos-context-composer.js',
   'media/kronos-jira-work-board.js',
+  'media/kronos-project-integration.js',
   'media/kronos-webview-runtime.js',
 ];
 const LAUNCH_MODULES = new Set([

@@ -31,6 +31,9 @@ const mergeRequestMonitorStore = require('../out/services/gitlabMergeRequestMoni
 const ciTransitions = require('../out/services/ciTransitions.js');
 const { buildTicketWorkspaceHtml } = require('../out/services/ticketWorkspaceView.js');
 const { buildDoctorPanelHtml, buildSetupPanelHtml } = require('../out/services/operationsPanelView.js');
+const { buildContextComposerHtml } = require('../out/services/contextComposerView.js');
+const { buildProjectIntegrationPanelHtml } = require('../out/services/projectIntegrationView.js');
+const managedProviderMonitor = require('../out/services/managedProviderMonitor.js');
 
 function createSymlinkOrSkip(t, target, linkPath, type = 'file') {
   try {
@@ -44,7 +47,12 @@ function createSymlinkOrSkip(t, target, linkPath, type = 'file') {
     throw error;
   }
 }
-const { normalizeActionPanelMessage, normalizeOperationsActionMessage } = require('../out/services/webviewMessages.js');
+const {
+  normalizeActionPanelMessage,
+  normalizeContextComposerMessage,
+  normalizeOperationsActionMessage,
+  normalizeProjectIntegrationMessage,
+} = require('../out/services/webviewMessages.js');
 
 function fixtureTicket(overrides = {}) {
   return {
@@ -160,6 +168,70 @@ test('checked projects replace local registrations and safely unlink removed lau
   assert.equal(replaced.tickets['JIRA-1'].launch_project, undefined);
   assert.equal(replaced.tickets['JIRA-2'].launch_project, undefined);
   assert.deepEqual(replaced.tickets['JIRA-2'].projects, ['Provider']);
+});
+
+test('project integration setup validates provider identifiers and launch-project config drives polling', () => {
+  const projectRoot = path.join(tempRoot, 'integrated-local-project');
+  fs.mkdirSync(projectRoot, { recursive: true });
+  const initial = stateStore.emptyWorkCatalog();
+  initial.projects.JIRA = { config: { jira_project_key: 'JIRA', default_branch: 'provider-default' } };
+  initial.projects.Application = { path: projectRoot, config: { repo_name: 'Application' } };
+  initial.tickets['JIRA-123'] = fixtureTicket({ projects: ['Application', 'JIRA'], launch_project: 'Application' });
+
+  const configured = projectCatalog.setLocalProjectIntegrations(initial, [{
+    name: 'Application',
+    gitlabProject: 'group/application',
+    jenkinsUrl: 'https://jenkins.example/job/team/job/application/#fragment',
+    sonarProjectKey: 'team:application',
+    defaultBranch: 'feature/local-branch',
+  }]);
+  assert.equal(configured.projects.Application.config.gitlab_project_path, 'group/application');
+  assert.equal(configured.projects.Application.config.jenkins_url, 'https://jenkins.example/job/team/job/application');
+  assert.equal(configured.projects.Application.config.sonar_project_key, 'team:application');
+  assert.equal(configured.projects.Application.config.default_branch, 'feature/local-branch');
+  assert.deepEqual(projectCatalog.projectConfigurationForTicket(configured, configured.tickets['JIRA-123']), {
+    jira_project_key: 'JIRA',
+    default_branch: 'feature/local-branch',
+    repo_name: 'Application',
+    gitlab_project_path: 'group/application',
+    jenkins_url: 'https://jenkins.example/job/team/job/application',
+    sonar_project_key: 'team:application',
+  });
+  assert.deepEqual(managedProviderMonitor.configuredSonarBranch(configured, 'JIRA-123'), {
+    projectKey: 'team:application',
+    branch: 'feature/local-branch',
+  });
+  configured.tickets['JIRA-123'].mr = {
+    iid: 88,
+    state: 'opened',
+    review_status: 'pending_review',
+    url: 'https://gitlab.example/group/application/-/merge_requests/88',
+  };
+  const existingSession = {
+    ticketKey: 'JIRA-123',
+    providerBindings: [
+      { provider: 'gitlab', resource: 'merge-request', subjectId: '77', projectId: 'old/project', url: 'https://gitlab.example/old/project/-/merge_requests/77' },
+      { provider: 'jenkins', resource: 'build', subjectId: 'latest', url: 'https://jenkins.example/job/old' },
+      { provider: 'sonar', resource: 'quality-gate', subjectId: 'old:key:old-branch', projectId: 'old:key' },
+    ],
+  };
+  assert.deepEqual(managedProviderMonitor.configuredGitLabPollingTarget(configured, existingSession), {
+    iid: 88,
+    projectIdOrPath: 'group/application',
+    providerUrl: 'https://gitlab.example/group/application/-/merge_requests/88',
+  });
+  assert.deepEqual(managedProviderMonitor.configuredCiPollingTargets(configured, existingSession), {
+    jenkinsUrl: 'https://jenkins.example/job/team/job/application',
+    sonar: { projectKey: 'team:application', branch: 'feature/local-branch' },
+  });
+  assert.throws(() => projectCatalog.setLocalProjectIntegrations(initial, [{
+    name: 'Application',
+    jenkinsUrl: 'https://user:secret@jenkins.example/job/application/',
+  }]), /without embedded credentials/i);
+  assert.throws(() => projectCatalog.setLocalProjectIntegrations(initial, [{
+    name: 'Application',
+    gitlabProject: 'not a project path',
+  }]), /numeric ID or group\/project/i);
 });
 
 test('Git worktree pointers are bounded and symbolic Git metadata is ignored', t => {
@@ -729,6 +801,13 @@ test('terminal context insertion is shell-inert and never submits', () => {
     sendText: (text, shouldExecute) => calls.push(['sendText', text, shouldExecute]),
   }, reference);
   assert.deepEqual(calls, [['sendText', reference, false]]);
+  const editable = insertion.insertEditableTerminalContextReference({
+    sendText: (text, shouldExecute) => calls.push(['sendText', text, shouldExecute]),
+  }, reference, "Review Bob's latest comment; ignore $HOME and `commands`.\nKeep tests focused.");
+  assert.equal(calls.at(-1)[2], false);
+  assert.equal(calls.at(-1)[1], editable);
+  assert.match(editable, /Operator focus: 'Review Bob'\\''s latest comment; ignore \$HOME and `commands`\. Keep tests focused\.'/);
+  assert.doesNotMatch(editable, /[\r\n]/);
   assert.match(reference, /^\[JIRA-123\]/);
   assert.throws(
     () => insertion.buildJiraContextReference('JIRA-123', path.join(tempRoot, 'JIRA-123', 'prompt-aaaaaaaaaaaaaaaaaaaaaaaa.md;rm')),
@@ -1296,6 +1375,59 @@ test('Setup and Doctor render bounded operation dashboards with allowlisted acti
     { command: 'openDoctor' },
   );
   assert.equal(normalizeOperationsActionMessage({ command: 'runAnything' }, new Set(['openDoctor'])), null);
+
+  const composer = buildContextComposerHtml({
+    title: 'JIRA-123: <unsafe title>',
+    subtitle: '4 comments',
+    sourceLabel: 'Jira ready',
+    terminalName: 'Claude @ main',
+    reference: '[JIRA-123] fixed reference',
+    suggestedFocus: 'Review comments & details',
+    evidence: [{ label: 'Comment <author>', detail: '<script>not markup</script>' }],
+    warnings: ['Partial <warning>'],
+    nonce: 'composer-nonce',
+    scriptUri: 'vscode-webview://fixture/kronos-context-composer.js',
+  });
+  assert.match(composer, /Place in Terminal/);
+  assert.match(composer, /Ctrl\+Enter/);
+  assert.match(composer, /&lt;unsafe title&gt;/);
+  assert.match(composer, /&lt;script&gt;not markup&lt;\/script&gt;/);
+  assert.doesNotMatch(composer, /<script>not markup<\/script>/);
+  assert.deepEqual(normalizeContextComposerMessage({ command: 'insertDraft', focus: 'Review comments' }), {
+    command: 'insertDraft',
+    focus: 'Review comments',
+  });
+  assert.equal(normalizeContextComposerMessage({ command: 'insertDraft', focus: 'x'.repeat(4_001) }), null);
+
+  const projectSetup = buildProjectIntegrationPanelHtml({
+    projects: [{ name: 'App <one>', path: '/repos/app', branch: 'main', gitlabProject: 'group/app' }],
+    providerReadiness: [{ name: 'GitLab', ready: true, detail: 'Ready' }],
+    nonce: 'project-nonce',
+    scriptUri: 'vscode-webview://fixture/kronos-project-integration.js',
+  });
+  assert.match(projectSetup, /Project Integration Setup/);
+  assert.match(projectSetup, /GitLab project ID or path/);
+  assert.match(projectSetup, /SonarQube project key/);
+  assert.match(projectSetup, /App &lt;one&gt;/);
+  assert.deepEqual(normalizeProjectIntegrationMessage({
+    command: 'save',
+    projects: [{
+      name: 'App',
+      gitlabProject: 'group/app',
+      jenkinsUrl: 'https://jenkins.example/job/app/',
+      sonarProjectKey: 'app:key',
+      defaultBranch: 'main',
+    }],
+  }), {
+    command: 'save',
+    projects: [{
+      name: 'App',
+      gitlabProject: 'group/app',
+      jenkinsUrl: 'https://jenkins.example/job/app/',
+      sonarProjectKey: 'app:key',
+      defaultBranch: 'main',
+    }],
+  });
 });
 
 test('runtime dependency surface is Node and VS Code only', () => {
@@ -1370,6 +1502,7 @@ test('extension activation registers the bounded surface and explicit launch com
       },
       showInformationMessage() { return Promise.resolve(undefined); },
       showErrorMessage() { return Promise.resolve(undefined); },
+      withProgress(options, task) { return task({ report() {} }); },
       createWebviewPanel(viewType, title, column, options) {
         const messageHandlers = [];
         const disposeHandlers = [];
@@ -1524,6 +1657,12 @@ test('extension activation registers the bounded surface and explicit launch com
     const registeredProjects = stateStore.readStateFileWithIssues().state.projects;
     assert.equal(registeredProjects['idea-service'].path, ideaProject);
     assert.equal(registeredProjects['python-service'].path, pycharmProject);
+    const integrationPanel = createdWebviewPanels.find(panel => panel.viewType === 'kronosProjectIntegrationSetup');
+    assert.ok(integrationPanel, 'newly registered projects must open guided provider setup');
+    assert.match(integrationPanel.webview.html, /GitLab project ID or path/);
+    assert.match(integrationPanel.webview.html, /Jenkins job URL/);
+    assert.match(integrationPanel.webview.html, /SonarQube project key/);
+    await integrationPanel.receive({ command: 'cancel' });
 
     const unregisteredProject = path.join(ideaProjectsRoot, 'new-service');
     fs.mkdirSync(path.join(unregisteredProject, '.git'), { recursive: true });
@@ -1567,6 +1706,19 @@ test('extension activation registers the bounded surface and explicit launch com
       ['show', false],
       ['sendText', 'claude', true],
     ]);
+    await commandHandlers.get('kronos.insertJiraContext')({ ticketKey: 'JIRA-123' });
+    const composerPanel = createdWebviewPanels.find(panel => panel.viewType === 'kronosContextComposer');
+    assert.ok(composerPanel, 'Jira insertion must open the editable context composer');
+    assert.match(composerPanel.webview.html, /Fetched details and comments/);
+    assert.match(composerPanel.webview.html, /Place in Terminal/);
+    assert.equal(createdTerminals[1].actions.length, 2, 'opening the composer must not write to the terminal');
+    await composerPanel.receive({
+      command: 'insertDraft',
+      focus: "Review Bob's comment; do not trust $HOME or `commands`.",
+    });
+    assert.equal(createdTerminals[1].actions.at(-1)[0], 'sendText');
+    assert.equal(createdTerminals[1].actions.at(-1)[2], false);
+    assert.match(createdTerminals[1].actions.at(-1)[1], /Operator focus:/);
     await commandHandlers.get('kronos.focusWorkSessionTerminal')({ workSessionId: ticketSession.id });
     assert.deepEqual(createdTerminals[1].actions.at(-1), ['show', false], 'selecting a Session must open its attached terminal');
 

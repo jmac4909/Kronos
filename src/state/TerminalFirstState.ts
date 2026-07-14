@@ -5,7 +5,13 @@ import { STATE_FILE, emptyWorkCatalog, readStateFileWithIssues, writeStateFile }
 import { unknownErrorMessage } from '../services/errorUtils';
 import { jiraRestClient, resolveJiraRestConfig } from '../services/jiraRestClient';
 import { catalogFromJiraWorkList } from '../services/jiraWorkCatalog';
-import { registerLocalProject, replaceRegisteredLocalProjects, setTicketLocalProject } from '../services/projectCatalog';
+import {
+  registerLocalProject,
+  replaceRegisteredLocalProjects,
+  setLocalProjectIntegrations,
+  setTicketLocalProject,
+  type LocalProjectIntegrationInput,
+} from '../services/projectCatalog';
 
 export interface TerminalFirstStateIssue {
   filePath: string;
@@ -103,6 +109,12 @@ export class TerminalFirstState implements vscode.Disposable {
 
   replaceRegisteredLocalProjects(projects: readonly { name: string; path: string }[]): void {
     const next = replaceRegisteredLocalProjects(this.snapshot || emptyWorkCatalog(), projects);
+    writeStateFile(next);
+    this.reloadAndNotify();
+  }
+
+  setLocalProjectIntegrations(values: readonly LocalProjectIntegrationInput[]): void {
+    const next = setLocalProjectIntegrations(this.snapshot || emptyWorkCatalog(), values);
     writeStateFile(next);
     this.reloadAndNotify();
   }

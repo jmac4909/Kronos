@@ -63,12 +63,14 @@ Use a real ticket only when its provider data is approved for local context capt
 
 1. Choose **Choose Project Discovery Folders** from the Work toolbar, select two safe parent folders in one native dialog, and confirm **Discover and Manage Local Projects** opens immediately.
 2. Confirm registered projects are checked at the top, newly discovered projects are unchecked below them, deeper/out-of-limit folders do not appear, and accepting the picker makes the checked state authoritative. Uncheck one unlinked project and confirm it is unregistered.
-3. Confirm the Jira board shows the project name, absolute path, and the branch currently named by Git `HEAD`.
-4. Use **Add Project** in the top row of two Jira cards, attach projects from the selected roots, and confirm the control changes to the project name while each ticket workspace and Work row show the right branch and launch directory.
-5. Switch branches yourself in the terminal, refresh or reopen the board, and confirm Kronos reflects the new branch without running a Git command.
-6. Start Claude for the linked ticket and confirm its new terminal starts in the selected project directory and its terminal tab shows both the ticket key and current Git branch, such as `Claude · JIRA-123 @ feature/name`.
-7. Choose **Manage Focused Terminal** on an existing terminal and confirm linking does not change that terminal's directory or send `cd`.
-8. Unlink the local project and confirm future ticket launches fall back to the configured workspace/home behavior while Jira/provider project tags remain.
+3. Confirm newly registered projects open **Project Integration Setup**. Enter a GitLab numeric ID or `group/project` path, Jenkins job URL, SonarQube project key, and default branch; confirm credential readiness is shown without any secret values. Leave an optional field blank and confirm it can be cleared.
+4. Reopen **Configure Project Integrations** from Setup and confirm the saved values appear for all registered projects and the observed Git branch was the initial default.
+5. Confirm the Jira board shows the project name, absolute path, and the branch currently named by Git `HEAD`.
+6. Use **Add Project** in the top row of two Jira cards, attach projects from the selected roots, and confirm the control changes to the project name while each ticket workspace and Work row show the right branch and launch directory.
+7. Switch branches yourself in the terminal, refresh or reopen the board, and confirm Kronos reflects the new branch without running a Git command.
+8. Start Claude for the linked ticket and confirm its new terminal starts in the selected project directory and its terminal tab shows both the ticket key and current Git branch, such as `Claude · JIRA-123 @ feature/name`.
+9. Choose **Manage Focused Terminal** on an existing terminal and confirm linking does not change that terminal's directory or send `cd`.
+10. Poll the linked ticket and confirm its selected local project's GitLab/Jenkins/SonarQube identifiers are used. Then unlink the local project and confirm future ticket launches fall back to the configured workspace/home behavior while Jira/provider project tags remain.
 
 ## Start Claude for a Ticket
 
@@ -76,20 +78,21 @@ Use a real ticket only when its provider data is approved for local context capt
 2. Confirm exactly one terminal is created and focused, its title contains the current branch when the launch directory is a Git project, and the configured `claude`/`claude-*` command is executed exactly once.
 3. Confirm no Jira context is submitted automatically and Kronos does not read or summarize Claude's output.
 4. In Sessions, confirm the new session shows the real ticket key and title.
-5. Choose **Insert `[TICKET-KEY]`**.
-6. Confirm exactly one editable reference is inserted, Enter is not pressed, and the terminal remains fully interactive and operator-controlled.
-7. Inspect the referenced Jira artifact. Confirm meaningful custom-field names and values, comments, attachment download/skip reasons, provenance, pruning, and partial-completeness warnings are understandable. Include a `.msg` or other binary fixture and an uncommon file type; confirm both are stored byte-for-byte as private files, referenced by sanitized paths and hashes, and never embedded, parsed, previewed, or executed by Kronos.
-8. Edit the inserted line and decide yourself whether to press Enter.
+5. Choose **Insert `[TICKET-KEY]`** and confirm no terminal text is written while the provider read is in progress or when the composer first opens.
+6. Confirm the composer shows an escaped preview of the ticket description, recent comments, warnings, and a fixed artifact reference. Edit **Operator focus** with normal Enter/newlines and confirm nothing is inserted yet.
+7. Choose **Place in Terminal** or press Ctrl/Cmd+Enter in the composer. Confirm exactly one shell-quoted reference is inserted, Enter is not pressed, and the terminal remains fully interactive and operator-controlled.
+8. Inspect the referenced Jira artifact. Confirm meaningful custom-field names and values, comments, attachment download/skip reasons, provenance, pruning, and partial-completeness warnings are understandable. Include a `.msg` or other binary fixture and an uncommon file type; confirm both are stored byte-for-byte as private files, referenced by sanitized paths and hashes, and never embedded, parsed, previewed, or executed by Kronos.
+9. Review the inserted line and decide yourself whether to press Enter in the terminal.
 
 To verify the existing-terminal path as well:
 
-9. Start or focus a separate terminal you control and choose **Manage Focused Terminal** from a ticket.
-10. Confirm Kronos associates the focused terminal but does not create a terminal, launch Claude, or write anything yet.
+10. Start or focus a separate terminal you control and choose **Manage Focused Terminal** from a ticket.
+11. Confirm Kronos associates the focused terminal but does not create a terminal, launch Claude, or write anything yet.
 
 If GitLab and CI providers are safely configured:
 
-11. Insert the linked `[MR-N]` context and confirm review, pipeline, job, and test completeness is explicit.
-12. Insert `[CI-TICKET-KEY]` and confirm Jenkins and SonarQube evidence clearly says which provider portions were fetched, partial, or unavailable.
+12. Insert the linked `[MR-N]` context and confirm the composer includes recent notes/discussions plus explicit review, pipeline, job, and test completeness.
+13. Insert `[CI-TICKET-KEY]` and confirm Jenkins and SonarQube evidence clearly says which provider portions were fetched, partial, or unavailable.
 
 ## Sessions View
 

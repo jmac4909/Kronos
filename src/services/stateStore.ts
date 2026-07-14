@@ -145,6 +145,7 @@ function normalizeProjectConfig(value: unknown): ProjectConfig {
   copyString(raw, config, 'repo_name');
   copyString(raw, config, 'jira_project_key');
   copyString(raw, config, 'jira_ticket_filter');
+  copyString(raw, config, 'gitlab_project_path');
   copyString(raw, config, 'jenkins_url');
   copyString(raw, config, 'sonar_project_key');
   copyString(raw, config, 'base_branch');

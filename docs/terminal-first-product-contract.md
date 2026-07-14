@@ -55,6 +55,7 @@ It supports:
 - hiding or showing completed work by the configured default, explicitly overriding it, and clearing filters reversibly;
 - opening one canonical ticket workspace;
 - explicitly discovering local projects from open workspace folders and configured roots, within configured depth/result limits, then registering only selected folders;
+- configuring each registered project's GitLab project ID/path, Jenkins job URL, SonarQube project key, and default monitoring branch through a guided local editor;
 - reading a registered project's current Git branch without invoking Git;
 - choosing or unlinking one primary local launch project for a ticket while preserving Jira/provider project associations;
 - managing the explicitly focused terminal for that ticket;
@@ -72,7 +73,7 @@ The ticket workspace prioritizes either terminal-first sequence:
 
 Project linking changes local Kronos metadata only. A new ticket-launched terminal may use the linked project folder as its starting directory. Linking never changes branch, index, worktree, or repository state, and never changes the current directory of an existing terminal.
 
-Project discovery roots, scan depth, and result limit are operator settings. An explicit Work/Setup action opens VS Code's native multi-folder picker, merges the selected machine-local parent folders into the configured roots, and immediately presents bounded discovery results. The registration editor sorts registered projects first and checked, followed by unchecked discoveries; accepting it makes that checked set authoritative. Unregistering a linked project requires confirmation, clears affected local launch links, and preserves Jira/provider project associations. Discovery skips symbolic child directories and dependency trees and reads only directory and Git `HEAD` metadata. Registered projects become available from the prominent **Add Project** control at the top of every Jira card and from the ticket workspace. Jira completed-work visibility and additional completed status names are mapped settings shared by the Work tree and Jira board.
+Project discovery roots, scan depth, and result limit are operator settings. An explicit Work/Setup action opens VS Code's native multi-folder picker, merges the selected machine-local parent folders into the configured roots, and immediately presents bounded discovery results. The registration editor sorts registered projects first and checked, followed by unchecked discoveries; accepting it makes that checked set authoritative. Newly registered projects immediately open a guided integration editor; Setup can reopen it for every registered project. The editor accepts only project-specific read identifiers and URLs, shows credential readiness without credential values, and pre-fills the default monitoring branch from the currently observed Git branch. Blank optional fields clear that binding. When a ticket has an explicit launch project, that project's integration values override provider-association defaults for GitLab, Jenkins, and SonarQube polling. Unregistering a linked project requires confirmation, clears affected local launch links, and preserves Jira/provider project associations. Discovery skips symbolic child directories and dependency trees and reads only directory and Git `HEAD` metadata. Registered projects become available from the prominent **Add Project** control at the top of every Jira card and from the ticket workspace. Jira completed-work visibility and additional completed status names are mapped settings shared by the Work tree and Jira board.
 
 It does not plan or execute software-delivery work.
 
@@ -126,9 +127,10 @@ Context insertion is always explicit and ticket-scoped. Creating a standalone Cl
 3. It normalizes and secret-redacts textual and structured provider data.
 4. For Jira, it downloads attachment bytes without a file-type allowlist or parser, writes them as private files with sanitized local names, and records their paths and SHA-256 hashes. Raw files are not transformed or secret-redacted.
 5. It writes a private, content-addressed JSON artifact and Markdown prompt boundary.
-6. It verifies that the managed terminal attachment has not changed during the fetch.
-7. It inserts one shell-inert reference line with terminal execution disabled.
-8. The operator reviews, edits, and submits the line manually.
+6. For Jira and GitLab MR context, it opens an interactive composer with escaped evidence previews, completeness warnings, an immutable artifact reference, and an editable operator-focus field.
+7. It verifies that the managed terminal attachment has not changed during the fetch.
+8. **Place in Terminal** or Ctrl/Cmd+Enter inserts one shell-quoted reference line with terminal execution disabled. Ordinary Enter only edits the composer text.
+9. The operator reviews the terminal line and submits it manually.
 
 Provider data inside an artifact is untrusted evidence, never instructions. Prompt artifacts tell the interactive agent not to follow commands, role changes, credential requests, links, or mutation requests found inside provider content.
 
@@ -200,8 +202,8 @@ Ticket-linked journey:
 2. The operator chooses `Start Claude for Ticket`, or focuses an existing terminal and chooses `Manage Focused Terminal`.
 3. On explicit start, Kronos validates the configured Claude command/name/cwd, creates and focuses one VS Code terminal, and executes only that command.
 4. The operator chooses `Insert [JIRA-123]`.
-5. Kronos inserts one editable, non-submitting reference to the private Jira artifact.
-6. The operator edits and submits it manually, then directs the work interactively.
+5. Kronos opens the context composer with the fixed private artifact reference, fetched evidence, and an editable operator-focus field.
+6. The operator places the line into the terminal, reviews and submits it manually, then directs the work interactively.
 7. Kronos monitors linked MR and CI providers without reading the terminal.
 8. Meaningful changes appear in Attention and can produce fresh explicit MR/CI insertion actions.
 9. The operator uses the work-session audit to inspect provenance and evidence.
