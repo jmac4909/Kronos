@@ -1,7 +1,7 @@
 {
   "name": "kronos",
   "displayName": "Kronos — Terminal Work Companion",
-  "description": "Terminal-first Jira, merge-request, pipeline, and audit context for operator-owned interactive sessions. Kronos reads, inserts, monitors, and audits without running your work.",
+  "description": "Terminal-first Jira, merge-request, pipeline, and audit context for interactive sessions. Kronos reads, inserts, monitors, audits, and launches Claude only from an explicit operator action.",
   "version": "0.1.0",
   "publisher": "jmacke01",
   "license": "UNLICENSED",
@@ -31,7 +31,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "Kronos reads provider context, writes private local context and audit records, and can insert non-submitting references into an operator-owned terminal. It never launches Claude, executes workspace code, runs project commands, or changes Git."
+      "description": "Kronos reads provider context, writes private local context and audit records, and can insert non-submitting references into an operator-owned terminal. Claude launch is disabled in untrusted workspaces. Kronos never executes workspace code, runs project commands, or changes Git."
     }
   },
   "contributes": {
@@ -67,6 +67,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "kronos.openJiraBoard",
+        "title": "Kronos: Open Jira Work Board",
+        "icon": "$(layout)"
+      },
+      {
         "command": "kronos.filterWork",
         "title": "Kronos: Filter Work",
         "icon": "$(filter)"
@@ -80,6 +85,16 @@
         "command": "kronos.openTicketWorkspace",
         "title": "Kronos: Open Ticket Workspace",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "kronos.newClaudeSession",
+        "title": "Kronos: New Claude Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "kronos.startClaudeForTicket",
+        "title": "Kronos: Start Claude for Ticket",
+        "icon": "$(terminal)"
       },
       {
         "command": "kronos.manageActiveTerminal",
@@ -152,6 +167,11 @@
         "icon": "$(link-external)"
       },
       {
+        "command": "kronos.setup",
+        "title": "Kronos: Setup",
+        "icon": "$(tools)"
+      },
+      {
         "command": "kronos.doctor",
         "title": "Kronos: Doctor",
         "icon": "$(pulse)"
@@ -170,34 +190,49 @@
           "group": "navigation@1"
         },
         {
-          "command": "kronos.filterWork",
+          "command": "kronos.openJiraBoard",
           "when": "view == kronosWork",
           "group": "navigation@2"
         },
         {
-          "command": "kronos.clearWorkFilter",
+          "command": "kronos.filterWork",
           "when": "view == kronosWork",
           "group": "navigation@3"
         },
         {
-          "command": "kronos.manageActiveTerminal",
+          "command": "kronos.clearWorkFilter",
+          "when": "view == kronosWork",
+          "group": "navigation@4"
+        },
+        {
+          "command": "kronos.newClaudeSession",
           "when": "view == kronosSessions",
           "group": "navigation@1"
         },
         {
-          "command": "kronos.pollManagedWorkSessions",
-          "when": "view == kronosSessions || view == kronosAttention",
+          "command": "kronos.manageActiveTerminal",
+          "when": "view == kronosSessions",
           "group": "navigation@2"
         },
         {
-          "command": "kronos.doctor",
-          "when": "view == kronosAttention",
+          "command": "kronos.pollManagedWorkSessions",
+          "when": "view == kronosSessions || view == kronosAttention",
+          "group": "navigation@3"
+        },
+        {
+          "command": "kronos.setup",
+          "when": "view == kronosSessions || view == kronosAttention",
           "group": "navigation@8"
         },
         {
-          "command": "kronos.settings",
-          "when": "view == kronosAttention",
+          "command": "kronos.doctor",
+          "when": "view == kronosSessions || view == kronosAttention",
           "group": "navigation@9"
+        },
+        {
+          "command": "kronos.settings",
+          "when": "view == kronosSessions || view == kronosAttention",
+          "group": "navigation@10"
         }
       ],
       "view/item/context": [
@@ -205,6 +240,11 @@
           "command": "kronos.openTicketWorkspace",
           "when": "viewItem == work_ticket",
           "group": "inline@1"
+        },
+        {
+          "command": "kronos.startClaudeForTicket",
+          "when": "viewItem == work_ticket",
+          "group": "inline@2"
         },
         {
           "command": "kronos.manageActiveTerminal",
@@ -228,17 +268,17 @@
         },
         {
           "command": "kronos.focusWorkSessionTerminal",
-          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused",
+          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused || viewItem == standalone_session_attached",
           "group": "inline@1"
         },
         {
           "command": "kronos.reattachWorkSessionTerminal",
-          "when": "viewItem == work_session_detached || viewItem == work_session_detached_paused || viewItem == work_session_closed",
+          "when": "viewItem == work_session_detached || viewItem == work_session_detached_paused || viewItem == work_session_closed || viewItem == standalone_session_detached || viewItem == standalone_session_closed",
           "group": "inline@1"
         },
         {
           "command": "kronos.openWorkSessionAudit",
-          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == work_session_closed",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == work_session_closed || viewItem == standalone_session_attached || viewItem == standalone_session_detached || viewItem == standalone_session_closed",
           "group": "audit@1"
         },
         {
@@ -253,12 +293,12 @@
         },
         {
           "command": "kronos.detachWorkSessionTerminal",
-          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused",
+          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused || viewItem == standalone_session_attached",
           "group": "management@1"
         },
         {
           "command": "kronos.closeWorkSession",
-          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == standalone_session_attached || viewItem == standalone_session_detached",
           "group": "management@2"
         },
         {
@@ -302,6 +342,32 @@
           "default": 300,
           "minimum": 15,
           "description": "How often Kronos reads GitLab, Jenkins, and SonarQube status for monitored work sessions, in seconds."
+        },
+        "kronos.claudeCommand": {
+          "type": "string",
+          "default": "claude",
+          "scope": "machine",
+          "description": "Validated Claude CLI command submitted only after New Claude Session or Start Claude for Ticket. Only claude/claude-* plus approved interactive model, effort, safe-mode, IDE, display, and non-escalating permission flags are accepted."
+        },
+        "kronos.claudeTerminalName": {
+          "type": "string",
+          "default": "Claude",
+          "description": "Base name for terminals created by an explicit Kronos Claude launch."
+        },
+        "kronos.claudeLaunchCwd": {
+          "type": "string",
+          "enum": [
+            "ticketProject",
+            "workspace",
+            "home"
+          ],
+          "enumDescriptions": [
+            "Use the ticket's configured project folder, then fall back to the workspace or home folder.",
+            "Use the first open workspace folder, then fall back to the home folder.",
+            "Use the current user's home folder."
+          ],
+          "default": "ticketProject",
+          "description": "Starting directory for terminals created by an explicit Claude launch."
         }
       }
     }
@@ -311,8 +377,9 @@
     "compile": "node scripts/clean-output.js && node node_modules/typescript/bin/tsc -p ./",
     "watch": "node scripts/clean-output.js && node node_modules/typescript/bin/tsc -watch -p ./",
     "package": "npx --yes @vscode/vsce@3.9.2 package --no-dependencies --allow-missing-repository",
-    "test": "node scripts/check-manifest.js && node scripts/check-security.js && node scripts/check-context-governance.js && npm run compile && node scripts/run-unit-tests.js && npm run webview:dom",
+    "test": "node scripts/check-manifest.js && node scripts/check-security.js && node scripts/check-context-governance.js && npm run compile && node scripts/run-unit-tests.js && npm run webview:dom && npm run webview:jira-board",
     "webview:dom": "node scripts/run-webview-dom-tests.js",
+    "webview:jira-board": "node scripts/run-jira-work-board-tests.js",
     "feedback:state": "node scripts/create-feedback-state.js",
     "feedback:state:force": "node scripts/create-feedback-state.js --force",
     "feedback:smoke": "node scripts/run-feedback-smoke.js",

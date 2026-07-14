@@ -27,7 +27,7 @@ assert.deepEqual(packageJson.contributes.views.kronos.map(view => view.id), [
   'kronosSessions',
   'kronosAttention',
 ]);
-assert.equal(packageJson.contributes.commands.length, 20);
+assert.equal(packageJson.contributes.commands.length, 24);
 
 console.log('Kronos terminal-first feedback smoke: PASS');
 console.log(`Fixture: ${fixtureDir}`);

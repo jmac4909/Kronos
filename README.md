@@ -1,21 +1,22 @@
 # Kronos — Terminal Work Companion
 
-Kronos is a terminal-first VS Code companion for organizing work around an interactive terminal that the operator already owns. It reads Jira, GitLab, Jenkins, and SonarQube context; inserts editable context references into the focused terminal without submitting them; monitors provider status; and keeps a private audit trail.
+Kronos is a terminal-first VS Code companion for organizing Jira work and interactive Claude sessions. The operator can attach a terminal they already own or explicitly ask Kronos to create and focus a new Claude terminal. Kronos reads Jira, GitLab, Jenkins, and SonarQube context; inserts editable context references without submitting them; monitors provider status; and keeps a private audit trail.
 
 ## Product Boundary
 
-Kronos does four things: **reads, inserts, monitors, and audits**.
+Kronos **organizes, explicitly starts Claude, reads, inserts, monitors, and audits**.
 
 Kronos never:
 
-- launches Claude or creates a replacement terminal;
+- launches anything automatically;
+- executes an arbitrary command: the two explicit Claude-start actions accept only a validated `claude` or `claude-*` executable plus a narrow allowlist of interactive, non-escalating flags;
 - reads terminal input, output, or scrollback;
-- presses Enter or submits terminal input;
+- submits inserted provider context or presses Enter for the operator;
 - runs project tests, builds, scans, deployments, or remediation commands;
 - creates, switches, commits, pushes, merges, or otherwise changes Git branches or worktrees;
 - changes Jira, GitLab, Jenkins, SonarQube, or database state.
 
-The operator starts and controls the interactive session, edits every inserted reference, decides when to submit it, directs the work, and can stop Kronos management without closing the terminal.
+The operator chooses every launch, owns the resulting interactive session, edits every inserted reference, decides when to submit it, directs the work, and can stop Kronos management without closing the terminal.
 
 The normative boundary and navigation model are in [docs/terminal-first-product-contract.md](docs/terminal-first-product-contract.md).
 
@@ -23,7 +24,9 @@ The normative boundary and navigation model are in [docs/terminal-first-product-
 
 ### Work
 
-Work is the ticket-centered starting point. Refresh or filter Jira work, open one ticket workspace, attach the focused terminal to that ticket, and explicitly insert the context needed for the next instruction:
+Work is a Jira board with search, status, project, and label filters. Completed work is hidden by default and can be shown explicitly. Refresh the board, combine or clear filters, open one ticket workspace, then either attach an existing focused terminal or choose **Start Claude for Ticket**. Ticket association is created only from this ticket path, never by standalone **New Claude**.
+
+From a ticket workspace, explicitly insert the context needed for the next instruction:
 
 - `[JIRA-123]` for Jira fields, description, comments, custom fields, and bounded safe-text attachments;
 - `[MR-77]` for GitLab merge-request, review, diff, pipeline, job, and test evidence;
@@ -31,11 +34,13 @@ Work is the ticket-centered starting point. Refresh or filter Jira work, open on
 
 Every insertion is one editable line and is sent with execution disabled. The operator reviews it and presses Enter only when ready.
 
-**Refresh Jira Tickets** uses Jira Cloud's bounded read-only JQL search directly from the extension. Set `JIRA_JQL` to choose the Work list; otherwise Kronos reads unresolved work assigned to the current Jira user. A partial paginated read retains prior rows instead of silently dropping them.
+**Refresh Jira Tickets** uses Jira Cloud's bounded read-only JQL search directly from the extension. Set `JIRA_JQL` to choose the Work list; otherwise Kronos reads unresolved work plus the last 30 days of resolved work assigned to the current Jira user, and the board hides completed rows locally by default. A partial paginated read retains prior rows instead of silently dropping them. Jira values are pruned recursively before storage and display: `null`, empty strings, empty arrays, empty objects, and recursively empty rich text disappear, while meaningful `false` and `0` values remain.
 
 ### Sessions
 
-Sessions shows durable ticket work sessions and their ephemeral live-terminal attachment. It reports whether the terminal is attached, which providers are bound, context freshness, monitoring health, and the latest poll result.
+Sessions shows both standalone Claude sessions and ticket-linked work sessions with their ephemeral live-terminal attachment. **New Claude** creates and focuses a standalone terminal without inventing a Jira key or ticket link. **Start Claude for Ticket** creates the same operator-owned terminal experience but records the selected ticket association.
+
+Each session reports whether the terminal is attached, which providers are bound, context freshness, monitoring health, and the latest poll result where applicable.
 
 From Sessions, the operator can focus or reattach the terminal, poll providers, pause or resume monitoring, inspect the audit, detach the terminal, or stop management. Detaching and stopping management never close the terminal.
 
@@ -43,15 +48,15 @@ After VS Code reloads, persisted history remains but the live terminal starts de
 
 ### Attention
 
-Attention is the ticket-grouped inbox for meaningful provider changes and monitoring problems: merge-request review changes, pipeline failures or recoveries, Jenkins test/stage changes, SonarQube gate or issue changes, partial provider reads, and monitoring blockers.
+Attention is the session- and ticket-aware inbox for meaningful provider changes and monitoring problems: merge-request review changes, pipeline failures or recoveries, Jenkins test/stage changes, SonarQube gate or issue changes, partial provider reads, and monitoring blockers.
 
-An attention item can open the originating provider page, open its ticket workspace, insert fresh MR or CI context into the managed terminal, or be acknowledged. Acknowledgement changes only the local audit state.
+An attention item can open the originating provider page, open its ticket workspace when ticket-linked, insert applicable fresh MR or CI context into the managed terminal, or be acknowledged. Acknowledgement changes only the local audit state.
 
 ## Typical Journey
 
-1. Open **Kronos > Work** and select a Jira ticket.
-2. Review the ticket workspace and focus the already-running interactive terminal you want to use.
-3. Choose **Manage Focused Terminal**.
+1. Open **Kronos > Work**, use the Jira board filters, and select a ticket.
+2. Review the ticket workspace and choose **Start Claude for Ticket**, or focus an existing terminal and choose **Manage Focused Terminal**.
+3. For an explicit start, Kronos validates the configured executable and approved interactive flags, terminal name, and working directory; it then creates and focuses one VS Code terminal and executes that command once.
 4. Choose **Insert `[JIRA-123]`**. Kronos writes a private context artifact and inserts its non-submitting reference.
 5. Edit the line if needed, press Enter yourself, and continue directing the interactive session normally.
 6. When an MR or CI provider is linked, Kronos monitors its bounded structural status in the background.
@@ -59,9 +64,11 @@ An attention item can open the originating provider page, open its ticket worksp
 8. Use **Sessions > Open Work Session Audit** to inspect context provenance, completeness, transitions, and acknowledgements. Terminal contents are never part of the audit.
 9. Choose **Stop Managing Work Session** when finished. The terminal remains open and under operator control.
 
+For work that does not begin with Jira, choose **Sessions > New Claude**. The resulting session is standalone and receives no ticket identity. A ticket association is created only through a separate ticket action from Work.
+
 ## Runtime, Local Data, and Credentials
 
-The installed extension has **zero third-party runtime dependencies**. It uses the VS Code API and Node built-ins only; it does not call external helper scripts or CLIs. TypeScript and the official VS Code type packages are development-only tooling. Release packaging uses the pinned official VS Code Extension Manager CLI (`@vscode/vsce@3.9.2`), which is not shipped in the extension.
+The installed extension has **zero third-party runtime dependencies**. Its implementation uses the VS Code API and Node built-ins only; it does not use helper scripts, subprocess libraries, or a bundled agent SDK. The sole external program it can start is the operator-configured Claude executable, through a newly created VS Code terminal and only after **New Claude** or **Start Claude for Ticket** is clicked. TypeScript and the official VS Code type packages are development-only tooling. Release packaging uses the pinned official VS Code Extension Manager CLI (`@vscode/vsce@3.9.2`), which is not shipped in the extension.
 
 Kronos uses local operator state under `~/.kronos` by default, or the explicitly configured `KRONOS_DIR`. Provider credentials are inherited from the extension environment and, when present, `~/.kronos/.env` (or `KRONOS_ENV_FILE`). Credential values are not written to context artifacts, work-session records, or audit events.
 
@@ -74,7 +81,7 @@ Common read-only configuration variables are:
 
 Context artifacts are bounded, normalized, secret-redacted, wrapped as untrusted provider data, and stored in private per-user files where the platform supports private file permissions. Provider reads are pinned to configured origins when credentials are sent. Kronos does not fetch GitLab job traces, Jenkins console logs, or unsupported Jira attachment bodies.
 
-Run **Kronos: Doctor** to inspect missing or invalid provider configuration without displaying credential values.
+Use **Kronos: Setup** for guided first-run and private provider-environment guidance, **Kronos: Doctor** to inspect missing or invalid provider/Claude settings without displaying credential values, and **Kronos: Settings** to change the validated Claude command, terminal name, working-directory behavior, and polling options.
 
 ## Install for Local Evaluation
 

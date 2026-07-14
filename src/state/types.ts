@@ -28,6 +28,8 @@ export interface Ticket {
   type: string;
   priority: string;
   jira_status: string;
+  /** Jira's status-category key/name, normally new, indeterminate, or done. */
+  jira_status_category?: string;
   source: 'jira';
   updated?: string;
   description?: string;

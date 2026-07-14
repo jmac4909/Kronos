@@ -1,6 +1,12 @@
 import * as crypto from 'crypto';
 import { JiraTicketSnapshot, normalizeJiraIssueKey } from './jiraRestClient';
 import { arrayFromUnknown, isRecord, optionalFiniteNumberFromUnknown, optionalTrimmedStringFromUnknown } from './records';
+import {
+  isEmptyJiraRichText,
+  pruneEmptyJiraValue,
+  type JiraArtifactValue,
+  type JiraUnprunedValue,
+} from './jiraValuePruning';
 
 const MAX_CONTEXT_TEXT_CHARS = 1024 * 1024;
 const MAX_FIELD_TEXT_CHARS = 256 * 1024;
@@ -10,7 +16,7 @@ const SENSITIVE_FIELD_PATTERN = /^(?:authorization|cookie|set-cookie|credential|
 const SENSITIVE_FIELD_LABEL_PATTERN = /(?:authorization|cookie|credential|password|passwd|secret|token|api[ _-]?key|private[ _-]?key|access[ _-]?token|client[ _-]?secret)/i;
 const UNSAFE_ATTACHMENT_TEXT_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/;
 
-export type JiraContextValue = string | number | boolean | null | JiraContextValue[] | { [key: string]: JiraContextValue };
+export type JiraContextValue = JiraArtifactValue;
 
 export interface JiraContextField {
   id: string;
@@ -546,20 +552,20 @@ function adfToTextTracked(value: unknown, tracker?: JiraValueNormalizationTracke
   } else if (Array.isArray(value['content']) || typeof value['type'] === 'string') {
     rendered = cleanAdfText(renderAdfNode(value));
   } else {
-    rendered = readableText(normalizeContextValueTracked(value, tracker));
+    rendered = readableText(normalizeContextValueTracked(value, tracker) ?? '');
   }
   return redactProviderText(rendered, tracker);
 }
 
-export function normalizeContextValue(value: unknown): JiraContextValue {
+export function normalizeContextValue(value: unknown): JiraContextValue | undefined {
   return normalizeContextValueTracked(value);
 }
 
 function normalizeContextValueTracked(
   value: unknown,
   tracker?: JiraValueNormalizationTracker,
-): JiraContextValue {
-  return normalizeContextValueInternal(value, new WeakSet<object>(), 0, tracker);
+): JiraContextValue | undefined {
+  return pruneEmptyJiraValue(normalizeContextValueInternal(value, new WeakSet<object>(), 0, tracker));
 }
 
 interface JiraFieldNormalizationResult {
@@ -581,17 +587,22 @@ function normalizeFields(
   const missingNameIds: string[] = [];
   const missingSchemaIds: string[] = [];
   const truncatedIds: string[] = [];
-  const normalizedFields = Object.entries(fields).map(([id, rawValue]) => {
+  const normalizedFields = Object.entries(fields).map(([id, rawValue]): JiraContextField | undefined => {
     const schema = schemas[id];
     const expandedName = optionalTrimmedStringFromUnknown(names[id]);
     const fieldName = expandedName || id;
+    const tracker: JiraValueNormalizationTracker = { truncated: false };
+    const visibleValue = normalizeContextValueTracked(
+      id === 'attachment' ? sanitizeAttachmentField(rawValue) : rawValue,
+      tracker,
+    );
+    if (visibleValue === undefined) { return undefined; }
     if (!expandedName) { missingNameIds.push(id); }
     if (schema === undefined || schema === null) { missingSchemaIds.push(id); }
     const sensitiveField = SENSITIVE_FIELD_LABEL_PATTERN.test(id) || SENSITIVE_FIELD_LABEL_PATTERN.test(fieldName);
-    const tracker: JiraValueNormalizationTracker = { truncated: false };
     const normalizedValue = sensitiveField
       ? '[REDACTED]'
-      : normalizeContextValueTracked(id === 'attachment' ? sanitizeAttachmentField(rawValue) : rawValue, tracker);
+      : visibleValue;
     const field: JiraContextField = {
       id,
       name: redactProviderText(fieldName),
@@ -600,11 +611,13 @@ function normalizeFields(
       text: boundedFieldText(normalizedValue, tracker),
     };
     if (schema !== undefined) {
-      field.schema = normalizeContextValueTracked(schema, tracker);
+      const normalizedSchema = normalizeContextValueTracked(schema, tracker);
+      if (normalizedSchema !== undefined) { field.schema = normalizedSchema; }
     }
     if (tracker.truncated) { truncatedIds.push(id); }
     return field;
-  }).sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+  }).filter((field): field is JiraContextField => field !== undefined)
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   return {
     fields: normalizedFields,
     missingNameIds: uniqueStrings(missingNameIds),
@@ -719,7 +732,7 @@ function sanitizeProviderMetadata(value: unknown): unknown {
   const sanitized: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
     if (SENSITIVE_FIELD_LABEL_PATTERN.test(key)) {
-      sanitized[key] = '[REDACTED]';
+      if (normalizeContextValueTracked(item) !== undefined) { sanitized[key] = '[REDACTED]'; }
     } else if (typeof item === 'string' && (/(?:url|self|content|thumbnail)$/i.test(key) || /^(?:https?:)?\/\//i.test(item))) {
       sanitized[key] = sanitizedProviderUrl(item) || null;
     } else if (typeof item === 'string') {
@@ -809,7 +822,7 @@ function normalizeContextValueInternal(
   seen: WeakSet<object>,
   depth: number,
   tracker?: JiraValueNormalizationTracker,
-): JiraContextValue {
+): JiraUnprunedValue {
   if (value === null || value === undefined) { return null; }
   if (typeof value === 'string') { return redactProviderText(value, tracker); }
   if (typeof value === 'boolean') { return value; }
@@ -827,13 +840,13 @@ function normalizeContextValueInternal(
       return value.map(item => normalizeContextValueInternal(item, seen, depth + 1, tracker));
     }
     if (isRecord(value) && isAdfDocument(value)) {
-      return adfToTextTracked(value, tracker);
+      return isEmptyJiraRichText(value) ? '' : adfToTextTracked(value, tracker);
     }
-    const result: { [key: string]: JiraContextValue } = {};
+    const result: { [key: string]: JiraUnprunedValue } = {};
     for (const [key, item] of Object.entries(value)) {
-      result[key] = SENSITIVE_FIELD_PATTERN.test(key)
-        ? '[REDACTED]'
-        : normalizeContextValueInternal(item, seen, depth + 1, tracker);
+      const normalizedItem = pruneEmptyJiraValue(normalizeContextValueInternal(item, seen, depth + 1, tracker));
+      if (normalizedItem === undefined) { continue; }
+      result[key] = SENSITIVE_FIELD_PATTERN.test(key) ? '[REDACTED]' : normalizedItem;
     }
     return result;
   } finally {
@@ -846,7 +859,7 @@ function normalizedRecord(value: Record<string, unknown>): { [key: string]: Jira
   return isContextRecord(normalized) ? normalized : {};
 }
 
-function isContextRecord(value: JiraContextValue): value is { [key: string]: JiraContextValue } {
+function isContextRecord(value: JiraContextValue | undefined): value is { [key: string]: JiraContextValue } {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 

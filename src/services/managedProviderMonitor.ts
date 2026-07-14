@@ -60,7 +60,7 @@ import { tryAcquireManagedMonitorLease } from './managedMonitorLease';
 import {
   listWorkSessions,
   recordWorkSessionMonitoringResult,
-  type WorkSessionRecord,
+  type TicketWorkSessionRecord,
 } from './workSessionStore';
 import { isRecord, optionalTrimmedStringFromUnknown } from './records';
 import { unknownErrorMessage } from './errorUtils';
@@ -76,7 +76,7 @@ export interface ManagedProviderPollResult {
 
 export interface ManagedProviderNotice {
   event: MonitorEvent;
-  session: WorkSessionRecord;
+  session: TicketWorkSessionRecord;
   severity: 'warning' | 'information';
   providerUrl?: string;
   contextCommand?: 'kronos.insertGitLabContext' | 'kronos.insertCiContext';
@@ -122,8 +122,14 @@ export class ManagedProviderMonitor {
     heartbeat.unref();
     let total = emptyResult();
     try {
-      for (const session of listWorkSessions().filter(candidate =>
-        candidate.status === 'active' && candidate.monitoring.enabled
+      // Filter before the store's bounded slice so standalone history cannot
+      // crowd active monitored ticket sessions out of the polling set.
+      for (const session of listWorkSessions({
+        kind: 'ticket',
+        status: 'active',
+        monitoringEnabled: true,
+      }).filter((candidate): candidate is TicketWorkSessionRecord =>
+        candidate.kind === 'ticket' && candidate.status === 'active' && candidate.monitoring.enabled
       )) {
         if (!renew()) {
           total.leaseUnavailable = true;
@@ -171,7 +177,7 @@ export class ManagedProviderMonitor {
   }
 
   private async pollGitLab(
-    session: WorkSessionRecord,
+    session: TicketWorkSessionRecord,
     retainLease: () => boolean,
   ): Promise<ManagedProviderPollResult> {
     const binding = [...session.providerBindings].reverse().find(candidate =>
@@ -378,7 +384,7 @@ export class ManagedProviderMonitor {
   }
 
   private async pollCi(
-    session: WorkSessionRecord,
+    session: TicketWorkSessionRecord,
     retainLease: () => boolean,
   ): Promise<ManagedProviderPollResult> {
     const bindings = [...session.providerBindings].reverse();
@@ -542,7 +548,7 @@ function leaseLost(result: ManagedProviderPollResult): ManagedProviderPollResult
 }
 
 function safeReadGitLabBaseline(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   log: ManagedProviderMonitorOptions['log'],
 ): GitLabPipelineDigest | null {
   try {
@@ -554,7 +560,7 @@ function safeReadGitLabBaseline(
 }
 
 function safeReadGitLabMergeRequestBaseline(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   log: ManagedProviderMonitorOptions['log'],
 ): GitLabMergeRequestDigest | null {
   try {
@@ -569,7 +575,7 @@ function safeReadGitLabMergeRequestBaseline(
 }
 
 function safeReadGitLabMergeRequestReadStatus(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   log: ManagedProviderMonitorOptions['log'],
 ): GitLabMergeRequestReadStatus | null {
   try {
@@ -584,7 +590,7 @@ function safeReadGitLabMergeRequestReadStatus(
 }
 
 function safeReadCiBaseline(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   log: ManagedProviderMonitorOptions['log'],
 ): CiMonitorDigest | null {
   try {
@@ -596,7 +602,7 @@ function safeReadCiBaseline(
 }
 
 function appendBaselineOnce(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   source: MonitorEventSource,
   kind: string,
   subjectId: string,
@@ -621,7 +627,7 @@ function appendBaselineOnce(
 }
 
 function initialGitLabNotice(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   iid: number,
   digest: GitLabPipelineDigest,
   artifactPath: string,
@@ -649,7 +655,7 @@ function initialGitLabNotice(
 }
 
 function initialGitLabMergeRequestNotice(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   digest: GitLabMergeRequestDigest,
   artifactPath: string,
   providerUrl: string | undefined,
@@ -678,7 +684,7 @@ function initialGitLabMergeRequestNotice(
 }
 
 function initialCiNotices(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   digest: CiMonitorDigest,
   artifactPath: string,
 ): ManagedProviderNotice[] {
@@ -729,7 +735,7 @@ function initialCiNotices(
 }
 
 function appendGitLabTransitionOnce(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   iid: number,
   transition: GitLabPipelineTransition,
   artifactPath: string,
@@ -758,7 +764,7 @@ function appendGitLabTransitionOnce(
 }
 
 function appendGitLabMergeRequestTransitionOnce(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   transition: GitLabMergeRequestTransition,
   artifactPath: string,
   providerUrl: string | undefined,
@@ -788,7 +794,7 @@ function appendGitLabMergeRequestTransitionOnce(
 }
 
 function appendCiTransitionOnce(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   transition: CiMonitorTransition,
   artifactPath: string,
 ): ManagedProviderNotice | null {
@@ -825,7 +831,7 @@ function appendCiTransitionOnce(
 }
 
 interface AppendTransitionInput {
-  session: WorkSessionRecord;
+  session: TicketWorkSessionRecord;
   source: MonitorEventSource;
   summary: string;
   subject: MonitorEventSubject;
@@ -962,7 +968,7 @@ function mergeRequestTransitionIsWarning(kind: GitLabMergeRequestTransitionKind)
 }
 
 function updateGitLabMergeRequestReadStatus(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   iid: number,
   input: GitLabMergeRequestReadStatusInput,
   providerUrl: string | undefined,
@@ -1066,7 +1072,7 @@ function readFailureLabel(reason: string): string {
 type ProviderReadState = 'complete' | 'partial' | 'failed';
 
 function appendProviderReadStatusTransition(
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   provider: 'jenkins' | 'sonar',
   state: ProviderReadState,
   reason: string,
@@ -1181,7 +1187,7 @@ function transitionLabel(kind: string): string {
 
 function notice(
   event: MonitorEvent,
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
   severity: ManagedProviderNotice['severity'],
   providerUrl: string | undefined,
   contextCommand: ManagedProviderNotice['contextCommand'],
@@ -1194,7 +1200,7 @@ function notice(
 
 export function projectConfigurationForSession(
   state: KronosStateSnapshot | null,
-  session: WorkSessionRecord,
+  session: TicketWorkSessionRecord,
 ): Record<string, unknown> {
   const ticket = state?.tickets[session.ticketKey];
   const projectName = ticket?.projects[0];

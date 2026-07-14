@@ -36,11 +36,22 @@ const insertion = requireMarkers('src/services/terminalContextInsertion.ts', [
   'assertShellInertPromptPath',
 ]);
 const extension = read('src/terminalFirstExtension.ts');
+const launcher = requireMarkers('src/services/claudeTerminalLauncher.ts', [
+  'normalizeClaudeTerminalLaunch(input)',
+  'factory.createTerminal(terminalOptions)',
+  'terminal.sendText(configuration.command, true)',
+  'CLAUDE_EXECUTABLE_BASENAME_PATTERN',
+  'APPROVED_INTERACTIVE_BOOLEAN_FLAGS',
+  'validateApprovedInteractiveArguments(argumentsList)',
+]);
 if (/\.sendText\s*\(/.test(extension)) {
   failures.push('terminalFirstExtension.ts must route insertion through the audited terminalContextInsertion boundary.');
 }
 if ((insertion.match(/\.sendText\s*\(/g) || []).length !== 1) {
-  failures.push('Exactly one audited terminal sendText call is allowed.');
+  failures.push('Exactly one audited non-submitting context insertion call is allowed.');
+}
+if ((launcher.match(/\.sendText\s*\(/g) || []).length !== 1) {
+  failures.push('Exactly one audited explicit Claude launch submission is allowed.');
 }
 
 for (const source of [
@@ -57,4 +68,4 @@ if (failures.length > 0) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
-console.log('Kronos context governance OK (untrusted boundaries, private artifacts, non-submitting insertion).');
+console.log('Kronos context governance OK (untrusted boundaries, private artifacts, non-submitting insertion, explicit validated Claude launch).');

@@ -7,6 +7,7 @@ import { isRecord } from './records';
 import { KRONOS_DIR } from './stateStore';
 
 export type WorkSessionStatus = 'active' | 'closed';
+export type WorkSessionKind = 'ticket' | 'standalone';
 export type WorkSessionTerminalStatus = 'attached' | 'detached' | 'closed';
 export type WorkSessionMonitoringState = 'healthy' | 'partial' | 'blocked' | 'idle';
 export type WorkSessionProvider = 'jira' | 'gitlab' | 'jenkins' | 'sonar';
@@ -53,10 +54,10 @@ export interface WorkSessionContextArtifact {
   contentSha256?: string;
 }
 
-export interface WorkSessionRecord {
+interface WorkSessionRecordBase {
   schemaVersion: 1;
   id: string;
-  ticketKey: string;
+  kind: WorkSessionKind;
   title: string;
   status: WorkSessionStatus;
   createdAt: string;
@@ -78,12 +79,41 @@ export interface WorkSessionRecord {
   closedAt?: string;
 }
 
-export interface CreateWorkSessionInput {
+export interface TicketWorkSessionRecord extends WorkSessionRecordBase {
+  kind: 'ticket';
+  ticketKey: string;
+}
+
+export interface StandaloneWorkSessionRecord extends WorkSessionRecordBase {
+  kind: 'standalone';
+  ticketKey?: never;
+}
+
+export type WorkSessionRecord = TicketWorkSessionRecord | StandaloneWorkSessionRecord;
+
+export interface CreateTicketWorkSessionInput {
   ticketKey: string;
   title?: string;
   projectName?: string;
   projectPath?: string;
   monitoringEnabled?: boolean;
+}
+
+/** @deprecated Prefer CreateTicketWorkSessionInput for ticket-linked sessions. */
+export type CreateWorkSessionInput = CreateTicketWorkSessionInput;
+
+export interface CreateStandaloneWorkSessionInput {
+  title: string;
+  projectName?: string;
+  projectPath?: string;
+  monitoringEnabled?: boolean;
+}
+
+export interface WorkSessionEventContext {
+  sessionId: string;
+  sessionTitle: string;
+  label: string;
+  ticketKey?: string;
 }
 
 export interface AttachWorkSessionTerminalInput {
@@ -118,6 +148,12 @@ export interface WorkSessionStoreOptions {
   kronosDir?: string;
   now?: Date;
   limit?: number;
+}
+
+export interface ListWorkSessionOptions extends WorkSessionStoreOptions {
+  kind?: WorkSessionKind;
+  status?: WorkSessionStatus;
+  monitoringEnabled?: boolean;
 }
 
 export interface RecordWorkSessionMonitoringResultInput {
@@ -163,7 +199,7 @@ export function workSessionRecordPath(sessionId: string, options: WorkSessionSto
 export function createOrGetWorkSessionByTicket(
   input: CreateWorkSessionInput,
   options: WorkSessionStoreOptions = {},
-): WorkSessionRecord {
+): TicketWorkSessionRecord {
   const ticketKey = normalizeTicketKey(input.ticketKey);
   const existing = getWorkSessionByTicket(ticketKey, options);
   if (existing) { return existing; }
@@ -173,6 +209,7 @@ export function createOrGetWorkSessionByTicket(
   const record: WorkSessionRecord = {
     schemaVersion: SCHEMA_VERSION,
     id,
+    kind: 'ticket',
     ticketKey,
     title: optionalSingleLine(input.title, 'work session title', 300) || ticketKey,
     status: 'active',
@@ -191,12 +228,59 @@ export function createOrGetWorkSessionByTicket(
   return cloneWorkSession(record);
 }
 
+export function createStandaloneWorkSession(
+  input: CreateStandaloneWorkSessionInput,
+  options: WorkSessionStoreOptions = {},
+): StandaloneWorkSessionRecord {
+  const title = requiredSingleLine(input.title, 'work session title', 300);
+  const at = nowIso(options.now);
+  const record: StandaloneWorkSessionRecord = {
+    schemaVersion: SCHEMA_VERSION,
+    id: standaloneWorkSessionId(title),
+    kind: 'standalone',
+    title,
+    status: 'active',
+    createdAt: at,
+    updatedAt: at,
+    terminals: [],
+    providerBindings: [],
+    artifacts: [],
+    monitoring: { enabled: input.monitoringEnabled === true },
+  };
+  const projectName = optionalSingleLine(input.projectName, 'project name', 200);
+  const projectPath = optionalAbsolutePath(input.projectPath, 'project path');
+  if (projectName) { record.projectName = projectName; }
+  if (projectPath) { record.projectPath = projectPath; }
+  writeWorkSessionRecord(record, options);
+  return cloneWorkSession(record);
+}
+
+export function workSessionEventContext(record: WorkSessionRecord): WorkSessionEventContext {
+  const context: WorkSessionEventContext = {
+    sessionId: record.id,
+    sessionTitle: record.title,
+    label: record.kind === 'ticket' ? `${record.ticketKey}: ${record.title}` : record.title,
+  };
+  if (record.kind === 'ticket') { context.ticketKey = record.ticketKey; }
+  return context;
+}
+
+export function workSessionTicketMetadata(record: WorkSessionRecord): { ticketKey?: string } {
+  return record.kind === 'ticket' ? { ticketKey: record.ticketKey } : {};
+}
+
 export function getWorkSessionByTicket(
   ticketKey: string,
   options: WorkSessionStoreOptions = {},
-): WorkSessionRecord | null {
-  const id = workSessionIdForTicket(normalizeTicketKey(ticketKey));
-  return readWorkSession(id, options);
+): TicketWorkSessionRecord | null {
+  const normalizedTicketKey = normalizeTicketKey(ticketKey);
+  const id = workSessionIdForTicket(normalizedTicketKey);
+  const record = readWorkSession(id, options);
+  if (!record) { return null; }
+  if (record.kind !== 'ticket' || record.ticketKey !== normalizedTicketKey) {
+    throw new Error(`Work session ${id} is not linked to ${normalizedTicketKey}.`);
+  }
+  return record;
 }
 
 export function readWorkSession(
@@ -213,7 +297,7 @@ export function readWorkSession(
   return record;
 }
 
-export function listWorkSessions(options: WorkSessionStoreOptions = {}): WorkSessionRecord[] {
+export function listWorkSessions(options: ListWorkSessionOptions = {}): WorkSessionRecord[] {
   const directory = workSessionsDirectory(options);
   if (!assertSafeDirectoryIfPresent(directory, 'work sessions directory')) { return []; }
   const limit = boundedInteger(options.limit, DEFAULT_LIST_LIMIT, 1, MAX_LIST_LIMIT);
@@ -229,6 +313,10 @@ export function listWorkSessions(options: WorkSessionStoreOptions = {}): WorkSes
     }
   }
   return records
+    .filter(record => options.kind === undefined || record.kind === options.kind)
+    .filter(record => options.status === undefined || record.status === options.status)
+    .filter(record => options.monitoringEnabled === undefined
+      || record.monitoring.enabled === options.monitoringEnabled)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.id.localeCompare(right.id))
     .slice(0, limit);
 }
@@ -434,17 +522,17 @@ export function reopenWorkSession(
     if (record.status === 'active') { return; }
     record.status = 'active';
     delete record.closedAt;
-    record.monitoring.enabled = true;
+    record.monitoring.enabled = record.kind === 'ticket';
   });
 }
 
 export function normalizeWorkSessionRecord(value: unknown): WorkSessionRecord {
   if (!isRecord(value)) { throw new Error('Work session record must be an object.'); }
   if (value['schemaVersion'] !== SCHEMA_VERSION) { throw new Error('Unsupported work session schema version.'); }
-  const record: WorkSessionRecord = {
+  const kind = normalizeWorkSessionKind(value['kind'], value['ticketKey']);
+  const base: Omit<WorkSessionRecordBase, 'kind'> = {
     schemaVersion: SCHEMA_VERSION,
     id: normalizeEntityId(value['id'], 'work session id'),
-    ticketKey: normalizeTicketKeyValue(value['ticketKey']),
     title: requiredSingleLine(value['title'], 'work session title', 300),
     status: normalizeSessionStatus(value['status']),
     createdAt: normalizeTimestamp(value['createdAt'], 'work session createdAt'),
@@ -454,6 +542,12 @@ export function normalizeWorkSessionRecord(value: unknown): WorkSessionRecord {
     artifacts: normalizeArtifacts(value['artifacts']),
     monitoring: normalizeMonitoring(value['monitoring']),
   };
+  const record: WorkSessionRecord = kind === 'ticket'
+    ? { ...base, kind, ticketKey: normalizeTicketKeyValue(value['ticketKey']) }
+    : { ...base, kind };
+  if (kind === 'standalone' && value['ticketKey'] !== undefined && value['ticketKey'] !== null && value['ticketKey'] !== '') {
+    throw new Error('Standalone work session must not include a ticket key.');
+  }
   const projectName = optionalSingleLine(value['projectName'], 'project name', 200);
   const projectPath = optionalAbsolutePath(value['projectPath'], 'project path');
   const closedAt = optionalTimestamp(value['closedAt'], 'work session closedAt');
@@ -610,6 +704,11 @@ function workSessionIdForTicket(ticketKey: string): string {
   return normalizeEntityId(safeFileStem(`jira-${ticketKey.toLowerCase()}`, { maxLength: 180 }), 'work session id');
 }
 
+function standaloneWorkSessionId(title: string): string {
+  const stem = safeFileStem(title.toLowerCase(), { maxLength: 96 }) || 'session';
+  return normalizeEntityId(`session-${stem}-${crypto.randomUUID()}`, 'work session id');
+}
+
 function providerBindingId(provider: WorkSessionProvider, resource: WorkSessionProviderResource, subject: string): string {
   return normalizeEntityId(safeFileStem(`${provider}-${resource}-${subject}`, { maxLength: 180 }), 'provider binding id');
 }
@@ -623,6 +722,13 @@ function normalizeTicketKeyValue(value: unknown): string {
   const normalized = value.trim().toUpperCase();
   if (!TICKET_KEY_PATTERN.test(normalized)) { throw new Error('Ticket key is missing or invalid.'); }
   return normalized;
+}
+
+function normalizeWorkSessionKind(value: unknown, ticketKey: unknown): WorkSessionKind {
+  // Version-1 records created before standalone sessions did not persist a kind.
+  if (value === undefined && typeof ticketKey === 'string' && ticketKey.trim()) { return 'ticket'; }
+  if (value === 'ticket' || value === 'standalone') { return value; }
+  throw new Error('Work session kind is missing or invalid.');
 }
 
 function normalizeEntityId(value: unknown, label: string): string {
@@ -967,6 +1073,6 @@ function boundedInteger(value: number | undefined, fallback: number, minimum: nu
   return Math.min(maximum, Math.max(minimum, Math.floor(value)));
 }
 
-function cloneWorkSession(record: WorkSessionRecord): WorkSessionRecord {
-  return JSON.parse(JSON.stringify(record)) as WorkSessionRecord;
+function cloneWorkSession<T extends WorkSessionRecord>(record: T): T {
+  return JSON.parse(JSON.stringify(record)) as T;
 }

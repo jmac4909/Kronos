@@ -21,7 +21,8 @@ export function buildTicketWorkspaceHtml(input: TicketWorkspaceViewInput): strin
   const liveTerminalCount = resolveLiveTerminalCount(workSession, input.liveTerminalCount);
   const mrIid = connectedMergeRequestIid(ticket, workSession);
   const actionButtons = [
-    ticketWorkspaceActionButton('manageActiveTerminal', 'Manage Focused Terminal', { ticket: ticketKey, primary: true }),
+    ticketWorkspaceActionButton('startClaudeForTicket', 'Start Claude for Ticket', { ticket: ticketKey, primary: true }),
+    ticketWorkspaceActionButton('manageActiveTerminal', 'Manage Focused Terminal', { ticket: ticketKey }),
     ...(ticket.source === 'jira'
       ? [ticketWorkspaceActionButton('insertJiraContext', `Insert [${ticketKey}]`, { ticket: ticketKey })]
       : []),
@@ -75,7 +76,7 @@ ${ticketWorkspaceActionScript(input.nonce, input.actionScriptUri)}
     <div>
       <div class="kronos-subtitle">Terminal-first ticket workspace</div>
       <h1 class="kronos-title">${escapeHtml(ticketKey)} — ${escapeHtml(summary)}</h1>
-      <div class="kronos-subtitle">Kronos keeps Jira, merge request, build, and monitoring context together while you stay in control of the focused terminal.</div>
+      <div class="kronos-subtitle">Start a new Claude terminal explicitly, or attach one you already own. Jira context is inserted only when you choose an Insert action.</div>
     </div>
   </header>
 

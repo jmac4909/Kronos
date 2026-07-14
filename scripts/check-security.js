@@ -4,8 +4,10 @@ const path = require('path');
 const ENTRY_FILE = 'src/extension.ts';
 const TERMINAL_FIRST_RUNTIME_FILE = 'src/terminalFirstExtension.ts';
 const TERMINAL_INSERTION_FILE = 'src/services/terminalContextInsertion.ts';
+const CLAUDE_LAUNCHER_FILE = 'src/services/claudeTerminalLauncher.ts';
 const PACKAGED_WEBVIEW_FILES = [
   'media/kronos-action-panel.js',
+  'media/kronos-jira-work-board.js',
   'media/kronos-webview-runtime.js',
 ];
 const LAUNCH_MODULES = new Set([
@@ -65,6 +67,7 @@ for (const [file, source] of runtimeFiles) {
 }
 
 checkTerminalInsertionContract();
+checkClaudeLauncherContract();
 checkFocusedInsertionContract();
 checkPackagedWebviewAssets();
 
@@ -79,7 +82,7 @@ if (violations.length > 0) {
     console.error(`- [${violation.rule}] ${location} — ${violation.message}`);
     if (violation.snippet) { console.error(`  ${violation.snippet}`); }
   }
-  console.error('Allowed runtime behavior is limited to provider reads, inert context insertion, monitoring, local audit/context records, and operator-selected terminal focus.');
+  console.error('Allowed runtime behavior is limited to provider reads, inert context insertion, monitoring, local audit/context records, operator-selected terminal focus, and explicit validated Claude launch.');
   process.exitCode = 1;
 } else {
   console.log(`Kronos terminal-first security boundary OK (${runtimeFiles.size} reachable runtime files checked).`);
@@ -102,8 +105,12 @@ function checkLaunchBoundary(file, source, code) {
     }
   }
 
-  scanPattern(file, source, code, /\b(?:vscode\.)?window\.createTerminal\s*\(/g, 'NO_LAUNCH',
-    'creates a terminal; Kronos may attach only to an operator-created terminal.');
+  for (const call of findMethodCalls(code, 'createTerminal')) {
+    if (file !== CLAUDE_LAUNCHER_FILE) {
+      addViolation('NO_LAUNCH', file, source, call.index,
+        'creates a terminal outside the single explicit Claude-launch service.');
+    }
+  }
   scanPattern(file, source, code, /\bvscode\.tasks\.executeTask\s*\(/g, 'NO_LAUNCH',
     'executes a VS Code task.');
   scanPattern(file, source, code, /\bnew\s+vscode\.(?:ShellExecution|ProcessExecution)\s*\(/g, 'NO_LAUNCH',
@@ -132,15 +139,24 @@ function checkLaunchBoundary(file, source, code) {
 
 function checkTerminalSubmissionBoundary(file, source, code) {
   for (const call of findMethodCalls(code, 'sendText')) {
-    if (file !== TERMINAL_INSERTION_FILE) {
-      addViolation('NO_SUBMIT', file, source, call.index,
-        'writes to a terminal outside the single inert context-insertion service.');
+    const args = splitTopLevelArguments(call.argumentsText);
+    if (file === TERMINAL_INSERTION_FILE) {
+      if (args.length !== 2 || args[1].trim() !== 'false') {
+        addViolation('NO_SUBMIT', file, source, call.index,
+          'terminal context insertion must pass false explicitly as sendText\'s shouldExecute argument.');
+      }
       continue;
     }
-    const args = splitTopLevelArguments(call.argumentsText);
-    if (args.length !== 2 || args[1].trim() !== 'false') {
+    if (file === CLAUDE_LAUNCHER_FILE) {
+      if (args.length !== 2 || args[0].trim() !== 'configuration.command' || args[1].trim() !== 'true') {
+        addViolation('EXPLICIT_CLAUDE_LAUNCH', file, source, call.index,
+          'Claude launch must submit only the validated configuration.command with shouldExecute true.');
+      }
+      continue;
+    }
+    {
       addViolation('NO_SUBMIT', file, source, call.index,
-        'terminal context insertion must pass false explicitly as sendText\'s shouldExecute argument.');
+        'writes to a terminal outside the inert insertion and explicit Claude-launch services.');
     }
   }
   scanPattern(file, source, code, /\[['"]sendText['"]\]\s*\(/g, 'NO_SUBMIT',
@@ -256,6 +272,50 @@ function checkTerminalInsertionContract() {
   }
   if (!/\bassertSafeTerminalContextReference\(\s*reference\s*\)/.test(code)) {
     addGlobalViolation('NO_SUBMIT', `${TERMINAL_INSERTION_FILE} must validate the inert reference before insertion.`);
+  }
+}
+
+function checkClaudeLauncherContract() {
+  const source = runtimeFiles.get(CLAUDE_LAUNCHER_FILE);
+  if (!source) {
+    addGlobalViolation('EXPLICIT_CLAUDE_LAUNCH', `${CLAUDE_LAUNCHER_FILE} must be reachable from ${ENTRY_FILE}.`);
+    return;
+  }
+  const code = maskComments(source);
+  const createCalls = findMethodCalls(code, 'createTerminal');
+  const sendCalls = findMethodCalls(code, 'sendText');
+  if (createCalls.length !== 1) {
+    addGlobalViolation('EXPLICIT_CLAUDE_LAUNCH', `${CLAUDE_LAUNCHER_FILE} must contain exactly one audited createTerminal call; found ${createCalls.length}.`);
+  }
+  if (sendCalls.length !== 1) {
+    addGlobalViolation('EXPLICIT_CLAUDE_LAUNCH', `${CLAUDE_LAUNCHER_FILE} must contain exactly one audited sendText call; found ${sendCalls.length}.`);
+  }
+  if (!/const\s+configuration\s*=\s*normalizeClaudeTerminalLaunch\(input\)[\s\S]{0,800}createTerminal\(terminalOptions\)/.test(code)) {
+    addGlobalViolation('EXPLICIT_CLAUDE_LAUNCH', 'Claude terminal options must be validated before the terminal is created.');
+  }
+  if (!/CLAUDE_EXECUTABLE_BASENAME_PATTERN[\s\S]{0,2400}must resolve to claude or a claude-\* wrapper/.test(source)) {
+    addGlobalViolation('EXPLICIT_CLAUDE_LAUNCH', 'Claude launch must reject arbitrary executable names.');
+  }
+  if (!/APPROVED_INTERACTIVE_BOOLEAN_FLAGS[\s\S]{0,1600}APPROVED_INTERACTIVE_VALUE_FLAGS/.test(source)
+    || !/validateApprovedInteractiveArguments\(argumentsList\)/.test(source)
+    || !/accepts only approved interactive flags and no positional prompts or subcommands/.test(source)
+    || !/APPROVED_PERMISSION_MODES\s*=\s*new Set\(\['default', 'manual', 'plan'\]\)/.test(source)) {
+    addGlobalViolation('EXPLICIT_CLAUDE_LAUNCH', 'Claude launch must use a narrow interactive flag allowlist and reject positional commands.');
+  }
+
+  const runtimeSource = runtimeFiles.get(TERMINAL_FIRST_RUNTIME_FILE) || '';
+  const runtimeCode = maskComments(runtimeSource);
+  for (const command of ['kronos.newClaudeSession', 'kronos.startClaudeForTicket']) {
+    if (!runtimeCode.includes(`this.command('${command}'`)) {
+      addGlobalViolation('EXPLICIT_CLAUDE_LAUNCH', `${command} must be an explicit registered operator command.`);
+    }
+  }
+  const launchCalls = [...runtimeCode.matchAll(/\bthis\.launchClaudeSession\s*\(/g)];
+  if (launchCalls.length !== 2) {
+    addGlobalViolation('EXPLICIT_CLAUDE_LAUNCH', `Claude session launch must be reachable only from the two explicit launch handlers; found ${launchCalls.length} calls.`);
+  }
+  if (!/private\s+canLaunchClaude\(\)[\s\S]{0,700}workspace\.isTrusted/.test(runtimeCode)) {
+    addGlobalViolation('EXPLICIT_CLAUDE_LAUNCH', 'Explicit Claude launch must be blocked in untrusted workspaces.');
   }
 }
 

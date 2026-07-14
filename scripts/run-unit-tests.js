@@ -15,9 +15,13 @@ const providerEnv = require('../out/services/providerEnv.js');
 const stateStore = require('../out/services/stateStore.js');
 const { JiraRestClient } = require('../out/services/jiraRestClient.js');
 const jiraContext = require('../out/services/jiraTicketContext.js');
+const jiraValuePruning = require('../out/services/jiraValuePruning.js');
+const jiraWorkCatalog = require('../out/services/jiraWorkCatalog.js');
+const workTicketFilters = require('../out/services/workTicketFilters.js');
 const jiraContextStore = require('../out/services/jiraContextStore.js');
 const insertion = require('../out/services/terminalContextInsertion.js');
 const { createOperatorTerminalRegistry } = require('../out/services/operatorTerminalRegistry.js');
+const claudeTerminalLauncher = require('../out/services/claudeTerminalLauncher.js');
 const workSessions = require('../out/services/workSessionStore.js');
 const pipelineTransitions = require('../out/services/pipelineTransitions.js');
 const mergeRequestTransitions = require('../out/services/gitlabMergeRequestTransitions.js');
@@ -255,6 +259,135 @@ test('Jira Work search uses GET token pagination and bounded fields', async () =
   assert.equal(harness.requests[0].headers.Authorization.includes('not-persisted'), false);
 });
 
+test('default Jira Work search fetches active and recent completed tickets for local filtering', async () => {
+  const harness = jiraTransport([{ body: { issues: [], isLast: true } }]);
+  const client = new JiraRestClient({
+    env: {
+      JIRA_BASE_URL: 'https://jira.example',
+      JIRA_EMAIL: 'operator@example.test',
+      JIRA_API_TOKEN: 'token',
+    },
+    transport: harness.transport,
+  });
+  const result = await client.searchWorkList();
+  assert.equal(result.jqlSource, 'default');
+  assert.equal(
+    new URL(harness.requests[0].url).searchParams.get('jql'),
+    'assignee = currentUser() AND (resolution = unresolved OR resolutiondate >= -30d) ORDER BY updated DESC',
+  );
+  assert.ok(harness.requests.every(request => request.method === 'GET'));
+});
+
+test('Jira Work search treats final pages with provider errors as partial and retains cached rows', async () => {
+  const harness = jiraTransport([{
+    body: { issues: [], isLast: true, errorMessages: ['Some assigned issues were not returned.'] },
+  }]);
+  const client = new JiraRestClient({
+    env: {
+      JIRA_BASE_URL: 'https://jira.example',
+      JIRA_EMAIL: 'operator@example.test',
+      JIRA_API_TOKEN: 'token',
+    },
+    transport: harness.transport,
+  });
+  const snapshot = await client.searchWorkList();
+  assert.equal(snapshot.complete, false);
+  assert.match(snapshot.warnings.join(' '), /not returned/i);
+  const current = stateStore.emptyWorkCatalog();
+  current.tickets['JIRA-77'] = fixtureTicket({ summary: 'Cached ticket that must survive' });
+  const catalog = jiraWorkCatalog.catalogFromJiraWorkList(snapshot, current, 'https://jira.example');
+  assert.equal(catalog.retainedFromPrevious, 1);
+  assert.equal(catalog.state.tickets['JIRA-77'].summary, 'Cached ticket that must survive');
+});
+
+test('Jira Work search and catalog retain cached rows for malformed complete pages', async () => {
+  const harness = jiraTransport([{ body: { isLast: true } }]);
+  const client = new JiraRestClient({
+    env: {
+      JIRA_BASE_URL: 'https://jira.example',
+      JIRA_EMAIL: 'operator@example.test',
+      JIRA_API_TOKEN: 'token',
+    },
+    transport: harness.transport,
+  });
+  const missingIssues = await client.searchWorkList();
+  assert.equal(missingIssues.complete, false);
+  assert.match(missingIssues.warnings.join(' '), /valid issues array/i);
+
+  const current = stateStore.emptyWorkCatalog();
+  current.tickets['JIRA-77'] = fixtureTicket({ summary: 'Cached ticket that must survive' });
+  const malformedCatalog = jiraWorkCatalog.catalogFromJiraWorkList({
+    ...missingIssues,
+    complete: true,
+    issues: [{ key: 'JIRA-88', fields: { summary: null } }],
+  }, current, 'https://jira.example');
+  assert.equal(malformedCatalog.retainedFromPrevious, 1);
+  assert.equal(malformedCatalog.state.tickets['JIRA-77'].summary, 'Cached ticket that must survive');
+});
+
+test('Jira Work catalog retains Jira status category for deterministic local filtering', () => {
+  const snapshot = {
+    issues: [
+      {
+        key: 'JIRA-9',
+        fields: {
+          summary: 'Completed fixture',
+          issuetype: { name: 'Story' },
+          priority: { name: 'Low' },
+          status: { name: 'Shipped', statusCategory: { key: 'done', name: 'Done' } },
+          project: { key: 'JIRA' },
+        },
+      },
+      { key: 'JIRA-10', fields: { summary: 'Partial fixture', status: null, project: { key: 'JIRA' } } },
+    ],
+    fetchedAt: '2026-07-14T12:00:00.000Z',
+    jql: 'assignee = currentUser()',
+    jqlSource: 'default',
+    complete: true,
+    pageCount: 1,
+    responseBytes: 500,
+    warnings: [],
+  };
+  const current = stateStore.emptyWorkCatalog();
+  current.tickets['JIRA-10'] = fixtureTicket({ jira_status: 'Shipped', jira_status_category: 'done' });
+  const catalog = jiraWorkCatalog.catalogFromJiraWorkList(snapshot, current, 'https://jira.example/');
+  assert.equal(catalog.state.tickets['JIRA-9'].jira_status, 'Shipped');
+  assert.equal(catalog.state.tickets['JIRA-9'].jira_status_category, 'done');
+  assert.equal(catalog.state.tickets['JIRA-9'].jira_url, 'https://jira.example/browse/JIRA-9');
+  assert.equal(catalog.state.tickets['JIRA-10'].jira_status_category, 'done');
+  const reloaded = stateStore.normalizeWorkCatalog(catalog.state).state;
+  assert.equal(reloaded.tickets['JIRA-9'].jira_status_category, 'done');
+});
+
+test('Work filtering hides completed Jira work by default and exposes explicit completion modes', () => {
+  const active = fixtureTicket({ jira_status: 'In Progress', jira_status_category: 'indeterminate' });
+  const shipped = fixtureTicket({ jira_status: 'Shipped', jira_status_category: 'done' });
+  const legacyClosed = fixtureTicket({ jira_status: 'Closed' });
+  const misleadingName = fixtureTicket({ jira_status: 'Done', jira_status_category: 'indeterminate' });
+
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-1', active, {}), true);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-2', shipped, {}), false);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-3', legacyClosed, {}), false);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-4', misleadingName, {}), true);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-2', shipped, { completion: 'all' }), true);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-2', shipped, { completion: 'completed' }), true);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-1', active, { completion: 'completed' }), false);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-2', shipped, { jiraStatus: 'Shipped' }), true);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-2', shipped, { jiraStatus: 'Shipped', completion: 'active' }), false);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-1', active, { label: 'terminal-first' }), true);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-1', active, { label: 'other' }), false);
+
+  assert.deepEqual(workTicketFilters.collectWorkTicketFilterOptions({
+    'JIRA-1': active,
+    'JIRA-2': shipped,
+    'JIRA-3': fixtureTicket({ jira_status: 'shipped', projects: ['Fixture', 'Other'] }),
+  }), {
+    projects: ['fixture', 'Other'],
+    labels: ['terminal-first'],
+    jiraStatuses: ['In Progress', 'Shipped'],
+  });
+});
+
 test('Jira Work search retains completed pages and reports a later read failure', async () => {
   const harness = jiraTransport([
     { body: { issues: [jiraIssue('JIRA-1', 'First')], isLast: false, nextPageToken: 'page-2' } },
@@ -358,6 +491,164 @@ test('work-session lifecycle never requires a terminal process owner', () => {
   assert.equal(workSessions.listWorkSessions(options).length, 1);
 });
 
+test('standalone work sessions persist without fake Jira identities and preserve legacy ticket records', () => {
+  const options = {
+    kronosDir: path.join(tempRoot, 'standalone-session-store'),
+    now: new Date('2026-07-14T12:00:00.000Z'),
+  };
+  const standalone = workSessions.createStandaloneWorkSession({
+    title: 'Explore terminal workflow',
+    projectName: 'Kronos',
+    projectPath: tempRoot,
+  }, options);
+  assert.equal(standalone.kind, 'standalone');
+  assert.equal(standalone.title, 'Explore terminal workflow');
+  assert.equal(standalone.monitoring.enabled, false);
+  assert.equal(Object.hasOwn(standalone, 'ticketKey'), false);
+  assert.deepEqual(workSessions.workSessionEventContext(standalone), {
+    sessionId: standalone.id,
+    sessionTitle: 'Explore terminal workflow',
+    label: 'Explore terminal workflow',
+  });
+  assert.deepEqual(workSessions.workSessionTicketMetadata(standalone), {});
+  const reopenedStandalone = workSessions.reopenWorkSession(
+    workSessions.closeWorkSession(standalone.id, options).id,
+    options,
+  );
+  assert.equal(reopenedStandalone.monitoring.enabled, false);
+
+  const rawStandalone = JSON.parse(fs.readFileSync(
+    workSessions.workSessionRecordPath(standalone.id, options),
+    'utf8',
+  ));
+  assert.equal(rawStandalone.kind, 'standalone');
+  assert.equal(Object.hasOwn(rawStandalone, 'ticketKey'), false);
+
+  const ticket = workSessions.createOrGetWorkSessionByTicket({
+    ticketKey: 'JIRA-456',
+    title: 'Existing ticket session',
+  }, options);
+  const ticketRecordPath = workSessions.workSessionRecordPath(ticket.id, options);
+  const legacyTicketRecord = JSON.parse(fs.readFileSync(ticketRecordPath, 'utf8'));
+  delete legacyTicketRecord.kind;
+  fs.writeFileSync(ticketRecordPath, `${JSON.stringify(legacyTicketRecord, null, 2)}\n`, { mode: 0o600 });
+  const restored = workSessions.readWorkSession(ticket.id, options);
+  assert.equal(restored.kind, 'ticket');
+  assert.equal(restored.ticketKey, 'JIRA-456');
+  assert.deepEqual(workSessions.workSessionTicketMetadata(restored), { ticketKey: 'JIRA-456' });
+  workSessions.createStandaloneWorkSession({ title: 'Newer standalone' }, {
+    ...options,
+    now: new Date('2026-07-15T12:00:00.000Z'),
+  });
+  assert.equal(workSessions.listWorkSessions({ ...options, limit: 1 })[0].kind, 'standalone');
+  assert.equal(workSessions.listWorkSessions({
+    ...options,
+    limit: 1,
+    kind: 'ticket',
+    status: 'active',
+    monitoringEnabled: true,
+  })[0].id, ticket.id, 'standalone history must not crowd a monitored ticket out of a bounded read');
+  assert.throws(
+    () => workSessions.normalizeWorkSessionRecord({ ...rawStandalone, ticketKey: 'JIRA-999' }),
+    /must not include a ticket key/i,
+  );
+});
+
+test('Claude terminal launch is explicit, focused, validated, and operator-triggered', () => {
+  const calls = [];
+  const terminal = {
+    show: preserveFocus => calls.push(['show', preserveFocus]),
+    sendText: (text, shouldExecute) => calls.push(['sendText', text, shouldExecute]),
+  };
+  const factory = {
+    createTerminal: options => {
+      calls.push(['createTerminal', options]);
+      return terminal;
+    },
+  };
+  const result = claudeTerminalLauncher.launchClaudeTerminal(factory, {
+    command: 'claude   --model opus',
+    name: '  Claude: Kronos  ',
+    cwd: tempRoot,
+  });
+  assert.equal(result.terminal, terminal);
+  assert.deepEqual(result.configuration, {
+    command: 'claude --model opus',
+    name: 'Claude: Kronos',
+    cwd: path.resolve(tempRoot),
+  });
+  assert.deepEqual(calls, [
+    ['createTerminal', { name: 'Claude: Kronos', cwd: path.resolve(tempRoot) }],
+    ['show', false],
+    ['sendText', 'claude --model opus', true],
+  ]);
+
+  const callCount = calls.length;
+  for (const command of [
+    'rm -rf /',
+    'claude; rm -rf /',
+    'claude && whoami',
+    'claude $(whoami)',
+    'claude\nwhoami',
+    '/tmp/claude --model opus',
+    '/tmp/evil\\claude --model opus',
+    'C:\\Tools\\claude.cmd --model opus',
+    '%ROOT%\\claude.cmd --model opus',
+    'claude --dangerously-skip-permissions',
+    'claude --dangerously-skip-permissions=true',
+    'claude --dangerously-skip-permiss\\ions',
+    'claude %KRONOS_CLAUDE_FLAG%',
+    'claude --permission-mode bypassPermissions',
+    'claude --permission-mode acceptEdits',
+    'claude --allow-dangerously-skip-permissions',
+    'claude --allowedTools Bash,Edit,Write',
+    'claude --add-dir /',
+    'claude --mcp-config /tmp/mcp.json',
+    'claude --plugin-url https://plugins.example/unsafe.zip',
+    'claude --bg',
+    'claude --exec whoami',
+    'claude update',
+    'claude install',
+    'claude mcp add evil npx -y package',
+    'claude --print hello',
+  ]) {
+    assert.throws(
+      () => claudeTerminalLauncher.launchClaudeTerminal(factory, { command, cwd: tempRoot }),
+      /must resolve to claude|unsupported shell syntax|single line|approved interactive|permission mode/i,
+    );
+  }
+  assert.throws(
+    () => claudeTerminalLauncher.launchClaudeTerminal(factory, { cwd: 'relative/repo' }),
+    /must be absolute/i,
+  );
+  assert.equal(calls.length, callCount, 'invalid settings must fail before a terminal is created');
+  assert.equal(
+    claudeTerminalLauncher.normalizeClaudeTerminalLaunch({
+      command: 'claude --model=opus --effort high --permission-mode plan --ide --safe-mode --verbose',
+      cwd: tempRoot,
+    }).command,
+    'claude --model=opus --effort high --permission-mode plan --ide --safe-mode --verbose',
+  );
+
+  const executableDirectory = path.join(tempRoot, 'claude-executable-path');
+  fs.mkdirSync(executableDirectory, { recursive: true });
+  const executableName = process.platform === 'win32' ? 'claude-test.cmd' : 'claude-test';
+  const executablePath = path.join(executableDirectory, executableName);
+  fs.writeFileSync(executablePath, process.platform === 'win32' ? '@echo off\r\n' : '#!/bin/sh\n', { mode: 0o700 });
+  if (process.platform !== 'win32') { fs.chmodSync(executablePath, 0o700); }
+  assert.deepEqual(
+    claudeTerminalLauncher.probeClaudeExecutableAvailability('claude-test', {
+      PATH: executableDirectory,
+      PATHEXT: '.COM;.EXE;.BAT;.CMD',
+    }),
+    { executable: 'claude-test', available: true },
+  );
+  assert.deepEqual(
+    claudeTerminalLauncher.probeClaudeExecutableAvailability('claude-missing', { PATH: executableDirectory }),
+    { executable: 'claude-missing', available: false },
+  );
+});
+
 test('Jira artifacts retain custom fields behind an untrusted-data boundary', () => {
   const snapshot = {
     issue: {
@@ -399,6 +690,76 @@ test('Jira artifacts retain custom fields behind an untrusted-data boundary', ()
   const reused = jiraContextStore.writeJiraContextArtifacts(context, { kronosDir: path.join(tempRoot, 'artifacts') });
   assert.deepEqual(reused, artifact);
   if (process.platform !== 'win32') { assert.equal(fs.statSync(artifact.promptPath).mode & 0o777, 0o600); }
+});
+
+test('Jira artifacts recursively omit empty fields while retaining false, zero, and non-empty provider values', () => {
+  const emptyRichText = {
+    type: 'doc',
+    version: 1,
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: '   ' }] }],
+  };
+  assert.equal(jiraValuePruning.isEmptyJiraRichText(emptyRichText), true);
+  assert.deepEqual(jiraContext.normalizeContextValue({
+    missing: null,
+    blank: ' \n ',
+    emptyArray: [null, '  ', {}],
+    emptyObject: { nested: [] },
+    disabled: false,
+    count: 0,
+    providerDefault: 'None',
+    credentials: null,
+    token: 'provider-secret',
+  }), {
+    disabled: false,
+    count: 0,
+    providerDefault: 'None',
+    token: '[REDACTED]',
+  });
+
+  const fields = {
+    summary: 'Meaningful values',
+    customfield_null: null,
+    customfield_blank: '   ',
+    customfield_array: [null, '', [], {}],
+    customfield_object: { a: null, b: ' ' },
+    customfield_richtext: emptyRichText,
+    customfield_values: {
+      disabled: false,
+      estimate: 0,
+      providerDefault: 'None',
+      nested: [null, ' ', false, 0, {}, { label: 'Retain me', empty: [] }],
+    },
+  };
+  const names = Object.fromEntries(Object.keys(fields).map(id => [id, id.replace('customfield_', '')]));
+  const schema = Object.fromEntries(Object.keys(fields).map(id => [id, {
+    type: id === 'customfield_values' ? 'object' : 'string',
+    custom: id.startsWith('customfield_') ? 'fixture:custom' : undefined,
+  }]));
+  const context = jiraContext.normalizeJiraTicketContext('JIRA-123', {
+    issue: { fields, names, schema },
+    comments: [],
+    attachmentContents: [],
+    fetchedAt: '2026-07-14T12:00:00.000Z',
+    issueUrl: 'https://jira.example/browse/JIRA-123',
+    commentsComplete: true,
+    commentPageCount: 1,
+    commentResponseBytes: 2,
+    attachmentFetchCount: 0,
+    attachmentResponseBytes: 0,
+    warnings: [],
+  });
+  assert.deepEqual(context.customFields.map(field => field.id), ['customfield_values']);
+  assert.deepEqual(context.customFields[0].value, {
+    disabled: false,
+    estimate: 0,
+    providerDefault: 'None',
+    nested: [false, 0, { label: 'Retain me' }],
+  });
+  assert.match(context.customFields[0].text, /"disabled": false/);
+  assert.equal(context.completeness.fieldCount, 2);
+  assert.equal(context.completeness.customFieldCount, 1);
+  assert.deepEqual(context.completeness.missingFieldNameIds, []);
+  assert.deepEqual(context.completeness.missingFieldSchemaIds, []);
 });
 
 test('GitLab and CI digests surface failures and recoveries without provider mutation', () => {
@@ -528,7 +889,7 @@ test('GitLab MR review monitoring retains complete facets across partial reads a
   assert.equal(recovered.status.generation, 2);
 });
 
-test('ticket workspace exposes only terminal management and explicit context insertion', () => {
+test('ticket workspace exposes explicit Claude launch, terminal management, and context insertion', () => {
   const html = buildTicketWorkspaceHtml({
     ticketKey: 'JIRA-123',
     ticket: fixtureTicket({
@@ -542,7 +903,7 @@ test('ticket workspace exposes only terminal management and explicit context ins
     nonce: 'abcdef1234567890',
     actionScriptUri: 'vscode-resource://kronos/media/kronos-action-panel.js',
   });
-  for (const action of ['manageActiveTerminal', 'insertJiraContext', 'insertGitLabContext', 'insertCiContext']) {
+  for (const action of ['startClaudeForTicket', 'manageActiveTerminal', 'insertJiraContext', 'insertGitLabContext', 'insertCiContext']) {
     assert.match(html, new RegExp(`data-action="${action}"`));
   }
   for (const forbidden of [
@@ -569,6 +930,7 @@ test('ticket workspace exposes only terminal management and explicit context ins
     workSession: {
       schemaVersion: 1,
       id: 'session-jira-123',
+      kind: 'ticket',
       ticketKey: 'JIRA-123',
       title: 'Terminal-first fixture',
       status: 'active',
@@ -604,6 +966,7 @@ test('ticket workspace messages retain only the allowed command and ticket', () 
   }, new Set(['insertJiraContext']));
   assert.deepEqual(message, { command: 'insertJiraContext', ticket: 'JIRA-123' });
   assert.equal(normalizeActionPanelMessage({ command: 'notAllowed', ticket: 'JIRA-123' }, new Set(['insertJiraContext'])), null);
+  assert.equal(normalizeActionPanelMessage({ command: 'insertJiraContext', ticket: '__proto__' }, new Set(['insertJiraContext'])), null);
 });
 
 test('runtime dependency surface is Node and VS Code only', () => {
@@ -617,11 +980,17 @@ test('runtime dependency surface is Node and VS Code only', () => {
   assert.equal(crypto.createHash('sha256').update(source).digest('hex').length, 64);
 });
 
-test('extension activation registers only the three views and twenty terminal-first commands', () => {
+test('extension activation registers the bounded surface and explicit launch commands create the right session kinds', async () => {
   const Module = require('node:module');
   const originalLoad = Module._load;
   const registeredViews = [];
   const registeredCommands = [];
+  const commandHandlers = new Map();
+  const createdTerminals = [];
+  let failNextTerminalCreation = false;
+  let deferNextProcessId = false;
+  let resolveDeferredProcessId;
+  let closeTerminalHandler;
   class EventEmitter {
     constructor() {
       this.listeners = [];
@@ -650,16 +1019,44 @@ test('extension activation registers only the three views and twenty terminal-fi
     window: {
       activeTerminal: undefined,
       registerTreeDataProvider(id) { registeredViews.push(id); return disposable(); },
-      onDidCloseTerminal() { return disposable(); },
+      onDidCloseTerminal(handler) { closeTerminalHandler = handler; return disposable(); },
       createOutputChannel() { return { appendLine() {}, dispose() {} }; },
       showWarningMessage() { return Promise.resolve(undefined); },
+      showInformationMessage() { return Promise.resolve(undefined); },
+      showErrorMessage() { return Promise.resolve(undefined); },
+      createTerminal(options) {
+        if (failNextTerminalCreation) {
+          failNextTerminalCreation = false;
+          throw new Error('Fixture terminal creation failed.');
+        }
+        const actions = [];
+        let processId;
+        if (deferNextProcessId) {
+          deferNextProcessId = false;
+          processId = new Promise(resolve => { resolveDeferredProcessId = resolve; });
+        } else {
+          processId = Promise.resolve(2000 + createdTerminals.length);
+        }
+        const terminal = {
+          name: options.name,
+          processId,
+          show(preserveFocus) { actions.push(['show', preserveFocus]); },
+          sendText(text, shouldExecute) { actions.push(['sendText', text, shouldExecute]); },
+        };
+        createdTerminals.push({ options, terminal, actions });
+        vscode.window.activeTerminal = terminal;
+        return terminal;
+      },
     },
     workspace: {
+      isTrusted: true,
+      name: 'Fixture Workspace',
+      workspaceFolders: [{ name: 'fixture', uri: { fsPath: tempRoot } }],
       getConfiguration() { return { get(_key, fallback) { return fallback; } }; },
       onDidChangeConfiguration() { return disposable(); },
     },
     commands: {
-      registerCommand(id) { registeredCommands.push(id); return disposable(); },
+      registerCommand(id, handler) { registeredCommands.push(id); commandHandlers.set(id, handler); return disposable(); },
       executeCommand() { return Promise.resolve(); },
     },
     env: { openExternal() { return Promise.resolve(true); } },
@@ -677,11 +1074,79 @@ test('extension activation registers only the three views and twenty terminal-fi
   delete require.cache[modulePath];
   const context = { subscriptions: [], extensionUri: { path: root } };
   try {
+    stateStore.writeStateFile({
+      schemaVersion: 1,
+      refreshedAt: '2026-07-14T12:00:00.000Z',
+      projects: { fixture: { path: tempRoot, config: { jira_project_key: 'JIRA' } } },
+      tickets: {
+        'JIRA-123': fixtureTicket(),
+        'JIRA-456': fixtureTicket({ summary: 'Attachment race fixture' }),
+        'JIRA-789': fixtureTicket({ summary: 'Closed-before-attach fixture' }),
+        'JIRA-999': fixtureTicket({ summary: 'Launch failure fixture' }),
+      },
+    });
     require(modulePath).activate(context);
     assert.deepEqual(registeredViews, ['kronosWork', 'kronosSessions', 'kronosAttention']);
     const expectedCommands = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
       .contributes.commands.map(command => command.command);
     assert.deepEqual(registeredCommands, expectedCommands);
+
+    await Promise.all([
+      commandHandlers.get('kronos.newClaudeSession')(),
+      commandHandlers.get('kronos.newClaudeSession')(),
+    ]);
+    assert.equal(createdTerminals.length, 1, 'an in-flight standalone launch must ignore a repeated click');
+    assert.deepEqual(createdTerminals[0].actions, [
+      ['show', false],
+      ['sendText', 'claude', true],
+    ]);
+    const standalone = workSessions.listWorkSessions().find(session => session.kind === 'standalone');
+    assert.ok(standalone);
+    assert.equal(Object.hasOwn(standalone, 'ticketKey'), false);
+    await commandHandlers.get('kronos.newClaudeSession')();
+    assert.equal(createdTerminals.length, 1, 'a rapid sequential standalone click must be ignored during the cooldown');
+
+    await commandHandlers.get('kronos.startClaudeForTicket')({ ticketKey: 'JIRA-123' });
+    assert.equal(createdTerminals.length, 2);
+    const ticketSession = workSessions.getWorkSessionByTicket('JIRA-123');
+    assert.equal(ticketSession.kind, 'ticket');
+    assert.equal(ticketSession.ticketKey, 'JIRA-123');
+    assert.match(createdTerminals[1].options.name, /JIRA-123/);
+    assert.deepEqual(createdTerminals[1].actions, [
+      ['show', false],
+      ['sendText', 'claude', true],
+    ]);
+
+    deferNextProcessId = true;
+    const racedLaunch = commandHandlers.get('kronos.startClaudeForTicket')({ ticketKey: 'JIRA-456' });
+    for (let index = 0; index < 10 && !resolveDeferredProcessId; index += 1) { await Promise.resolve(); }
+    assert.equal(typeof resolveDeferredProcessId, 'function');
+    const racedManage = commandHandlers.get('kronos.manageActiveTerminal')({ ticketKey: 'JIRA-456' });
+    await Promise.resolve();
+    resolveDeferredProcessId(3000);
+    await Promise.all([racedLaunch, racedManage]);
+    const racedSession = workSessions.getWorkSessionByTicket('JIRA-456');
+    assert.equal(racedSession.terminals.length, 1, 'concurrent actions must reuse one durable binding for a terminal');
+
+    resolveDeferredProcessId = undefined;
+    deferNextProcessId = true;
+    const closedLaunch = commandHandlers.get('kronos.startClaudeForTicket')({ ticketKey: 'JIRA-789' });
+    for (let index = 0; index < 10 && !resolveDeferredProcessId; index += 1) { await Promise.resolve(); }
+    assert.equal(typeof resolveDeferredProcessId, 'function');
+    const closingTerminal = createdTerminals[createdTerminals.length - 1].terminal;
+    closeTerminalHandler(closingTerminal);
+    resolveDeferredProcessId(4000);
+    await closedLaunch;
+    assert.equal(
+      workSessions.getWorkSessionByTicket('JIRA-789').terminals.length,
+      0,
+      'a terminal closed during PID resolution must never be attached afterward',
+    );
+
+    failNextTerminalCreation = true;
+    await commandHandlers.get('kronos.startClaudeForTicket')({ ticketKey: 'JIRA-999' });
+    const failedSession = workSessions.getWorkSessionByTicket('JIRA-999');
+    assert.equal(failedSession.status, 'closed', 'a new session must be compensated when launch fails before submission');
   } finally {
     for (const item of [...context.subscriptions].reverse()) { item.dispose(); }
     Module._load = originalLoad;

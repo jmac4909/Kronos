@@ -40,8 +40,9 @@ const allowedDevDependencies = new Set(['@types/node', '@types/vscode', 'typescr
 for (const name of Object.keys(manifest.devDependencies || {})) {
   if (!allowedDevDependencies.has(name)) { fail(`unexpected development dependency: ${name}`); }
 }
-if (manifest.contributes.commands.length !== 20) { fail('expected exactly 20 terminal-first commands'); }
+if (manifest.contributes.commands.length !== 24) { fail('expected exactly 24 terminal-first commands'); }
 if (manifest.contributes.views.kronos.length !== 3) { fail('expected exactly Work, Sessions, and Attention'); }
+if (Object.keys(manifest.contributes.configuration.properties || {}).length !== 5) { fail('expected exactly five terminal-first settings'); }
 
 requireMarkers('README.md', ['zero third-party runtime dependencies', 'Work', 'Sessions', 'Attention']);
 requireMarkers('docs/terminal-first-product-contract.md', ['Ownership Invariants', 'Context Insertion Contract', 'Monitoring Contract']);
@@ -51,7 +52,6 @@ for (const removed of [
   'src/runners/sessionDispatcher.ts',
   'src/views/QueueTreeProvider.ts',
   'src/services/queuePlanner.ts',
-  'media/kronos-jira-board.js',
   'resources/spec-beanstalk/xlsx_to_markdown.py',
 ]) {
   if (fs.existsSync(path.join(root, removed))) { fail(`legacy file still exists: ${removed}`); }
@@ -77,7 +77,10 @@ for (const expected of [
   'out/views/WorkTreeProvider.js',
   'out/views/ManagedSessionTreeProvider.js',
   'out/views/AttentionTreeProvider.js',
+  'out/services/claudeTerminalLauncher.js',
+  'out/services/jiraWorkBoardView.js',
   'media/kronos-action-panel.js',
+  'media/kronos-jira-work-board.js',
   'media/kronos-webview-runtime.js',
   'docs/terminal-first-product-contract.md',
   'HUMAN_FEEDBACK_CHECKLIST.md',
@@ -92,7 +95,6 @@ for (const forbidden of [
   '.kronos/',
   'sessionDispatcher',
   'QueueTreeProvider',
-  'jira-board',
   'spec-beanstalk',
 ]) {
   if (tree.includes(forbidden)) { fail(`VSIX tree contains forbidden legacy/development content: ${forbidden}`); }

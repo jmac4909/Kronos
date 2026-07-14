@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
+import * as os from 'os';
 import type { ProjectConfig, Ticket } from './state/types';
 import { TerminalFirstState } from './state/TerminalFirstState';
 import { WorkTreeProvider } from './views/WorkTreeProvider';
 import { ManagedSessionTreeProvider } from './views/ManagedSessionTreeProvider';
 import { AttentionTreeProvider } from './views/AttentionTreeProvider';
-import { loadProviderEnv } from './services/providerEnv';
+import { defaultProviderEnvPath, loadProviderEnv } from './services/providerEnv';
 import { unknownErrorMessage } from './services/errorUtils';
 import { buildFallbackJiraTicketContext, normalizeJiraTicketContext, type JiraTicketContext } from './services/jiraTicketContext';
 import { isJiraRestConfigured, jiraRestClient } from './services/jiraRestClient';
@@ -35,6 +36,7 @@ import {
   attachWorkSessionTerminal,
   closeWorkSession,
   createOrGetWorkSessionByTicket,
+  createStandaloneWorkSession,
   detachWorkSessionTerminal,
   getWorkSessionByTicket,
   listWorkSessionStoreIssues,
@@ -43,7 +45,10 @@ import {
   recordWorkSessionContextArtifact,
   reopenWorkSession,
   setWorkSessionMonitoring,
+  type TicketWorkSessionRecord,
   type WorkSessionRecord,
+  workSessionEventContext,
+  workSessionTicketMetadata,
 } from './services/workSessionStore';
 import {
   acknowledgeMonitorEvent,
@@ -59,6 +64,18 @@ import {
 } from './services/managedProviderMonitor';
 import { buildTicketWorkspaceHtml } from './services/ticketWorkspaceView';
 import {
+  JIRA_WORK_BOARD_ACTIONS,
+  JIRA_WORK_BOARD_SCRIPT,
+  buildJiraWorkBoardHtml,
+} from './services/jiraWorkBoardView';
+import {
+  DEFAULT_CLAUDE_COMMAND,
+  DEFAULT_CLAUDE_TERMINAL_NAME,
+  launchClaudeTerminal,
+  normalizeClaudeTerminalLaunch,
+  probeClaudeExecutableAvailability,
+} from './services/claudeTerminalLauncher';
+import {
   WEBVIEW_ACTION_PANEL_SCRIPT,
   WEBVIEW_READY_COMMAND,
   createWebviewNonce,
@@ -69,13 +86,21 @@ import { normalizeActionPanelMessage } from './services/webviewMessages';
 import { isRecord } from './services/records';
 
 const TICKET_WORKSPACE_ACTIONS = new Set([
+  'startClaudeForTicket',
   'manageActiveTerminal',
   'insertJiraContext',
   'insertGitLabContext',
   'insertCiContext',
 ]);
+const JIRA_BOARD_ACTIONS = new Set<string>(JIRA_WORK_BOARD_ACTIONS);
+const CLAUDE_LAUNCH_COOLDOWN_MS = 1_000;
 
 interface TicketPanelRecord {
+  panel: vscode.WebviewPanel;
+  nonce: string;
+}
+
+interface JiraBoardPanelRecord {
   panel: vscode.WebviewPanel;
   nonce: string;
 }
@@ -101,12 +126,17 @@ export function deactivate(): void {}
 class TerminalFirstRuntime implements vscode.Disposable {
   private readonly state = new TerminalFirstState();
   private readonly operatorTerminals: OperatorTerminalRegistry<vscode.Terminal> = createOperatorTerminalRegistry();
+  private readonly closedTerminals = new WeakSet<vscode.Terminal>();
   private readonly workTree = new WorkTreeProvider(this.state);
   private readonly sessionTree = new ManagedSessionTreeProvider(this.operatorTerminals);
   private readonly attentionTree = new AttentionTreeProvider();
   private readonly output = vscode.window.createOutputChannel('Kronos Terminal Work Companion');
   private readonly disposables: vscode.Disposable[] = [];
   private readonly ticketPanels = new Map<string, TicketPanelRecord>();
+  private readonly ticketPanelActionsInFlight = new Set<string>();
+  private readonly claudeLaunchesInFlight = new Set<string>();
+  private readonly claudeLaunchCooldownUntil = new Map<string, number>();
+  private jiraBoardPanel: JiraBoardPanelRecord | undefined;
   private readonly monitor: ManagedProviderMonitor;
   private refreshTimer: NodeJS.Timeout | undefined;
   private providerTimer: NodeJS.Timeout | undefined;
@@ -128,6 +158,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       this.state.onDidChange(() => {
         this.workTree.refresh();
         this.refreshTicketPanels();
+        this.renderJiraBoardPanel();
       }),
       vscode.window.onDidCloseTerminal(terminal => this.handleClosedTerminal(terminal)),
       vscode.workspace.onDidChangeConfiguration(event => {
@@ -139,7 +170,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     );
     this.registerCommands();
     this.startTimers();
-    this.log('Kronos terminal-first runtime activated.', 'No agent, terminal, project command, or Git mutation was started.');
+    this.log('Kronos terminal-first runtime activated.', 'No agent, terminal, project command, or Git mutation was started automatically.');
   }
 
   dispose(): void {
@@ -147,6 +178,9 @@ class TerminalFirstRuntime implements vscode.Disposable {
     if (this.providerTimer) { clearInterval(this.providerTimer); }
     for (const panel of this.ticketPanels.values()) { panel.panel.dispose(); }
     this.ticketPanels.clear();
+    this.claudeLaunchCooldownUntil.clear();
+    this.jiraBoardPanel?.panel.dispose();
+    this.jiraBoardPanel = undefined;
     for (const disposable of this.disposables.splice(0)) { disposable.dispose(); }
     this.operatorTerminals.clear();
     this.workTree.dispose();
@@ -158,17 +192,12 @@ class TerminalFirstRuntime implements vscode.Disposable {
 
   private registerCommands(): void {
     this.command('kronos.refreshTickets', async () => this.refreshTickets(true));
-    this.command('kronos.filterWork', async () => {
-      const current = this.workTree.getFilter().query || '';
-      const query = await vscode.window.showInputBox({
-        title: 'Filter Kronos Work',
-        prompt: 'Match ticket key, summary, status, label, project, MR, or build',
-        value: current,
-      });
-      if (query !== undefined) { this.workTree.setFilter(query); }
-    });
+    this.command('kronos.openJiraBoard', async () => this.openJiraBoard());
+    this.command('kronos.filterWork', async () => this.configureWorkFilter());
     this.command('kronos.clearWorkFilter', () => this.workTree.clearFilter());
     this.command('kronos.openTicketWorkspace', async argument => this.openTicketWorkspace(argument));
+    this.command('kronos.newClaudeSession', async () => this.newClaudeSession());
+    this.command('kronos.startClaudeForTicket', async argument => this.startClaudeForTicket(argument));
     this.command('kronos.manageActiveTerminal', async argument => this.manageFocusedTerminal(argument));
     this.command('kronos.insertJiraContext', async argument => this.insertJiraContext(argument));
     this.command('kronos.insertGitLabContext', async argument => this.insertGitLabContext(argument));
@@ -183,6 +212,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     this.command('kronos.resumeWorkSessionMonitoring', async argument => this.setMonitoring(argument, true));
     this.command('kronos.acknowledgeAttention', async argument => this.acknowledgeAttention(argument));
     this.command('kronos.openProvider', async argument => this.openProvider(argument));
+    this.command('kronos.setup', async () => this.openSetup());
     this.command('kronos.doctor', async () => this.openDoctor());
     this.command('kronos.settings', async () => {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'Kronos Terminal Work Companion');
@@ -222,6 +252,77 @@ class TerminalFirstRuntime implements vscode.Disposable {
     return seconds * 1000;
   }
 
+  private async configureWorkFilter(): Promise<void> {
+    const current = this.workTree.getFilter();
+    const options = this.workTree.getFilterOptions();
+    const selection = await vscode.window.showQuickPick([
+      { label: '$(search) Search text', description: current.query || 'none', id: 'query' },
+      { label: '$(issue-opened) Completion', description: current.jiraStatus ? `status: ${current.jiraStatus}` : current.completion || 'active', id: 'completion' },
+      { label: '$(list-filter) Jira status', description: current.jiraStatus || 'any active status', id: 'status' },
+      { label: '$(project) Project', description: current.project || 'all projects', id: 'project' },
+      { label: '$(tag) Label', description: current.label || 'all labels', id: 'label' },
+      { label: '$(clear-all) Clear filters', description: 'return to active Jira work', id: 'clear' },
+    ], { title: 'Filter Kronos Work', placeHolder: 'Choose a filter to change' });
+    if (!selection) { return; }
+    if (selection.id === 'clear') {
+      this.workTree.clearFilter();
+      return;
+    }
+    if (selection.id === 'query') {
+      const query = await vscode.window.showInputBox({
+        title: 'Search Kronos Work',
+        prompt: 'Match ticket key, summary, description, status, label, project, MR, or build',
+        value: current.query || '',
+      });
+      if (query !== undefined) { this.workTree.setFilter({ ...current, query }); }
+      return;
+    }
+    if (selection.id === 'completion') {
+      const completion = await vscode.window.showQuickPick([
+        { label: 'Active', description: 'Hide Jira work in the Done status category', value: 'active' as const },
+        { label: 'Completed', description: 'Show only Jira work in the Done status category', value: 'completed' as const },
+        { label: 'All', description: 'Show active and completed Jira work', value: 'all' as const },
+      ], { title: 'Filter by completion' });
+      if (completion) {
+        const next = { ...current, completion: completion.value };
+        delete next.jiraStatus;
+        this.workTree.setFilter(next);
+      }
+      return;
+    }
+    if (selection.id === 'status') {
+      const status = await vscode.window.showQuickPick([
+        { label: 'Any active status', value: '' },
+        ...options.jiraStatuses.map(value => ({ label: value, value })),
+      ], { title: 'Filter by Jira status' });
+      if (status) {
+        const next = { ...current };
+        if (status.value) { next.jiraStatus = status.value; next.completion = 'all'; }
+        else { delete next.jiraStatus; next.completion = 'active'; }
+        this.workTree.setFilter(next);
+      }
+      return;
+    }
+    const facet = selection.id === 'label'
+      ? await vscode.window.showQuickPick([
+        { label: 'All labels', value: '' },
+        ...options.labels.map(value => ({ label: value, value })),
+      ], { title: 'Filter by label' })
+      : await vscode.window.showQuickPick([
+        { label: 'All projects', value: '' },
+        ...options.projects.map(value => ({ label: value, value })),
+      ], { title: 'Filter by project' });
+    if (facet) {
+      const next = { ...current };
+      if (selection.id === 'label') {
+        if (facet.value) { next.label = facet.value; }
+        else { delete next.label; }
+      } else if (facet.value) { next.project = facet.value; }
+      else { delete next.project; }
+      this.workTree.setFilter(next);
+    }
+  }
+
   private async refreshTickets(showResult: boolean): Promise<void> {
     if (this.ticketRefreshRunning) {
       if (showResult) { void vscode.window.showInformationMessage('A Jira ticket refresh is already running.'); }
@@ -251,6 +352,53 @@ class TerminalFirstRuntime implements vscode.Disposable {
     } finally {
       this.ticketRefreshRunning = false;
     }
+  }
+
+  private async openJiraBoard(): Promise<void> {
+    if (this.jiraBoardPanel) {
+      this.jiraBoardPanel.panel.reveal(vscode.ViewColumn.One);
+      this.renderJiraBoardPanel();
+      return;
+    }
+    const panel = vscode.window.createWebviewPanel(
+      'kronosJiraWorkBoard',
+      'Kronos — Jira Work Board',
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        enableCommandUris: false,
+        localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
+      },
+    );
+    const record: JiraBoardPanelRecord = { panel, nonce: createWebviewNonce() };
+    this.jiraBoardPanel = record;
+    panel.onDidDispose(() => {
+      if (this.jiraBoardPanel?.panel === panel) { this.jiraBoardPanel = undefined; }
+    });
+    panel.webview.onDidReceiveMessage(async raw => {
+      if (isRecord(raw) && raw['command'] === WEBVIEW_READY_COMMAND) { return; }
+      const message = normalizeActionPanelMessage(raw, JIRA_BOARD_ACTIONS);
+      const ticketKey = normalizeTicketKey(message?.ticket);
+      const tickets = this.state.state?.tickets;
+      if (!message || !ticketKey || !tickets || !Object.prototype.hasOwnProperty.call(tickets, ticketKey)) {
+        void vscode.window.showWarningMessage('Kronos ignored an invalid Jira-board request.');
+        return;
+      }
+      await this.executeTicketPanelAction(message.command, ticketKey);
+    });
+    this.renderJiraBoardPanel();
+  }
+
+  private renderJiraBoardPanel(): void {
+    const record = this.jiraBoardPanel;
+    if (!record) { return; }
+    const scriptUri = record.panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', JIRA_WORK_BOARD_SCRIPT),
+    ).toString();
+    record.panel.webview.html = withWebviewCsp(
+      buildJiraWorkBoardHtml({ state: this.state.state, nonce: record.nonce, scriptUri }),
+      webviewScriptCspOptions(record.panel.webview.cspSource, record.nonce),
+    );
   }
 
   private async openTicketWorkspace(argument: unknown): Promise<void> {
@@ -284,12 +432,29 @@ class TerminalFirstRuntime implements vscode.Disposable {
         void vscode.window.showWarningMessage('Kronos ignored an invalid ticket-workspace request.');
         return;
       }
-      const command = `kronos.${message.command}`;
-      await vscode.commands.executeCommand(command, { ticketKey });
+      await this.executeTicketPanelAction(message.command, ticketKey);
       const current = this.ticketPanels.get(ticketKey);
       if (current) { this.renderTicketPanel(ticketKey, current); }
     });
     this.renderTicketPanel(ticketKey, record);
+  }
+
+  private async executeTicketPanelAction(action: string, ticketKey: string): Promise<void> {
+    const requestKey = `${action}\u0000${ticketKey}`;
+    if (this.ticketPanelActionsInFlight.has(requestKey)) {
+      void vscode.window.showInformationMessage(`${ticketKey} ${action} is already in progress.`);
+      return;
+    }
+    this.ticketPanelActionsInFlight.add(requestKey);
+    try {
+      await vscode.commands.executeCommand(`kronos.${action}`, { ticketKey });
+    } catch (error: unknown) {
+      const detail = unknownErrorMessage(error, `${ticketKey} action failed.`);
+      this.log(`${ticketKey} ${action} failed.`, detail);
+      void vscode.window.showErrorMessage(detail);
+    } finally {
+      this.ticketPanelActionsInFlight.delete(requestKey);
+    }
   }
 
   private renderTicketPanel(ticketKey: string, record: TicketPanelRecord): void {
@@ -321,12 +486,45 @@ class TerminalFirstRuntime implements vscode.Disposable {
   }
 
   private async manageFocusedTerminal(argument: unknown): Promise<void> {
-    const ticketKey = await this.resolveTicketKey(argument, true);
-    const ticket = ticketKey ? this.state.state?.tickets[ticketKey] : undefined;
-    if (!ticketKey || !ticket) { return; }
     const terminal = vscode.window.activeTerminal;
     if (!terminal) {
       void vscode.window.showWarningMessage('Focus the already-running interactive terminal you want Kronos to organize, then try again.');
+      return;
+    }
+    const requestedTicketKey = normalizeTicketKey(
+      typeof argument === 'string'
+        ? argument
+        : stringProperty(argument, 'ticketKey') || stringProperty(argument, 'ticket'),
+    );
+    const ticketKey = await this.resolveTicketKey(argument, false);
+    const ticket = ticketKey ? this.state.state?.tickets[ticketKey] : undefined;
+    if (requestedTicketKey && (!ticketKey || !ticket)) {
+      void vscode.window.showWarningMessage(`${requestedTicketKey} is no longer present in loaded Jira Work. Refresh Jira and try again.`);
+      return;
+    }
+    if (!ticketKey || !ticket) {
+      const existing = this.operatorTerminals.bindingForTerminal(terminal);
+      if (existing) {
+        const session = readWorkSession(existing.sessionId);
+        if (session) {
+          void vscode.window.showInformationMessage(`${terminal.name} is already managed as ${workSessionEventContext(session).label}.`);
+          return;
+        }
+      }
+      const title = await vscode.window.showInputBox({
+        title: 'Manage Focused Terminal as a Standalone Session',
+        prompt: 'Name this session. No Jira ticket will be attached.',
+        value: terminal.name || 'Terminal session',
+        validateInput: value => value.trim() ? undefined : 'Enter a session name.',
+      });
+      if (!title?.trim()) { return; }
+      const project = this.standaloneProjectDetails();
+      const session = createStandaloneWorkSession({ title: title.trim(), ...project });
+      await this.attachTerminal(session, terminal);
+      this.refreshTerminalFirstViews();
+      void vscode.window.showInformationMessage(
+        `${terminal.name} is now organized as a standalone session. No ticket was attached and terminal contents were not read.`,
+      );
       return;
     }
     const sessionInput: Parameters<typeof createOrGetWorkSessionByTicket>[0] = {
@@ -340,7 +538,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       if (projectPath) { sessionInput.projectPath = projectPath; }
     }
     let session = createOrGetWorkSessionByTicket(sessionInput);
-    if (session.status === 'closed') { session = reopenWorkSession(session.id); }
+    if (session.status === 'closed') { session = this.requireTicketSession(reopenWorkSession(session.id)); }
     session = this.ensureProviderBindings(session, ticket);
     await this.attachTerminal(session, terminal);
     this.refreshTerminalFirstViews();
@@ -349,14 +547,166 @@ class TerminalFirstRuntime implements vscode.Disposable {
     );
   }
 
+  private async newClaudeSession(): Promise<void> {
+    if (!this.canLaunchClaude()) { return; }
+    const workspaceName = vscode.workspace.name?.trim();
+    const launchedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const title = workspaceName
+      ? `${workspaceName} Claude · ${launchedAt}`
+      : `Claude session · ${launchedAt}`;
+    await this.launchClaudeSession({ title });
+  }
+
+  private async startClaudeForTicket(argument: unknown): Promise<void> {
+    if (!this.canLaunchClaude()) { return; }
+    const ticketKey = await this.resolveTicketKey(argument, true);
+    const ticket = ticketKey ? this.state.state?.tickets[ticketKey] : undefined;
+    if (!ticketKey || !ticket) { return; }
+    await this.launchClaudeSession({ title: ticket.summary, ticketKey, ticket });
+  }
+
+  private canLaunchClaude(): boolean {
+    if (vscode.workspace.isTrusted) { return true; }
+    void vscode.window.showWarningMessage(
+      'Kronos does not launch Claude in an untrusted workspace. Trust the workspace, or open a trusted window and try again.',
+    );
+    return false;
+  }
+
+  private async launchClaudeSession(input: { title: string; ticketKey?: string; ticket?: Ticket }): Promise<void> {
+    const launchKey = input.ticketKey ? `ticket:${input.ticketKey}` : 'standalone';
+    const now = Date.now();
+    for (const [key, expiresAt] of this.claudeLaunchCooldownUntil) {
+      if (expiresAt <= now) { this.claudeLaunchCooldownUntil.delete(key); }
+    }
+    if (this.claudeLaunchesInFlight.has(launchKey)
+      || (this.claudeLaunchCooldownUntil.get(launchKey) || 0) > now) {
+      void vscode.window.showInformationMessage(
+        input.ticketKey
+          ? `Claude launch for ${input.ticketKey} is already in progress or was just submitted.`
+          : 'A standalone Claude launch is already in progress or was just submitted.',
+      );
+      return;
+    }
+    this.claudeLaunchesInFlight.add(launchKey);
+    let commandSubmitted = false;
+    let closeSessionIfNotSubmitted = false;
+    let session: WorkSessionRecord | undefined;
+    try {
+      const launch = this.claudeLaunchConfiguration(input.ticketKey, input.ticket);
+      if (input.ticketKey && input.ticket) {
+        const previousSession = getWorkSessionByTicket(input.ticketKey);
+        const sessionInput: Parameters<typeof createOrGetWorkSessionByTicket>[0] = {
+          ticketKey: input.ticketKey,
+          title: input.title,
+        };
+        const projectName = input.ticket.projects[0];
+        if (projectName) {
+          sessionInput.projectName = projectName;
+          const projectPath = this.state.state?.projects[projectName]?.path;
+          if (projectPath) { sessionInput.projectPath = projectPath; }
+        }
+        let ticketSession = createOrGetWorkSessionByTicket(sessionInput);
+        closeSessionIfNotSubmitted = !previousSession || previousSession.status === 'closed';
+        if (ticketSession.status === 'closed') {
+          ticketSession = this.requireTicketSession(reopenWorkSession(ticketSession.id));
+        }
+        session = ticketSession;
+        session = this.ensureProviderBindings(ticketSession, input.ticket);
+      } else {
+        session = createStandaloneWorkSession({ title: input.title, ...this.standaloneProjectDetails(launch.cwd) });
+        closeSessionIfNotSubmitted = true;
+      }
+      const launched = launchClaudeTerminal(vscode.window, launch);
+      commandSubmitted = true;
+      session = await this.attachTerminal(session, launched.terminal);
+      const eventContext = workSessionEventContext(session);
+      appendMonitorEvent({
+        sessionId: session.id,
+        type: 'decision.recorded',
+        source: 'operator',
+        summary: `${eventContext.label} Claude command submitted in a focused terminal by explicit operator action.`,
+        subject: { kind: 'work-session', id: session.id, ...workSessionTicketMetadata(session) },
+        metadata: { explicitLaunch: true, commandSubmitted: true, terminalName: launched.configuration.name },
+      });
+      this.refreshTerminalFirstViews();
+      void vscode.window.showInformationMessage(
+        input.ticketKey
+          ? `Submitted Claude for ${input.ticketKey}. When Claude is ready, use Insert [${input.ticketKey}] to add the fetched Jira context.`
+          : 'Submitted a standalone Claude command in a focused terminal. No Jira ticket was attached.',
+      );
+    } catch (error: unknown) {
+      if (!commandSubmitted && closeSessionIfNotSubmitted && session) {
+        try {
+          const closed = closeWorkSession(session.id);
+          appendMonitorEvent({
+            sessionId: closed.id,
+            type: 'decision.recorded',
+            source: 'operator',
+            summary: `${workSessionEventContext(closed).label} Claude launch failed before command submission; the new session was closed.`,
+            subject: { kind: 'work-session', id: closed.id, ...workSessionTicketMetadata(closed) },
+            metadata: { explicitLaunch: true, commandSubmitted: false },
+          });
+        } catch (compensationError: unknown) {
+          this.log('Could not close the failed pre-submission work session.', unknownErrorMessage(compensationError, 'Session compensation failed.'));
+        }
+      }
+      const detail = unknownErrorMessage(error, commandSubmitted
+        ? 'The Claude command was submitted, but Kronos could not attach its session.'
+        : 'Claude terminal launch failed.');
+      this.log(commandSubmitted ? 'Claude command submitted but session attachment failed.' : 'Claude terminal launch failed.', detail);
+      void vscode.window.showErrorMessage(
+        commandSubmitted
+          ? `The Claude command was submitted, but Kronos could not finish attaching the session: ${detail}`
+          : `${detail} Run Kronos: Setup or Kronos: Doctor to check launch settings.`,
+      );
+    } finally {
+      this.claudeLaunchesInFlight.delete(launchKey);
+      this.claudeLaunchCooldownUntil.set(launchKey, Date.now() + CLAUDE_LAUNCH_COOLDOWN_MS);
+    }
+  }
+
+  private claudeLaunchConfiguration(ticketKey?: string, ticket?: Ticket): { command: string; name: string; cwd?: string } {
+    const configuration = vscode.workspace.getConfiguration('kronos');
+    const command = configuration.get<string>('claudeCommand', DEFAULT_CLAUDE_COMMAND);
+    const configuredName = configuration.get<string>('claudeTerminalName', DEFAULT_CLAUDE_TERMINAL_NAME);
+    const suffix = ticketKey ? ` · ${ticketKey}` : '';
+    const name = suffix ? `${configuredName.slice(0, Math.max(1, 80 - suffix.length))}${suffix}` : configuredName;
+    const mode = configuration.get<string>('claudeLaunchCwd', 'ticketProject');
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const projectName = ticket?.projects[0];
+    const ticketProjectPath = projectName ? this.state.state?.projects[projectName]?.path : undefined;
+    const cwd = mode === 'home'
+      ? os.homedir()
+      : mode === 'workspace'
+        ? workspacePath || os.homedir()
+        : ticketProjectPath || workspacePath || os.homedir();
+    return normalizeClaudeTerminalLaunch({ command, name, cwd });
+  }
+
+  private standaloneProjectDetails(cwd?: string): { projectName?: string; projectPath?: string } {
+    const workspace = vscode.workspace.workspaceFolders?.[0];
+    const details: { projectName?: string; projectPath?: string } = {};
+    const workspacePath = workspace?.uri.fsPath;
+    if (workspace?.name && (!cwd || cwd === workspacePath)) { details.projectName = workspace.name; }
+    const projectPath = cwd || workspacePath;
+    if (projectPath) { details.projectPath = projectPath; }
+    return details;
+  }
+
   private async attachTerminal(session: WorkSessionRecord, terminal: vscode.Terminal): Promise<WorkSessionRecord> {
+    let processId: number | undefined;
+    try { processId = await terminal.processId; } catch { processId = undefined; }
+    if (this.closedTerminals.has(terminal) || terminal.exitStatus !== undefined) {
+      throw new Error('The terminal closed before Kronos could attach its session.');
+    }
+    // Re-read after the await so concurrent actions cannot both persist a new
+    // binding for the same terminal from a stale pre-await registry snapshot.
     const previous = this.operatorTerminals.bindingForTerminal(terminal);
     if (previous && previous.sessionId !== session.id) {
       detachWorkSessionTerminal(previous.sessionId, previous.bindingId, 'Terminal reassigned by the operator.');
       this.appendTerminalDetachedEvent(previous, 'reassigned');
     }
-    let processId: number | undefined;
-    try { processId = await terminal.processId; } catch { processId = undefined; }
     const input: Parameters<typeof attachWorkSessionTerminal>[1] = { name: terminal.name };
     if (previous?.sessionId === session.id) { input.bindingId = previous.bindingId; }
     if (processId !== undefined) { input.processId = processId; }
@@ -368,18 +718,19 @@ class TerminalFirstRuntime implements vscode.Disposable {
       : updated.terminals[updated.terminals.length - 1];
     if (!persisted) { throw new Error('Kronos could not persist the terminal attachment.'); }
     this.operatorTerminals.attach(terminal, { sessionId: updated.id, bindingId: persisted.id });
+    const context = workSessionEventContext(updated);
     appendMonitorEvent({
       sessionId: updated.id,
       type: 'terminal.attached',
       source: 'operator',
-      summary: `${updated.ticketKey} operator terminal attached.`,
-      subject: { kind: 'work-session', id: updated.id, ticketKey: updated.ticketKey },
+      summary: `${context.label} operator terminal attached.`,
+      subject: { kind: 'work-session', id: updated.id, ...workSessionTicketMetadata(updated) },
       metadata: { terminalBindingId: persisted.id },
     });
     return updated;
   }
 
-  private ensureProviderBindings(session: WorkSessionRecord, ticket: Ticket): WorkSessionRecord {
+  private ensureProviderBindings(session: TicketWorkSessionRecord, ticket: Ticket): TicketWorkSessionRecord {
     let updated = session;
     const projectName = ticket.projects[0];
     const config = projectName ? this.state.state?.projects[projectName]?.config : undefined;
@@ -390,7 +741,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
         subjectId: session.ticketKey,
       };
       if (ticket.jira_url) { binding.url = ticket.jira_url; }
-      updated = addWorkSessionProviderBinding(updated.id, binding);
+      updated = this.requireTicketSession(addWorkSessionProviderBinding(updated.id, binding));
     }
     if (ticket.mr?.iid) {
       const binding: Parameters<typeof addWorkSessionProviderBinding>[1] = {
@@ -400,29 +751,34 @@ class TerminalFirstRuntime implements vscode.Disposable {
       };
       if (config?.gitlab_project_id) { binding.projectId = String(config.gitlab_project_id); }
       if (ticket.mr.url) { binding.url = ticket.mr.url; }
-      updated = addWorkSessionProviderBinding(updated.id, binding);
+      updated = this.requireTicketSession(addWorkSessionProviderBinding(updated.id, binding));
     }
     const jenkinsUrl = ticket.build?.url || config?.jenkins_url;
     if (jenkinsUrl) {
-      updated = addWorkSessionProviderBinding(updated.id, {
+      updated = this.requireTicketSession(addWorkSessionProviderBinding(updated.id, {
         id: 'jenkins-build',
         provider: 'jenkins',
         resource: 'build',
         subjectId: ticket.build ? String(ticket.build.number) : 'latest',
         url: jenkinsUrl,
-      });
+      }));
     }
     const sonarTarget = configuredSonarBranch(this.state.state, session.ticketKey);
     if (sonarTarget) {
-      updated = addWorkSessionProviderBinding(updated.id, {
+      updated = this.requireTicketSession(addWorkSessionProviderBinding(updated.id, {
         id: 'sonar-quality-gate',
         provider: 'sonar',
         resource: 'quality-gate',
         subjectId: `${sonarTarget.projectKey}:${sonarTarget.branch}`,
         projectId: sonarTarget.projectKey,
-      });
+      }));
     }
     return updated;
+  }
+
+  private requireTicketSession(session: WorkSessionRecord): TicketWorkSessionRecord {
+    if (session.kind !== 'ticket') { throw new Error('Expected a ticket-linked work session.'); }
+    return session;
   }
 
   private async insertJiraContext(argument: unknown): Promise<void> {
@@ -756,7 +1112,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     if (!session) { return; }
     const selected = await this.chooseLiveTerminal(session.id);
     if (!selected) {
-      void vscode.window.showWarningMessage(`${session.ticketKey} has no live attached terminal. Focus it and choose Reattach Focused Terminal.`);
+      void vscode.window.showWarningMessage(`${workSessionEventContext(session).label} has no live attached terminal. Focus it and choose Reattach Focused Terminal.`);
       return;
     }
     selected.terminal.show(false);
@@ -771,11 +1127,13 @@ class TerminalFirstRuntime implements vscode.Disposable {
       return;
     }
     if (session.status === 'closed') { session = reopenWorkSession(session.id); }
-    const ticket = this.state.state?.tickets[session.ticketKey];
-    if (ticket) { session = this.ensureProviderBindings(session, ticket); }
+    if (session.kind === 'ticket') {
+      const ticket = this.state.state?.tickets[session.ticketKey];
+      if (ticket) { session = this.ensureProviderBindings(session, ticket); }
+    }
     await this.attachTerminal(session, terminal);
     this.refreshTerminalFirstViews();
-    void vscode.window.showInformationMessage(`Reattached ${terminal.name} to ${session.ticketKey}. Terminal contents were not read.`);
+    void vscode.window.showInformationMessage(`Reattached ${terminal.name} to ${workSessionEventContext(session).label}. Terminal contents were not read.`);
   }
 
   private async detachManagedTerminal(argument: unknown): Promise<void> {
@@ -783,21 +1141,22 @@ class TerminalFirstRuntime implements vscode.Disposable {
     if (!session) { return; }
     const selected = await this.chooseLiveTerminal(session.id);
     if (!selected) {
-      void vscode.window.showInformationMessage(`${session.ticketKey} has no live terminal attachment.`);
+      void vscode.window.showInformationMessage(`${workSessionEventContext(session).label} has no live terminal attachment.`);
       return;
     }
     this.operatorTerminals.detachBinding(session.id, selected.binding.bindingId);
     detachWorkSessionTerminal(session.id, selected.binding.bindingId, 'Detached explicitly by the operator.');
     this.appendTerminalDetachedEvent(selected.binding, 'operator-detached');
     this.refreshTerminalFirstViews();
-    void vscode.window.showInformationMessage(`Detached ${selected.terminal.name} from ${session.ticketKey}. The terminal remains open.`);
+    void vscode.window.showInformationMessage(`Detached ${selected.terminal.name} from ${workSessionEventContext(session).label}. The terminal remains open.`);
   }
 
   private async stopManagingSession(argument: unknown): Promise<void> {
     const session = await this.resolveWorkSession(argument, true);
     if (!session) { return; }
+    const context = workSessionEventContext(session);
     const confirmation = await vscode.window.showWarningMessage(
-      `Stop organizing ${session.ticketKey}? Monitoring will stop, but every terminal remains open and untouched.`,
+      `Stop organizing ${context.label}? Monitoring will stop, but every terminal remains open and untouched.`,
       { modal: true },
       'Stop Managing',
     );
@@ -808,8 +1167,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
       sessionId: session.id,
       type: 'decision.recorded',
       source: 'operator',
-      summary: `${session.ticketKey} work-session management stopped by the operator.`,
-      subject: { kind: 'work-session', id: session.id, ticketKey: session.ticketKey },
+      summary: `${context.label} work-session management stopped by the operator.`,
+      subject: { kind: 'work-session', id: session.id, ...workSessionTicketMetadata(session) },
       metadata: { monitoringEnabled: false, terminalClosed: false },
     });
     this.refreshTerminalFirstViews();
@@ -818,6 +1177,10 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private async setMonitoring(argument: unknown, enabled: boolean): Promise<void> {
     const session = await this.resolveWorkSession(argument, true);
     if (!session) { return; }
+    if (session.kind !== 'ticket') {
+      void vscode.window.showInformationMessage('Standalone sessions do not poll Jira, merge-request, or CI providers.');
+      return;
+    }
     if (session.status !== 'active') {
       void vscode.window.showWarningMessage(`Reattach ${session.ticketKey} before enabling monitoring.`);
       return;
@@ -854,11 +1217,62 @@ class TerminalFirstRuntime implements vscode.Disposable {
     await this.openHttpUrl(providerUrl);
   }
 
+  private async openSetup(): Promise<void> {
+    const choice = await vscode.window.showQuickPick([
+      { label: '$(terminal) Claude launch settings', description: 'command, terminal name, and starting directory', id: 'claude' },
+      { label: '$(key) Provider setup guide', description: 'Jira, GitLab, Jenkins, and SonarQube environment keys', id: 'providers' },
+      { label: '$(pulse) Run Doctor', description: 'validate local state and configured boundaries', id: 'doctor' },
+      { label: '$(layout) Open Jira Work Board', description: 'review and filter fetched Jira work', id: 'board' },
+    ], { title: 'Kronos Setup', placeHolder: 'Choose what to configure' });
+    if (!choice) { return; }
+    if (choice.id === 'claude') {
+      await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:jmacke01.kronos claude');
+      return;
+    }
+    if (choice.id === 'doctor') { await this.openDoctor(); return; }
+    if (choice.id === 'board') { await this.openJiraBoard(); return; }
+    const envPath = defaultProviderEnvPath().replace(/`/g, 'ˋ');
+    const markdown = [
+      '# Kronos Provider Setup',
+      '',
+      `Kronos reads provider values from \`${envPath}\` without displaying credential values. Existing process environment values take precedence.`,
+      '',
+      'Supported keys:',
+      '',
+      '- Jira: `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, optional `JIRA_JQL`',
+      '- GitLab: `GITLAB_API_BASE_URL` or `GITLAB_URL`, plus `GITLAB_TOKEN`',
+      '- Jenkins: `JENKINS_URL`, optional `JENKINS_USER`, `JENKINS_API_TOKEN`',
+      '- SonarQube: `SONAR_HOST_URL` or `SONAR_URL`, plus `SONAR_TOKEN`',
+      '',
+      'Keep this file private, then reload the VS Code window and run **Kronos: Doctor**. Setup never asks for or copies secret values.',
+      '',
+    ].join('\n');
+    const document = await vscode.workspace.openTextDocument({ language: 'markdown', content: markdown });
+    await vscode.window.showTextDocument(document, { preview: true });
+  }
+
   private async openDoctor(): Promise<void> {
     const stateIssues = this.state.loadIssues;
     const sessionIssues = listWorkSessionStoreIssues();
+    let claudeSettingsValid = true;
+    let claudeSettingsDetail = 'Validated command syntax, starting directory, and executable availability.';
+    try {
+      const launch = this.claudeLaunchConfiguration();
+      const availability = probeClaudeExecutableAvailability(launch.command);
+      if (!availability.available) {
+        claudeSettingsValid = false;
+        claudeSettingsDetail = `${availability.executable} was not found on the VS Code extension-host PATH. Your interactive terminal PATH may differ.`;
+      } else {
+        claudeSettingsDetail = `${availability.executable} is available on the VS Code extension-host PATH; command syntax and starting directory are valid.`;
+      }
+    } catch (error: unknown) {
+      claudeSettingsValid = false;
+      claudeSettingsDetail = unknownErrorMessage(error, 'Claude launch settings are invalid.');
+    }
     const rows = [
       doctorRow('Work catalog', this.state.state !== null && stateIssues.length === 0, `${Object.keys(this.state.state?.tickets || {}).length} Jira ticket(s); ${stateIssues.length} local issue(s)`),
+      doctorRow('Claude launch settings', claudeSettingsValid, claudeSettingsDetail),
+      doctorRow('Workspace trust for launch', vscode.workspace.isTrusted, vscode.workspace.isTrusted ? 'Explicit Claude launch is enabled.' : 'Claude launch is disabled in this untrusted workspace.'),
       doctorRow('Jira REST', isJiraRestConfigured(), 'Requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN.'),
       doctorRow('GitLab REST', isGitLabRestConfigured(), 'Requires a GitLab URL/token plus a project ID or parseable MR URL.'),
       doctorRow('Jenkins REST', isJenkinsRestConfigured(), 'Uses configured Jenkins URLs and inherited credentials when required.'),
@@ -872,7 +1286,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     const markdown = [
       '# Kronos Terminal-First Doctor',
       '',
-      'Doctor checks provider readiness and the read / insert / monitor / audit ownership boundary. It never runs repairs or project commands.',
+      'Doctor validates provider, session, and explicit Claude-launch readiness. It never launches Claude, runs repairs, or executes project commands.',
       '',
       ...rows,
       ...(issueLines.length > 0 ? ['', '## Local state issues', '', ...issueLines] : []),
@@ -926,8 +1340,10 @@ class TerminalFirstRuntime implements vscode.Disposable {
     if (!allowPick) { return undefined; }
     const sessions = listWorkSessions();
     const pick = await vscode.window.showQuickPick(sessions.map(session => ({
-      label: session.ticketKey,
-      description: `${session.status} • ${session.monitoring.enabled ? 'monitoring on' : 'monitoring off'}`,
+      label: workSessionEventContext(session).label,
+      description: session.kind === 'ticket'
+        ? `${session.status} • ${session.monitoring.enabled ? 'monitoring on' : 'monitoring off'}`
+        : `${session.status} • standalone`,
       detail: session.title,
       session,
     })), { title: 'Choose a managed work session' });
@@ -1011,12 +1427,13 @@ class TerminalFirstRuntime implements vscode.Disposable {
     artifactPath: string,
     contentSha256: string,
   ): void {
+    const context = workSessionEventContext(session);
     appendMonitorEvent({
       sessionId: session.id,
       type: 'context.inserted',
       source,
-      summary: `${session.ticketKey} ${source} context reference inserted without submission.`,
-      subject: { kind: source === 'gitlab' ? 'merge-request' : source === 'jira' ? 'ticket' : 'ci-context', id: subjectId, ticketKey: session.ticketKey },
+      summary: `${context.label} ${source} context reference inserted without submission.`,
+      subject: { kind: source === 'gitlab' ? 'merge-request' : source === 'jira' ? 'ticket' : 'ci-context', id: subjectId, ...workSessionTicketMetadata(session) },
       artifactPath,
       metadata: { submitted: false, artifactSha256: contentSha256 },
     });
@@ -1025,17 +1442,19 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private appendTerminalDetachedEvent(binding: OperatorTerminalBinding, reason: string): void {
     const session = readWorkSession(binding.sessionId);
     if (!session) { return; }
+    const context = workSessionEventContext(session);
     appendMonitorEvent({
       sessionId: session.id,
       type: 'terminal.detached',
       source: 'operator',
-      summary: `${session.ticketKey} operator terminal detached.`,
-      subject: { kind: 'work-session', id: session.id, ticketKey: session.ticketKey },
+      summary: `${context.label} operator terminal detached.`,
+      subject: { kind: 'work-session', id: session.id, ...workSessionTicketMetadata(session) },
       metadata: { reason },
     });
   }
 
   private handleClosedTerminal(terminal: vscode.Terminal): void {
+    this.closedTerminals.add(terminal);
     const binding = this.operatorTerminals.detachTerminal(terminal);
     if (!binding) { return; }
     try {
@@ -1052,6 +1471,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     this.sessionTree.refresh();
     this.attentionTree.refresh();
     this.refreshTicketPanels();
+    this.renderJiraBoardPanel();
   }
 
   private async runProgress(

@@ -4,7 +4,7 @@ import { WorkSessionRecord, listWorkSessions } from '../services/workSessionStor
 
 export interface ManagedSessionCommandTarget {
   workSessionId: string;
-  ticketKey: string;
+  ticketKey?: string;
   liveTerminalBindingIds: readonly string[];
 }
 
@@ -60,32 +60,36 @@ export class ManagedSessionTreeProvider implements vscode.TreeDataProvider<vscod
 
 export class ManagedSessionTreeItem extends vscode.TreeItem implements ManagedSessionCommandTarget {
   readonly workSessionId: string;
-  readonly ticketKey: string;
+  readonly ticketKey?: string;
   readonly liveTerminalBindingIds: readonly string[];
 
   constructor(
     readonly session: WorkSessionRecord,
     liveTerminalBindingIds: readonly string[],
   ) {
-    super(`${session.ticketKey}: ${session.title}`, vscode.TreeItemCollapsibleState.None);
+    super(sessionLabel(session), vscode.TreeItemCollapsibleState.None);
     this.workSessionId = session.id;
-    this.ticketKey = session.ticketKey;
+    if (session.kind === 'ticket') { this.ticketKey = session.ticketKey; }
     this.liveTerminalBindingIds = [...liveTerminalBindingIds].sort();
 
     const liveCount = this.liveTerminalBindingIds.length;
     const attached = session.status === 'active' && liveCount > 0;
     const commandTarget: ManagedSessionCommandTarget = {
       workSessionId: this.workSessionId,
-      ticketKey: this.ticketKey,
       liveTerminalBindingIds: this.liveTerminalBindingIds,
     };
+    if (this.ticketKey) { commandTarget.ticketKey = this.ticketKey; }
 
     this.id = `work-session:${session.id}`;
-    this.contextValue = session.status === 'closed'
-      ? 'work_session_closed'
-      : !session.monitoring.enabled
-        ? attached ? 'work_session_attached_paused' : 'work_session_detached_paused'
-        : attached ? 'work_session_attached' : 'work_session_detached';
+    this.contextValue = session.kind === 'standalone'
+      ? session.status === 'closed'
+        ? 'standalone_session_closed'
+        : attached ? 'standalone_session_attached' : 'standalone_session_detached'
+      : session.status === 'closed'
+        ? 'work_session_closed'
+        : !session.monitoring.enabled
+          ? attached ? 'work_session_attached_paused' : 'work_session_detached_paused'
+          : attached ? 'work_session_attached' : 'work_session_detached';
     this.description = sessionDescription(session, liveCount);
     this.tooltip = sessionTooltip(session, liveCount);
     this.iconPath = sessionIcon(session, attached);
@@ -99,23 +103,29 @@ export class ManagedSessionTreeItem extends vscode.TreeItem implements ManagedSe
 
 class ManagedSessionMessageTreeItem extends vscode.TreeItem {
   constructor() {
-    super('No terminal work sessions yet', vscode.TreeItemCollapsibleState.None);
+    super('New Claude session', vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'managed_session_empty';
-    this.description = 'manage a focused terminal from a ticket';
-    this.tooltip = 'Kronos organizes ticket context and provider monitoring around terminals you own and control.';
-    this.iconPath = new vscode.ThemeIcon('info');
+    this.description = 'no Jira ticket required';
+    this.tooltip = 'Create a focused interactive Claude terminal. A Jira ticket is linked only when you launch from Work.';
+    this.iconPath = new vscode.ThemeIcon('add');
+    this.command = { command: 'kronos.newClaudeSession', title: 'New Claude Session' };
   }
 }
 
 function sessionSortOrder(left: WorkSessionRecord, right: WorkSessionRecord): number {
   if (left.status !== right.status) { return left.status === 'active' ? -1 : 1; }
   return right.updatedAt.localeCompare(left.updatedAt)
-    || left.ticketKey.localeCompare(right.ticketKey)
+    || sessionLabel(left).localeCompare(sessionLabel(right))
     || left.id.localeCompare(right.id);
 }
 
 function sessionDescription(session: WorkSessionRecord, liveCount: number): string {
   if (session.status === 'closed') { return 'management closed'; }
+  if (session.kind === 'standalone') {
+    return liveCount === 0
+      ? 'standalone • terminal detached'
+      : `standalone • ${liveCount} terminal${liveCount === 1 ? '' : 's'} attached`;
+  }
   const monitoring = session.monitoring.enabled
     ? `monitoring ${session.monitoring.lastState || 'waiting'}`
     : 'monitoring paused';
@@ -137,7 +147,7 @@ function sessionTooltip(session: WorkSessionRecord, liveCount: number): string {
   const incompleteArtifacts = session.artifacts.length - completeArtifacts;
   const lines = [
     `Work session: ${session.id}`,
-    `Ticket: ${session.ticketKey}`,
+    ...(session.kind === 'ticket' ? [`Ticket: ${session.ticketKey}`] : ['Ticket: none (standalone session)']),
     `Title: ${session.title}`,
     `Status: ${session.status}`,
     'Terminal ownership: operator',
@@ -159,6 +169,10 @@ function sessionTooltip(session: WorkSessionRecord, liveCount: number): string {
   if (session.projectPath) { lines.splice(5, 0, `Project path: ${session.projectPath}`); }
   if (session.closedAt) { lines.push(`Closed: ${session.closedAt}`); }
   return lines.join('\n');
+}
+
+function sessionLabel(session: WorkSessionRecord): string {
+  return session.kind === 'ticket' ? `${session.ticketKey}: ${session.title}` : session.title;
 }
 
 function sessionIcon(session: WorkSessionRecord, attached: boolean): vscode.ThemeIcon {

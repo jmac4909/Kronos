@@ -9,8 +9,11 @@ export function buildWorkSessionAuditMarkdown(
 ): string {
   const providers = [...new Set(session.providerBindings.map(binding => binding.provider))];
   const attachedTerminals = session.terminals.filter(terminal => terminal.status === 'attached').length;
+  const heading = session.kind === 'ticket'
+    ? `${session.ticketKey} managed work session`
+    : `${session.title} managed session`;
   const lines = [
-    `# ${markdownText(session.ticketKey)} managed work session`,
+    `# ${markdownText(heading)}`,
     '',
     markdownText(session.title),
     '',
@@ -19,6 +22,7 @@ export function buildWorkSessionAuditMarkdown(
     '## Current state',
     '',
     `- Session: \`${inlineCode(session.id)}\``,
+    `- Kind: ${session.kind === 'ticket' ? `ticket-linked (${markdownText(session.ticketKey)})` : 'standalone'}`,
     `- Status: ${markdownText(session.status)}`,
     `- Operator terminals currently recorded as attached: ${attachedTerminals}`,
     `- Monitoring: ${session.monitoring.enabled ? 'enabled' : 'disabled'}`,

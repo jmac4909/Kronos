@@ -121,7 +121,10 @@ const DEFAULT_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_COMMENT_BYTES = 20 * 1024 * 1024;
 const MAX_JIRA_JQL_LENGTH = 16 * 1024;
 const MAX_JIRA_NEXT_PAGE_TOKEN_LENGTH = 16 * 1024;
-const DEFAULT_JIRA_WORK_LIST_JQL = 'assignee = currentUser() AND resolution = unresolved ORDER BY updated DESC';
+// Fetch active and recent completed work so the local Work view can change its
+// completion filter without another provider query. The view hides completed
+// tickets by default; JIRA_JQL can intentionally widen the history window.
+const DEFAULT_JIRA_WORK_LIST_JQL = 'assignee = currentUser() AND (resolution = unresolved OR resolutiondate >= -30d) ORDER BY updated DESC';
 const JIRA_WORK_LIST_FIELDS = [
   'summary',
   'issuetype',
@@ -257,11 +260,30 @@ export class JiraRestClient {
         stoppedWithWarning = true;
         break;
       }
-      const pageIssues = arrayFromUnknown(page['issues']);
+      const rawPageIssues = page['issues'];
+      const pageIssues = Array.isArray(rawPageIssues) ? rawPageIssues : [];
+      if (!Array.isArray(rawPageIssues)) {
+        pushUniqueWarning(warnings, `Jira Work search page ${pageNumber} did not contain a valid issues array.`);
+        stoppedWithWarning = true;
+      } else {
+        const malformedIssueCount = pageIssues.filter(issue => !isValidJiraWorkIssue(issue)).length;
+        if (malformedIssueCount > 0) {
+          pushUniqueWarning(
+            warnings,
+            `Jira Work search page ${pageNumber} contained ${malformedIssueCount} malformed issue row${malformedIssueCount === 1 ? '' : 's'}; cached Work rows were retained.`,
+          );
+          stoppedWithWarning = true;
+        }
+      }
       const retainedIssues = pageIssues.slice(0, remainingIssues);
       issues.push(...retainedIssues);
       pageCount = pageNumber;
-      for (const warning of jiraSearchWarnings(page)) { pushUniqueWarning(warnings, warning); }
+      const pageWarnings = jiraSearchWarnings(page);
+      for (const warning of pageWarnings) { pushUniqueWarning(warnings, warning); }
+      // Jira can return HTTP 200 with errorMessages/warningMessages and only a
+      // partial issue set. Never call that snapshot complete or evict cached
+      // rows merely because the same response also says isLast.
+      if (pageWarnings.length > 0) { stoppedWithWarning = true; }
 
       if (pageIssues.length > retainedIssues.length) {
         pushUniqueWarning(warnings, `Jira Work search stopped at the safety limit of ${this.maxWorkListIssues} issues.`);
@@ -269,7 +291,7 @@ export class JiraRestClient {
         break;
       }
       if (page['isLast'] === true) {
-        complete = true;
+        complete = !stoppedWithWarning;
         break;
       }
 
@@ -809,6 +831,12 @@ function jiraSearchWarnings(page: Record<string, unknown>): string[] {
     warnings.push(`Jira Work search returned ${rawWarnings.length - 20} additional warning messages that were omitted.`);
   }
   return warnings;
+}
+
+function isValidJiraWorkIssue(value: unknown): boolean {
+  if (!isRecord(value) || typeof value['key'] !== 'string' || !value['key'].trim()) { return false; }
+  const fields = isRecord(value['fields']) ? value['fields'] : undefined;
+  return Boolean(fields && typeof fields['summary'] === 'string' && fields['summary'].trim());
 }
 
 function pushUniqueWarning(warnings: string[], warning: string): void {

@@ -147,7 +147,7 @@ export class AttentionGroupTreeItem extends vscode.TreeItem {
     const ticketKey = newest.ticketKey;
     const label = ticketKey
       ? `${ticketKey}: ${session?.title || 'Provider changes'}`
-      : `Work session ${newest.event.sessionId}`;
+      : session?.title || `Work session ${newest.event.sessionId}`;
     super(label, vscode.TreeItemCollapsibleState.Expanded);
     this.newestAt = newest.event.at;
     this.labelText = label;
@@ -158,7 +158,7 @@ export class AttentionGroupTreeItem extends vscode.TreeItem {
     this.description = `${entries.length} unacknowledged • newest ${displayTimestamp(this.newestAt)}`;
     this.tooltip = [
       `Work session: ${this.workSessionId}`,
-      `Ticket: ${ticketKey || 'unknown'}`,
+      `Ticket: ${ticketKey || 'none'}`,
       `Unacknowledged provider transitions: ${entries.length}`,
       `Newest transition: ${this.newestAt}`,
     ].join('\n');

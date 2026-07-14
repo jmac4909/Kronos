@@ -1,16 +1,20 @@
 import * as vscode from 'vscode';
 import type { KronosState as KronosStateSnapshot, Ticket } from '../state/types';
+import {
+  collectWorkTicketFilterOptions,
+  isCompletedWorkTicket,
+  normalizeWorkTicketFilter,
+  workTicketMatchesFilter,
+  type WorkTicketFilter,
+  type WorkTicketFilterOptions,
+} from '../services/workTicketFilters';
+
+export type { WorkCompletionFilter, WorkTicketFilter, WorkTicketFilterOptions } from '../services/workTicketFilters';
+export { isCompletedWorkTicket, normalizeWorkTicketFilter, workTicketMatchesFilter } from '../services/workTicketFilters';
 
 export interface WorkTreeStateSource {
   readonly state: KronosStateSnapshot | null;
   readonly onDidChange: vscode.Event<void>;
-}
-
-export interface WorkTicketFilter {
-  query?: string;
-  project?: string;
-  source?: Ticket['source'];
-  jiraStatus?: string;
 }
 
 type WorkTreeItem = WorkTicketTreeItem | WorkTreeMessageItem;
@@ -48,17 +52,27 @@ export class WorkTreeProvider implements vscode.TreeDataProvider<WorkTreeItem>, 
       .filter(([ticketKey, ticket]) => workTicketMatchesFilter(ticketKey, ticket, this.filter))
       .sort(compareWorkTickets);
     if (visibleTickets.length === 0) {
+      const normalized = normalizeWorkTicketFilter(this.filter);
+      if (!normalized.query && !normalized.project && !normalized.label && !normalized.jiraStatus
+        && (normalized.completion === undefined || normalized.completion === 'active')
+        && allTickets.every(([, ticket]) => isCompletedWorkTicket(ticket))) {
+        return [new WorkTreeMessageItem(
+          'No active tickets — change filters to show completed work.',
+          'filter',
+          'kronos.filterWork',
+        )];
+      }
       return [new WorkTreeMessageItem('No tickets match your search.', 'search')];
     }
     return visibleTickets.map(([ticketKey, ticket]) => new WorkTicketTreeItem(ticketKey, ticket));
   }
 
   setSearchQuery(query: string): void {
-    this.setFilter(query);
+    this.setFilter({ ...this.filter, query });
   }
 
-  setFilter(query: string): void {
-    this.filter = normalizeWorkTicketFilter({ query });
+  setFilter(filter: string | WorkTicketFilter): void {
+    this.filter = normalizeWorkTicketFilter(typeof filter === 'string' ? { query: filter } : filter);
     this.changeEmitter.fire(undefined);
   }
 
@@ -69,6 +83,10 @@ export class WorkTreeProvider implements vscode.TreeDataProvider<WorkTreeItem>, 
 
   getFilter(): WorkTicketFilter {
     return { ...this.filter };
+  }
+
+  getFilterOptions(): WorkTicketFilterOptions {
+    return collectWorkTicketFilterOptions(this.stateSource.state?.tickets || {});
   }
 
   refresh(): void {
@@ -105,7 +123,7 @@ export class WorkTicketTreeItem extends vscode.TreeItem {
     this.iconPath = new vscode.ThemeIcon(
       ticket.type.toLowerCase().includes('bug') || ticket.type.toLowerCase().includes('defect')
         ? 'bug'
-        : 'issue-opened',
+        : isCompletedWorkTicket(ticket) ? 'issue-closed' : 'issue-opened',
     );
     this.command = {
       command: 'kronos.openTicketWorkspace',
@@ -113,56 +131,6 @@ export class WorkTicketTreeItem extends vscode.TreeItem {
       arguments: [this],
     };
   }
-}
-
-export function workTicketMatchesFilter(
-  ticketKey: string,
-  ticket: Ticket,
-  filter: WorkTicketFilter,
-): boolean {
-  const normalized = normalizeWorkTicketFilter(filter);
-  if (normalized.source && ticket.source !== normalized.source) { return false; }
-  const projectFilter = normalized.project;
-  if (projectFilter && !ticket.projects.some(project => comparable(project) === comparable(projectFilter))) {
-    return false;
-  }
-  if (normalized.jiraStatus && comparable(ticket.jira_status) !== comparable(normalized.jiraStatus)) {
-    return false;
-  }
-  const query = normalized.query;
-  if (!query) { return true; }
-
-  const searchable = [
-    ticketKey,
-    ticket.summary,
-    ticket.description,
-    ticket.type,
-    ticket.priority,
-    ticket.jira_status,
-    ticket.source,
-    ...ticket.projects,
-    ...(ticket.labels || []),
-    ticket.mr?.title,
-    ticket.mr?.state,
-    ticket.mr?.review_status,
-    ticket.mr?.source_branch,
-    ticket.mr?.target_branch,
-    ticket.build?.status,
-    ticket.build?.number,
-  ].filter(value => value !== undefined && value !== null).map(value => comparable(String(value)));
-  return searchable.some(value => value.includes(comparable(query)));
-}
-
-function normalizeWorkTicketFilter(filter: WorkTicketFilter): WorkTicketFilter {
-  const normalized: WorkTicketFilter = {};
-  const query = safeSingleLine(filter.query, 500);
-  const project = safeSingleLine(filter.project, 200);
-  const jiraStatus = safeSingleLine(filter.jiraStatus, 200);
-  if (query) { normalized.query = query; }
-  if (project) { normalized.project = project; }
-  if (filter.source === 'jira' || filter.source === 'adhoc') { normalized.source = filter.source; }
-  if (jiraStatus) { normalized.jiraStatus = jiraStatus; }
-  return normalized;
 }
 
 function compareWorkTickets(
@@ -191,10 +159,6 @@ function buildWorkTicketTooltip(key: string, summary: string, ticket: Ticket, pr
   const description = safeSingleLine(ticket.description, 300);
   if (description) { lines.push(description); }
   return lines.join('\n');
-}
-
-function comparable(value: string): string {
-  return value.trim().toLocaleLowerCase();
 }
 
 function timestamp(value: string | undefined): number {

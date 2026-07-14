@@ -3,9 +3,12 @@ const path = require('path');
 
 const EXPECTED_COMMANDS = [
   'kronos.refreshTickets',
+  'kronos.openJiraBoard',
   'kronos.filterWork',
   'kronos.clearWorkFilter',
   'kronos.openTicketWorkspace',
+  'kronos.newClaudeSession',
+  'kronos.startClaudeForTicket',
   'kronos.manageActiveTerminal',
   'kronos.insertJiraContext',
   'kronos.insertGitLabContext',
@@ -20,6 +23,7 @@ const EXPECTED_COMMANDS = [
   'kronos.resumeWorkSessionMonitoring',
   'kronos.acknowledgeAttention',
   'kronos.openProvider',
+  'kronos.setup',
   'kronos.doctor',
   'kronos.settings',
 ];
@@ -33,6 +37,9 @@ const EXPECTED_VIEWS = [
 const EXPECTED_SETTINGS = [
   'kronos.refreshIntervalSec',
   'kronos.managedProviderPollIntervalSec',
+  'kronos.claudeCommand',
+  'kronos.claudeTerminalName',
+  'kronos.claudeLaunchCwd',
 ];
 
 const EXPECTED_MENU_LOCATIONS = [
@@ -41,6 +48,7 @@ const EXPECTED_MENU_LOCATIONS = [
 ];
 
 const ALLOWED_CODICONS = new Set([
+  'add',
   'beaker',
   'check',
   'clear-all',
@@ -51,6 +59,7 @@ const ALLOWED_CODICONS = new Set([
   'filter',
   'git-merge',
   'history',
+  'layout',
   'link',
   'link-external',
   'open-preview',
@@ -60,6 +69,7 @@ const ALLOWED_CODICONS = new Set([
   'symbol-keyword',
   'sync',
   'terminal',
+  'tools',
 ]);
 
 const failures = [];
@@ -166,11 +176,25 @@ function checkSettings() {
   const settingIds = properties && typeof properties === 'object' ? Object.keys(properties) : [];
   checkExactOrderedValues('configuration settings', settingIds, EXPECTED_SETTINGS);
 
-  for (const id of EXPECTED_SETTINGS) {
+  for (const id of EXPECTED_SETTINGS.slice(0, 2)) {
     const setting = properties?.[id];
     if (setting?.type !== 'number' || typeof setting.default !== 'number' || setting.minimum !== 15) {
       fail(`${id} must be a numeric interval with a numeric default and a 15-second minimum.`);
     }
+  }
+  if (properties?.['kronos.claudeCommand']?.type !== 'string'
+    || properties?.['kronos.claudeCommand']?.default !== 'claude'
+    || properties?.['kronos.claudeCommand']?.scope !== 'machine') {
+    fail('kronos.claudeCommand must be machine-scoped and default to the validated claude command.');
+  }
+  if (properties?.['kronos.claudeTerminalName']?.type !== 'string'
+    || properties?.['kronos.claudeTerminalName']?.default !== 'Claude') {
+    fail('kronos.claudeTerminalName must default to Claude.');
+  }
+  const cwd = properties?.['kronos.claudeLaunchCwd'];
+  if (cwd?.type !== 'string' || cwd?.default !== 'ticketProject'
+    || JSON.stringify(cwd?.enum) !== JSON.stringify(['ticketProject', 'workspace', 'home'])) {
+    fail('kronos.claudeLaunchCwd must expose only ticketProject, workspace, and home.');
   }
 }
 
@@ -188,7 +212,7 @@ function checkMenus() {
     }
     for (const item of items) {
       if (!allowed.has(item?.command)) {
-        fail(`${location} references command ${String(item?.command)}, which is outside the 20-command surface.`);
+        fail(`${location} references command ${String(item?.command)}, which is outside the terminal-first command surface.`);
       }
       for (const match of String(item?.when || '').matchAll(/\bview\s*==\s*([A-Za-z0-9_.-]+)/g)) {
         if (!expectedViews.has(match[1])) {
@@ -208,7 +232,7 @@ function checkWorkspaceTrustBoundary() {
   const requiredClaims = [
     [/reads provider context/i, 'reads provider context'],
     [/non-submitting references/i, 'inserts only non-submitting references'],
-    [/never launches Claude/i, 'never launches Claude'],
+    [/Claude launch is disabled in untrusted workspaces/i, 'disables Claude launch in untrusted workspaces'],
     [/never .*executes workspace code|never .*runs project commands/i, 'never executes workspace or project commands'],
     [/never .*changes Git/i, 'never changes Git'],
   ];
