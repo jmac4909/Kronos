@@ -75,6 +75,7 @@ import {
   reconcileKnownGitLabMergeRequestTarget,
 } from './ticketMergeRequestProjection';
 import { isProviderReadTransitionKind, providerReadStateSignature } from './providerReadTransitions';
+import { providerTransitionStreamKey } from './providerTransitionStreams';
 
 export interface ManagedProviderPollResult {
   polled: number;
@@ -859,16 +860,25 @@ function appendBaselineOnce(
 ): void {
   const id = deterministicEventId(session.id, source, 'baseline', subjectId, fingerprint);
   if (readMonitorEvent(id)) { return; }
+  const subject: MonitorEventSubject = { kind, id: subjectId, ticketKey: session.ticketKey };
   appendMonitorEvent({
     id,
     sessionId: session.id,
     type: 'provider.baseline',
     source,
     summary: `${session.ticketKey} ${kind} baseline recorded.`,
-    subject: { kind, id: subjectId, ticketKey: session.ticketKey },
+    subject,
     after: { state, fingerprint },
     artifactPath,
-    metadata,
+    metadata: {
+      ...metadata,
+      transitionStreamKey: providerTransitionStreamKey({
+        sessionId: session.id,
+        source,
+        subject,
+        metadata,
+      }, session),
+    },
   });
 }
 
@@ -1068,10 +1078,20 @@ function appendOpenMergeRequestReminder(
     types: ['provider.transition', 'notification.acknowledged'],
     limit: 2000,
   });
+  const reminderSubject: MonitorEventSubject = {
+    kind: 'merge-request',
+    id: String(digest.iid),
+    ticketKey: session.ticketKey,
+  };
+  const reminderMetadata = mergeRequestMetadata(digest, 'open_mr_reminder');
+  const reminderStreamKey = providerTransitionStreamKey({
+    sessionId: session.id,
+    source: 'gitlab',
+    subject: reminderSubject,
+    metadata: reminderMetadata,
+  }, session);
   const latestMergeRequestEvent = recent.find(event => event.type === 'provider.transition'
-    && event.source === 'gitlab'
-    && event.subject?.kind === 'merge-request'
-    && event.subject.id === String(digest.iid));
+    && providerTransitionStreamKey(event, session) === reminderStreamKey);
   if (!latestMergeRequestEvent) { return null; }
   const acknowledgement = recent.find(event => event.type === 'notification.acknowledged'
     && event.metadata?.['acknowledgedEventId'] === latestMergeRequestEvent.id);
@@ -1083,13 +1103,13 @@ function appendOpenMergeRequestReminder(
     summary: needsAttention
       ? `${session.ticketKey} MR !${digest.iid} remains open and still needs attention after being cleared.`
       : `${session.ticketKey} MR !${digest.iid} remains open after being cleared from Attention.`,
-    subject: { kind: 'merge-request', id: String(digest.iid), ticketKey: session.ticketKey },
+    subject: reminderSubject,
     state: mergeRequestEventState(digest),
     fingerprint: digest.fingerprint,
     artifactPath,
     transitionKey: `open-mr-reminder:${acknowledgement.id}`,
     metadata: {
-      ...mergeRequestMetadata(digest, 'open_mr_reminder'),
+      ...reminderMetadata,
       reminderAfterAcknowledgementId: acknowledgement.id,
     },
   });
@@ -1170,7 +1190,16 @@ function appendTransitionOnce(input: AppendTransitionInput): MonitorEvent | null
     subject: input.subject,
     after: { state: input.state, fingerprint: input.fingerprint },
     artifactPath: input.artifactPath,
-    metadata: { ...input.metadata, transitionKey: input.transitionKey },
+    metadata: {
+      ...input.metadata,
+      transitionKey: input.transitionKey,
+      transitionStreamKey: providerTransitionStreamKey({
+        sessionId: input.session.id,
+        source: input.source,
+        subject: input.subject,
+        metadata: input.metadata,
+      }, input.session),
+    },
   };
   if (input.beforeState && input.beforeFingerprint) {
     eventInput.before = { state: input.beforeState, fingerprint: input.beforeFingerprint };

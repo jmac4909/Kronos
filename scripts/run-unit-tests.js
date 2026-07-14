@@ -37,6 +37,7 @@ const pipelineTransitions = require('../out/services/pipelineTransitions.js');
 const mergeRequestTransitions = require('../out/services/gitlabMergeRequestTransitions.js');
 const mergeRequestMonitorStore = require('../out/services/gitlabMergeRequestMonitorStore.js');
 const monitorEventStore = require('../out/services/monitorEventStore.js');
+const providerTransitionStreams = require('../out/services/providerTransitionStreams.js');
 const ticketMergeRequestProjection = require('../out/services/ticketMergeRequestProjection.js');
 const ciTransitions = require('../out/services/ciTransitions.js');
 const { buildTicketWorkspaceHtml } = require('../out/services/ticketWorkspaceView.js');
@@ -68,6 +69,94 @@ test('managed monitoring lease omits unsupported open flags on Windows and fails
   assert.throws(
     () => managedMonitorLease.managedMonitorNoFollowFlag('linux', undefined),
     /require O_NOFOLLOW support/,
+  );
+});
+
+test('Attention stream identity is stable by project, provider, resource, logical subject, and facet', () => {
+  const projectSession = { id: 'session-one', projectName: 'Application' };
+  const siblingSession = { id: 'session-two', projectName: 'Application' };
+  const otherSession = { id: 'session-three', projectName: 'Other' };
+  const stream = (session, source, kind, id, transitionKind, metadata = {}) =>
+    providerTransitionStreams.providerTransitionStreamKey({
+      sessionId: session.id,
+      source,
+      subject: { kind, id },
+      metadata: { transitionKind, ...metadata },
+    }, session);
+
+  const cases = [
+    {
+      label: 'MR transitions share identity across sessions for one project and IID',
+      left: stream(projectSession, 'gitlab', 'merge-request', '77', 'changes_requested', { mergeRequestIid: 77 }),
+      right: stream(siblingSession, 'gitlab', 'merge-request', '77', 'approval_satisfied', { mergeRequestIid: 77 }),
+      equal: true,
+    },
+    {
+      label: 'different current MRs remain independently actionable',
+      left: stream(projectSession, 'gitlab', 'merge-request', '77', 'changes_requested', { mergeRequestIid: 77 }),
+      right: stream(projectSession, 'gitlab', 'merge-request', '78', 'changes_requested', { mergeRequestIid: 78 }),
+      equal: false,
+    },
+    {
+      label: 'new pipeline occurrences replace stale pipeline rows for one MR',
+      left: stream(projectSession, 'gitlab', 'pipeline', '100', 'pipeline_failed', { mergeRequestIid: 77, pipelineId: 100 }),
+      right: stream(projectSession, 'gitlab', 'pipeline', '101', 'pipeline_recovered', { mergeRequestIid: 77, pipelineId: 101 }),
+      equal: true,
+    },
+    {
+      label: 'pipelines for different MRs remain independent',
+      left: stream(projectSession, 'gitlab', 'pipeline', '100', 'pipeline_failed', { mergeRequestIid: 77 }),
+      right: stream(projectSession, 'gitlab', 'pipeline', '101', 'pipeline_failed', { mergeRequestIid: 78 }),
+      equal: false,
+    },
+    {
+      label: 'new Jenkins builds replace stale build rows',
+      left: stream(projectSession, 'jenkins', 'build', '31', 'jenkins_failed', { buildNumber: 31 }),
+      right: stream(projectSession, 'jenkins', 'build', '32', 'jenkins_recovered', { buildNumber: 32 }),
+      equal: true,
+    },
+    {
+      label: 'SonarQube branches remain independent',
+      left: stream(projectSession, 'sonar', 'quality-gate', 'app:main', 'sonar_gate_failed', { projectKey: 'app', branch: 'main' }),
+      right: stream(projectSession, 'sonar', 'quality-gate', 'app:feature', 'sonar_gate_failed', { projectKey: 'app', branch: 'feature' }),
+      equal: false,
+    },
+    {
+      label: 'provider read failure and recovery share one health stream',
+      left: stream(projectSession, 'gitlab', 'merge-request', '77', 'provider_read_failed', { mergeRequestIid: 77 }),
+      right: stream(projectSession, 'gitlab', 'merge-request', '77', 'provider_read_recovered', { mergeRequestIid: 77 }),
+      equal: true,
+    },
+    {
+      label: 'provider read health does not replace MR state and review',
+      left: stream(projectSession, 'gitlab', 'merge-request', '77', 'provider_read_failed', { mergeRequestIid: 77 }),
+      right: stream(projectSession, 'gitlab', 'merge-request', '77', 'changes_requested', { mergeRequestIid: 77 }),
+      equal: false,
+    },
+    {
+      label: 'GitLab read health remains independent for different MRs in one project',
+      left: stream(projectSession, 'gitlab', 'merge-request', '77', 'provider_read_failed', { mergeRequestIid: 77 }),
+      right: stream(projectSession, 'gitlab', 'merge-request', '78', 'provider_read_failed', { mergeRequestIid: 78 }),
+      equal: false,
+    },
+    {
+      label: 'project scope prevents unrelated repositories from replacing one another',
+      left: stream(projectSession, 'jenkins', 'build', '31', 'jenkins_failed'),
+      right: stream(otherSession, 'jenkins', 'build', '32', 'jenkins_recovered'),
+      equal: false,
+    },
+  ];
+  for (const entry of cases) {
+    assert.equal(entry.left === entry.right, entry.equal, entry.label);
+    assert.match(entry.left, /^provider-stream-[a-f0-9]{48}$/);
+  }
+
+  const detachedOne = { id: 'standalone-one' };
+  const detachedTwo = { id: 'standalone-two' };
+  assert.notEqual(
+    stream(detachedOne, 'jenkins', 'build', '1', 'jenkins_failed'),
+    stream(detachedTwo, 'jenkins', 'build', '2', 'jenkins_recovered'),
+    'sessions without a project retain independent Attention scope',
   );
 });
 
@@ -454,6 +543,11 @@ test('managed provider polling automatically discovers and locally binds a proje
     assert.equal(discoveryEvent.subject.kind, 'merge-request');
     assert.equal(discoveryEvent.subject.id, '90');
     assert.match(discoveryEvent.summary, /first observed \(opened\/mergeable\)/);
+    assert.equal(
+      discoveryEvent.metadata.transitionStreamKey,
+      providerTransitionStreams.providerTransitionStreamKey(discoveryEvent, updated),
+      'persisted transition evidence uses the same canonical stream key as Attention projection',
+    );
     const duplicate = await monitor.poll();
     assert.equal(duplicate.transitions, 0);
     monitorEventStore.acknowledgeMonitorEvent(discoveryEvent.id, session.id);

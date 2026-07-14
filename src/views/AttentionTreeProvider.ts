@@ -11,7 +11,7 @@ import {
   newestWorkSessionProviderBinding,
 } from '../services/workSessionStore';
 import { normalizeProviderPublicUrl } from '../services/providerUrls';
-import { isProviderReadTransitionKind } from '../services/providerReadTransitions';
+import { providerTransitionStreamKey } from '../services/providerTransitionStreams';
 
 export interface AttentionCommandTarget {
   eventId: string;
@@ -160,19 +160,10 @@ function latestProviderTransitions(
   const latestByStream = new Map<string, MonitorEvent>();
   for (const { event } of newestFirst) {
     const session = sessionsById.get(event.sessionId);
-    const key = attentionStreamKey(event, session);
+    const key = providerTransitionStreamKey(event, session);
     if (!latestByStream.has(key)) { latestByStream.set(key, event); }
   }
   return [...latestByStream.values()];
-}
-
-function attentionStreamKey(event: MonitorEvent, session: WorkSessionRecord | undefined): string {
-  const scope = session?.projectName ? `project:${session.projectName}` : `session:${event.sessionId}`;
-  const transitionKind = event.metadata?.['transitionKind'];
-  const facet = isProviderReadTransitionKind(transitionKind)
-    ? 'provider-read'
-    : event.subject?.kind || `event:${event.subject?.id || event.id}`;
-  return [scope, event.source, facet].join('\u0000');
 }
 
 export type AttentionTreeItem = AttentionGroupTreeItem | AttentionEventTreeItem | AttentionMessageTreeItem;

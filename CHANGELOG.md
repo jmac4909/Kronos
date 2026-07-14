@@ -15,6 +15,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Changed
 
+- Defined one hashed Attention stream identity across monitoring and projection, so provider health transitions replace stale health rows, newer pipelines/builds replace older occurrences, and separate MRs or SonarQube branches remain independently actionable.
 - Centralized GitLab merge-request target reconciliation so durable session bindings, catalog evidence, configured project identity, polling, status, and context insertion share one deterministic precedence rule.
 - Split Jira namespace and explicit local repository into independent Work-tree and Jira-board filters, including separately persisted webview choices.
 - Migrated the Work catalog to schema v2 with `linked_local_project` as the only ticket-to-repository identity; schema-v1 `launch_project` records migrate safely and legacy project tags are discarded.

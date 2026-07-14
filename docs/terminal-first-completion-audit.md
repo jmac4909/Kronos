@@ -30,6 +30,7 @@ The repository is ready for the operator-owned human feedback pass in `HUMAN_FEE
 - Work catalog schema v2 stores one explicit `linked_local_project`; schema-v1 links migrate, legacy inferred project tags are discarded, unavailable links are cleared with a load issue, and future schemas fail closed.
 - Work filtering now keeps Jira namespaces and explicit local projects in separate typed facets, selectors, persisted board state, and card attributes so one identity cannot satisfy the other filter.
 - Attention now shows only the newest transition for each project/provider/facet. Recoveries, later failures, builds, pipelines, and gate results replace stale rows; acknowledging the newest row cannot resurrect an older one. The append-only audit history is unchanged.
+- Monitoring and Attention now share a canonical project-or-session/provider/resource/logical-subject/facet stream key. Separate MRs and SonarQube branches stay independent; pipeline IDs and Jenkins build numbers are occurrences whose newer state replaces their stale row; GitLab read health stays scoped to its MR.
 - Clearing an open MR now snoozes it until the next successful GitLab poll. That poll records one fresh reminder; unchanged polls do not duplicate an uncleared reminder, and merged or closed MRs stay cleared.
 - Jenkins job configuration and observed build targets are stored separately, so multiple real builds remain available from Attention.
 - Jenkins build choices are deterministically latest-first even when bindings share a timestamp.

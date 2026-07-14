@@ -115,6 +115,8 @@ Attention is the project-aware inbox for changes that merit operator review. Ite
 
 Attention is a current-state projection, not a historical feed. For each project, provider, and subject facet (for example GitLab MR, GitLab pipeline, Jenkins build, SonarQube gate, or provider-read health), only the newest transition is shown. A later failure, recovery, partial read, build, pipeline, or gate result replaces the older row. Acknowledging that newest row clears the stream without resurfacing a superseded event. An open merge request is the deliberate exception: clearing it snoozes it only until the next successful GitLab poll, when one new current-state reminder is recorded. The reminder remains stable until cleared again, and closed or merged MRs do not return. Every transition remains in the append-only session audit.
 
+That projection uses one canonical stream identity: current project or fallback session, provider, resource, logical subject, and facet. MR IIDs and SonarQube project/branch pairs remain independent logical subjects. Pipeline IDs and Jenkins build numbers are occurrences, so their newest state replaces the older occurrence for the same MR pipeline or configured project job. Provider-read failure, partial, and recovery events share one health stream, with GitLab health additionally scoped to its MR.
+
 Eligible items include:
 
 - the first successful observation of a merge request, even when its initial state is healthy and mergeable;
