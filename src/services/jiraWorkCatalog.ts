@@ -27,12 +27,7 @@ export function catalogFromJiraWorkList(
       continue;
     }
     const previous = current.tickets[key];
-    const projectKey = nestedProviderText(fields['project'], 'key');
-    const linkedProjects = linkedProjectNames(projectKey, previous, projects);
-    if (projectKey && linkedProjects.length === 0) {
-      projects[projectKey] = { config: { jira_project_key: projectKey } };
-      linkedProjects.push(projectKey);
-    }
+    const projectKey = nestedProviderText(fields['project'], 'key') || previous?.jira_project_key;
     const rawStatus = fields['status'];
     const statusName = nestedProviderText(rawStatus, 'name');
     const ticket: Ticket = {
@@ -41,11 +36,12 @@ export function catalogFromJiraWorkList(
       priority: nestedProviderText(fields['priority'], 'name') || previous?.priority || 'Unknown',
       jira_status: statusName || previous?.jira_status || 'Unknown',
       source: 'jira',
-      projects: linkedProjects,
+      projects: [],
       mr: previous?.mr || null,
       build: previous?.build || null,
       jira_url: `${baseUrl}/browse/${encodeURIComponent(key)}`,
     };
+    if (projectKey) { ticket.jira_project_key = projectKey; }
     const statusCategory = jiraStatusCategory(rawStatus)
       || (!statusName ? previous?.jira_status_category : undefined);
     if (statusCategory) { ticket.jira_status_category = statusCategory; }
@@ -85,24 +81,6 @@ export function catalogFromJiraWorkList(
     state: { schemaVersion: 1, refreshedAt: snapshot.fetchedAt, projects, tickets },
     retainedFromPrevious,
   };
-}
-
-function linkedProjectNames(
-  jiraProjectKey: string | undefined,
-  previous: Ticket | undefined,
-  projects: Record<string, Project>,
-): string[] {
-  const linked = new Set(previous?.projects || []);
-  if (jiraProjectKey) {
-    const candidates = Object.entries(projects)
-      .filter(([, project]) => project.config.jira_project_key?.toUpperCase() === jiraProjectKey.toUpperCase())
-      .map(([name]) => name);
-    // A Jira project key identifies a board, not necessarily one repository.
-    // Only infer a project when the mapping is unambiguous; otherwise the
-    // operator chooses the relevant local project explicitly.
-    if (candidates.length === 1 && candidates[0]) { linked.add(candidates[0]); }
-  }
-  return [...linked].filter(name => Boolean(projects[name]) || name === jiraProjectKey).slice(0, 100);
 }
 
 function normalizedIssueKey(value: unknown): string | undefined {

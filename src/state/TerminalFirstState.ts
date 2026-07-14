@@ -32,7 +32,7 @@ export interface TerminalFirstRefreshResult {
 
 /**
  * The terminal-first product consumes only the bounded Jira Work catalog and
- * project/provider bindings needed by the three-view product.
+ * explicit project/provider bindings needed by the terminal-first product.
  */
 export class TerminalFirstState implements vscode.Disposable {
   private snapshot: KronosStateSnapshot | null = null;

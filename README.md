@@ -26,7 +26,7 @@ Kronos solves a narrow enterprise-development problem: the evidence needed for a
 
 | Surface | Outcome |
 | --- | --- |
-| **Work** | Search and filter Jira work, link a local project and branch, then open a focused ticket workspace. |
+| **Work** | Search and filter Jira work, explicitly link the right local project and branch, then open a focused ticket workspace. Shared Jira keys never infer a repository. |
 | **Sessions** | Organize operator-owned Claude terminals by local project, attach multiple Jira contexts when useful, and never read terminal contents. |
 | **Projects** | Track each registered repository's current branch and clean/dirty status, then open bounded diff, MR, CI, and provider actions. |
 | **Attention** | Show the newest meaningful provider state by project, resurface still-open MRs after the next poll, and retain full history in the private audit. |

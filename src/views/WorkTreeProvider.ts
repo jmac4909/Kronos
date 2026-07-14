@@ -151,17 +151,19 @@ export class WorkTicketTreeItem extends vscode.TreeItem {
     const summary = safeSingleLine(ticket.summary, 400) || 'Untitled ticket';
     super(`${key} — ${summary}`, vscode.TreeItemCollapsibleState.None);
 
-    const projects = ticket.projects.map(project => safeSingleLine(project, 120)).filter(Boolean);
+    const jiraProject = safeSingleLine(ticket.jira_project_key, 120);
+    const localProjectName = safeSingleLine(localProject?.name || ticket.launch_project, 120);
     const facts = [
       safeSingleLine(ticket.jira_status, 120),
       safeSingleLine(ticket.priority, 80),
-      projects.length > 0 ? projects.join(', ') : 'unlinked',
+      jiraProject ? `Jira ${jiraProject}` : '',
+      localProjectName ? `project ${localProjectName}` : 'no local project',
       localProject?.branch ? `branch ${localProject.branch}` : '',
       ticket.mr ? `MR !${ticket.mr.iid} ${safeSingleLine(ticket.mr.state, 40)}` : '',
       ticket.build ? `build #${ticket.build.number} ${safeSingleLine(ticket.build.status, 80)}` : '',
     ].filter(Boolean);
     this.description = facts.join(' • ');
-    this.tooltip = buildWorkTicketTooltip(key, summary, ticket, projects, localProject);
+    this.tooltip = buildWorkTicketTooltip(key, summary, ticket, localProject);
     this.iconPath = new vscode.ThemeIcon(
       ticket.type.toLowerCase().includes('bug') || ticket.type.toLowerCase().includes('defect')
         ? 'bug'
@@ -188,15 +190,15 @@ function buildWorkTicketTooltip(
   key: string,
   summary: string,
   ticket: Ticket,
-  projects: readonly string[],
   localProject?: LocalProjectSummary,
 ): string {
   const lines = [
     `${key}: ${summary}`,
     `Jira status: ${safeSingleLine(ticket.jira_status, 160) || 'unknown'}`,
+    `Jira project: ${safeSingleLine(ticket.jira_project_key, 120) || 'unknown'}`,
     `Type: ${safeSingleLine(ticket.type, 120) || 'unknown'}`,
     `Priority: ${safeSingleLine(ticket.priority, 120) || 'unknown'}`,
-    `Projects: ${projects.join(', ') || 'unlinked'}`,
+    `Local project: ${safeSingleLine(localProject?.name || ticket.launch_project, 200) || 'not linked'}`,
   ];
   if (localProject) {
     lines.push(`Launch directory: ${localProject.path}`);

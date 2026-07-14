@@ -151,7 +151,6 @@ function buildProviderLinks(ticket: Ticket, workSession: WorkSessionRecord | und
 }
 
 function buildTicketSummary(ticket: Ticket): string {
-  const projects = ticket.projects.map(project => singleLine(project, 200)).filter(Boolean);
   const labels = (ticket.labels || []).map(label => singleLine(label, 100)).filter(Boolean);
   const description = singleLinePreservingBreaks(ticket.description, 20_000);
   return `<section class="kronos-card">
@@ -159,7 +158,8 @@ function buildTicketSummary(ticket: Ticket): string {
     <div class="workspace-facts">
       ${fact('Type', singleLine(ticket.type, 120) || 'unknown')}
       ${fact('Priority', singleLine(ticket.priority, 120) || 'unknown')}
-      ${fact('Projects', projects.join(', ') || 'unlinked')}
+      ${fact('Jira project', singleLine(ticket.jira_project_key, 200) || 'unknown')}
+      ${fact('Local project', singleLine(ticket.launch_project, 200) || 'not linked')}
       ${fact('Labels', labels.join(', ') || 'none')}
     </div>
     ${description ? `<div class="kronos-section"><h3>Description</h3><div class="description">${escapeHtml(description)}</div></div>` : ''}

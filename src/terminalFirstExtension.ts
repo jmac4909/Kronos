@@ -2090,7 +2090,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
       .filter(session => session.projectName === project.projectName);
     const knownUrl = latestGitLabMergeRequestBindingAcrossSessions(projectSessions)?.url;
     const linkedTickets = Object.entries(this.state.state?.tickets || {})
-      .filter(([, ticket]) => ticket.launch_project === project.projectName || ticket.projects.includes(project.projectName))
+      .filter(([, ticket]) => ticket.launch_project === project.projectName)
       .sort(([, left], [, right]) => String(right.updated || '').localeCompare(String(left.updated || '')));
     const ticketMrUrl = linkedTickets
       .map(([ticketKey, ticket]) => this.effectiveTicket(ticketKey, ticket).mr)
@@ -2641,7 +2641,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     const pick = await vscode.window.showQuickPick(entries.map(([ticketKey, ticket]) => ({
       label: ticketKey,
       description: ticket.summary,
-      detail: `${ticket.jira_status} • ${ticket.projects.join(', ') || 'unlinked'}`,
+      detail: `${ticket.jira_status} • Jira ${ticket.jira_project_key || 'unknown'} • local ${ticket.launch_project || 'unlinked'}`,
       ticketKey,
     })), { title: 'Choose the Jira work item for this terminal action', matchOnDescription: true, matchOnDetail: true });
     return pick?.ticketKey;

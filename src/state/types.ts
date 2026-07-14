@@ -13,7 +13,6 @@ export interface Project {
 
 export interface ProjectConfig {
   repo_name?: string;
-  jira_project_key?: string;
   jira_ticket_filter?: string;
   gitlab_project_id?: number;
   gitlab_project_path?: string;
@@ -33,14 +32,17 @@ export interface Ticket {
   jira_status: string;
   /** Jira's status-category key/name, normally new, indeterminate, or done. */
   jira_status_category?: string;
+  /** Jira namespace metadata used only for display and filtering, never repository attachment. */
+  jira_project_key?: string;
   source: 'jira';
   updated?: string;
   description?: string;
   labels?: string[];
   attachments?: Array<{ filename: string; size: number; mimeType: string }>;
   jira_url?: string;
-  /** Explicit local project used only as the starting directory for new ticket launches. */
+  /** Sole explicit ticket-to-local-project link; controls launch directory and project provider config. */
   launch_project?: string;
+  /** Legacy provider-project tags retained only for record compatibility; never a local repository link. */
   projects: string[];
   mr: MergeRequest | null;
   build: BuildStatus | null;

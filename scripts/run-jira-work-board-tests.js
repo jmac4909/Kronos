@@ -17,8 +17,9 @@ function ticket(status, overrides = {}) {
     type: 'Story',
     priority: 'High',
     jira_status: status,
+    jira_project_key: 'KRONOS',
     source: 'jira',
-    projects: ['Kronos'],
+    projects: [],
     labels: ['terminal-first'],
     mr: null,
     build: null,
@@ -30,7 +31,7 @@ function state(tickets) {
   return {
     schemaVersion: 1,
     refreshedAt: '2026-07-14T02:00:00.000Z',
-    projects: { Kronos: { config: { jira_project_key: 'KRONOS' } } },
+    projects: { Kronos: { config: { repo_name: 'Kronos' } } },
     tickets,
   };
 }
@@ -111,6 +112,7 @@ test('board lists registered local project paths and current Git branches', () =
     assert.match(html, /feature\/board-projects/);
     assert.match(html, new RegExp(projectRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.match(html, /data-action="chooseTicketProject"/);
+    assert.match(html, /Jira: KRONOS/);
     assert.match(html, /Project: Kronos/);
   } finally {
     fs.rmSync(projectRoot, { recursive: true, force: true });

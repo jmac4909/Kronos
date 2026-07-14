@@ -154,12 +154,13 @@ function fixtureTicket(overrides = {}) {
     type: 'Story',
     priority: 'High',
     jira_status: 'In Progress',
+    jira_project_key: 'JIRA',
     source: 'jira',
     updated: '2026-07-13T12:00:00.000Z',
     description: 'Keep the operator in control.',
     labels: ['terminal-first'],
     jira_url: 'https://jira.example/browse/JIRA-123',
-    projects: ['fixture'],
+    projects: [],
     mr: null,
     build: null,
     ...overrides,
@@ -179,6 +180,12 @@ function jiraIssue(key, summary) {
       project: { key: 'JIRA' },
     },
   };
+}
+
+function jiraIssueForProject(key, summary, projectKey) {
+  const issue = jiraIssue(key, summary);
+  issue.fields.project = { key: projectKey };
+  return issue;
 }
 
 function jiraTransport(pages) {
@@ -619,7 +626,6 @@ test('managed SonarQube polling persists a branch-qualified dashboard binding', 
   const state = stateStore.emptyWorkCatalog();
   state.projects.Application = {
     config: {
-      jira_project_key: 'JIRA',
       sonar_project_key: 'team:application',
       default_branch: 'feature/JIRA-902',
     },
@@ -688,7 +694,6 @@ test('managed polling discovers the SonarQube target from Jenkins config.xml evi
   const state = stateStore.emptyWorkCatalog();
   state.projects.Application = {
     config: {
-      jira_project_key: 'JIRA',
       jenkins_url: 'https://jenkins.example/job/application',
       sonar_project_key: 'team:wrong',
       default_branch: 'feature/JIRA-903',
@@ -788,7 +793,6 @@ test('managed Jenkins polling retains branch-build targets for Attention choices
   const state = stateStore.emptyWorkCatalog();
   state.projects.Application = {
     config: {
-      jira_project_key: 'JIRA',
       jenkins_url: 'https://jenkins.example/job/application',
     },
   };
@@ -913,7 +917,7 @@ test('effective ticket MR rejects stale catalog and monitor identities after a n
   );
 });
 
-test('local projects preserve provider bindings and report branch without running Git', () => {
+test('explicit local project links preserve unrelated provider records and report branch without running Git', () => {
   const projectRoot = path.join(tempRoot, 'project-catalog-fixture');
   const alternateRoot = path.join(tempRoot, 'project-catalog-alternate');
   fs.mkdirSync(path.join(projectRoot, '.git'), { recursive: true });
@@ -921,13 +925,13 @@ test('local projects preserve provider bindings and report branch without runnin
   fs.writeFileSync(path.join(projectRoot, '.git', 'HEAD'), 'ref: refs/heads/feature/ticket-context\n');
   fs.writeFileSync(path.join(alternateRoot, '.git', 'HEAD'), '0123456789abcdef0123456789abcdef01234567\n');
   const initial = stateStore.emptyWorkCatalog();
-  initial.projects.Provider = { config: { jira_project_key: 'JIRA', gitlab_project_id: 77 } };
-  initial.tickets['JIRA-123'] = fixtureTicket({ projects: ['Provider'] });
+  initial.projects.Provider = { config: { gitlab_project_id: 77 } };
+  initial.tickets['JIRA-123'] = fixtureTicket({ projects: ['legacy-provider-tag'] });
 
   const registered = projectCatalog.registerLocalProject(initial, 'Application', projectRoot);
   const withAlternate = projectCatalog.registerLocalProject(registered, 'Alternate', alternateRoot);
   const linked = projectCatalog.setTicketLocalProject(withAlternate, 'JIRA-123', 'Application');
-  assert.deepEqual(linked.tickets['JIRA-123'].projects, ['Provider']);
+  assert.deepEqual(linked.tickets['JIRA-123'].projects, []);
   assert.equal(linked.tickets['JIRA-123'].launch_project, 'Application');
   assert.equal(linked.projects.Provider.config.gitlab_project_id, 77);
   assert.deepEqual(projectCatalog.readProjectGitBranch(projectRoot), {
@@ -947,10 +951,10 @@ test('local projects preserve provider bindings and report branch without runnin
   });
 
   const switched = projectCatalog.setTicketLocalProject(linked, 'JIRA-123', 'Alternate');
-  assert.deepEqual(switched.tickets['JIRA-123'].projects, ['Provider']);
+  assert.deepEqual(switched.tickets['JIRA-123'].projects, []);
   assert.equal(switched.tickets['JIRA-123'].launch_project, 'Alternate');
   const unlinked = projectCatalog.setTicketLocalProject(switched, 'JIRA-123');
-  assert.deepEqual(unlinked.tickets['JIRA-123'].projects, ['Provider']);
+  assert.deepEqual(unlinked.tickets['JIRA-123'].projects, []);
   assert.equal(unlinked.tickets['JIRA-123'].launch_project, undefined);
 });
 
@@ -972,18 +976,43 @@ test('provider observations update the durable Work catalog without losing Jira 
   assert.equal(projectCatalog.projectTicketProviderState(next, 'JIRA-123', {}), next);
 });
 
-test('Jira project keys never auto-link every repository that shares the same board', () => {
+test('Jira project keys never auto-link a repository; only an explicit ticket link does', () => {
   const current = stateStore.emptyWorkCatalog();
-  current.projects.Api = { config: { jira_project_key: 'JIRA' } };
-  current.projects.Web = { config: { jira_project_key: 'JIRA' } };
+  const names = ['Api', 'Web', 'Worker', 'Database'];
+  for (const name of names) {
+    const projectPath = path.join(tempRoot, `abc-${name.toLowerCase()}`);
+    fs.mkdirSync(projectPath, { recursive: true });
+    current.projects[name] = {
+      path: projectPath,
+      config: { repo_name: name, gitlab_project_path: `team/${name.toLowerCase()}` },
+    };
+  }
   const snapshot = {
-    issues: [jiraIssue('JIRA-123', 'Ambiguous project mapping')],
+    issues: [
+      jiraIssueForProject('ABC-123', 'Choose the API explicitly', 'ABC'),
+      jiraIssueForProject('ABC-124', 'Choose the Web explicitly', 'ABC'),
+    ],
     fetchedAt: '2026-07-14T12:00:00.000Z',
     complete: true,
   };
   const result = jiraWorkCatalog.catalogFromJiraWorkList(snapshot, current, 'https://jira.example');
-  assert.equal(result.state.tickets['JIRA-123'].projects.includes('Api'), false);
-  assert.equal(result.state.tickets['JIRA-123'].projects.includes('Web'), false);
+  assert.deepEqual(Object.keys(result.state.projects), names);
+  assert.equal(Object.hasOwn(result.state.projects, 'ABC'), false, 'Jira refresh must not invent a local project named after the Jira key');
+  for (const ticketKey of ['ABC-123', 'ABC-124']) {
+    assert.equal(result.state.tickets[ticketKey].jira_project_key, 'ABC');
+    assert.deepEqual(result.state.tickets[ticketKey].projects, []);
+    assert.equal(result.state.tickets[ticketKey].launch_project, undefined);
+    assert.deepEqual(projectCatalog.projectConfigurationForTicket(result.state, result.state.tickets[ticketKey]), {});
+  }
+  const linked = projectCatalog.setTicketLocalProject(result.state, 'ABC-123', 'Api');
+  assert.equal(linked.tickets['ABC-123'].launch_project, 'Api');
+  assert.equal(linked.tickets['ABC-124'].launch_project, undefined);
+  assert.equal(projectCatalog.projectConfigurationForTicket(linked, linked.tickets['ABC-123']).gitlab_project_path, 'team/api');
+  assert.deepEqual(projectCatalog.projectConfigurationForTicket(linked, linked.tickets['ABC-124']), {});
+  const refreshed = jiraWorkCatalog.catalogFromJiraWorkList(snapshot, linked, 'https://jira.example').state;
+  assert.equal(refreshed.tickets['ABC-123'].launch_project, 'Api', 'an explicit operator link survives Jira refresh');
+  assert.equal(refreshed.tickets['ABC-124'].launch_project, undefined);
+  assert.deepEqual(refreshed.tickets['ABC-123'].projects, []);
 });
 
 test('checked projects replace local registrations and safely unlink removed launch projects', () => {
@@ -997,7 +1026,7 @@ test('checked projects replace local registrations and safely unlink removed lau
   initial.projects.Local = { path: localRoot, config: { repo_name: 'Local' } };
   initial.projects.Provider = {
     path: providerRoot,
-    config: { repo_name: 'Provider', jira_project_key: 'JIRA', gitlab_project_id: 77 },
+    config: { repo_name: 'Provider', gitlab_project_id: 77 },
   };
   initial.tickets['JIRA-1'] = fixtureTicket({ launch_project: 'Local', projects: [] });
   initial.tickets['JIRA-2'] = fixtureTicket({ launch_project: 'Provider', projects: ['Provider'] });
@@ -1011,16 +1040,16 @@ test('checked projects replace local registrations and safely unlink removed lau
   assert.equal(replaced.projects['New Project'].path, newRoot);
   assert.equal(replaced.tickets['JIRA-1'].launch_project, undefined);
   assert.equal(replaced.tickets['JIRA-2'].launch_project, undefined);
-  assert.deepEqual(replaced.tickets['JIRA-2'].projects, ['Provider']);
+  assert.deepEqual(replaced.tickets['JIRA-2'].projects, []);
 });
 
 test('project integration setup validates provider identifiers and launch-project config drives polling', () => {
   const projectRoot = path.join(tempRoot, 'integrated-local-project');
   fs.mkdirSync(projectRoot, { recursive: true });
   const initial = stateStore.emptyWorkCatalog();
-  initial.projects.JIRA = { config: { jira_project_key: 'JIRA', default_branch: 'provider-default' } };
+  initial.projects.LegacyDefault = { config: { default_branch: 'provider-default' } };
   initial.projects.Application = { path: projectRoot, config: { repo_name: 'Application' } };
-  initial.tickets['JIRA-123'] = fixtureTicket({ projects: ['Application', 'JIRA'], launch_project: 'Application' });
+  initial.tickets['JIRA-123'] = fixtureTicket({ projects: ['LegacyDefault'], launch_project: 'Application' });
 
   const configured = projectCatalog.setLocalProjectIntegrations(initial, [{
     name: 'Application',
@@ -1034,7 +1063,6 @@ test('project integration setup validates provider identifiers and launch-projec
   assert.equal(configured.projects.Application.config.sonar_project_key, 'team:application');
   assert.equal(configured.projects.Application.config.default_branch, 'feature/local-branch');
   assert.deepEqual(projectCatalog.projectConfigurationForTicket(configured, configured.tickets['JIRA-123']), {
-    jira_project_key: 'JIRA',
     default_branch: 'feature/local-branch',
     repo_name: 'Application',
     gitlab_project_path: 'group/application',
@@ -1255,6 +1283,9 @@ test('Work catalog strips legacy automation fields and persists privately', () =
 
   assert.deepEqual(Object.keys(normalized.state.tickets), ['JIRA-123']);
   assert.equal(normalized.state.projects.fixture.config.gitlab_project_id, 42);
+  assert.equal(normalized.state.projects.fixture.config.jira_project_key, undefined, 'legacy Jira keys are not project bindings');
+  assert.deepEqual(normalized.state.tickets['JIRA-123'].projects, [], 'legacy inferred project tags are discarded');
+  assert.equal(normalized.state.tickets['JIRA-123'].jira_project_key, 'JIRA');
   assert.equal('next_action' in normalized.state.tickets['JIRA-123'], false);
   assert.equal('queue' in normalized.state, false);
   stateStore.writeStateFile(normalized.state);
@@ -1417,7 +1448,7 @@ test('Jira Work catalog retains Jira status category for deterministic local fil
     warnings: [],
   };
   const current = stateStore.emptyWorkCatalog();
-  current.projects.fixture = { path: tempRoot, config: { jira_project_key: 'JIRA' } };
+  current.projects.fixture = { path: tempRoot, config: { repo_name: 'fixture' } };
   current.tickets['JIRA-10'] = fixtureTicket({
     jira_status: 'Shipped',
     jira_status_category: 'done',
@@ -1456,13 +1487,24 @@ test('Work filtering hides completed Jira work by default and exposes explicit c
   assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-2', shipped, { jiraStatus: 'Shipped', completion: 'active' }), false);
   assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-1', active, { label: 'terminal-first' }), true);
   assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-1', active, { label: 'other' }), false);
+  assert.equal(workTicketFilters.workTicketMatchesFilter('JIRA-1', active, { project: 'JIRA' }), true, 'Jira namespace remains filterable');
+  assert.equal(workTicketFilters.workTicketMatchesFilter(
+    'JIRA-1',
+    fixtureTicket({ launch_project: 'Api' }),
+    { project: 'Api' },
+  ), true, 'an explicit local project remains filterable');
+  assert.equal(workTicketFilters.workTicketMatchesFilter(
+    'JIRA-1',
+    fixtureTicket({ projects: ['legacy-auto-link'] }),
+    { project: 'legacy-auto-link' },
+  ), false, 'legacy project tags never behave like explicit links');
 
   assert.deepEqual(workTicketFilters.collectWorkTicketFilterOptions({
     'JIRA-1': active,
     'JIRA-2': shipped,
-    'JIRA-3': fixtureTicket({ jira_status: 'shipped', projects: ['Fixture', 'Other'] }),
+    'JIRA-3': fixtureTicket({ jira_status: 'shipped', jira_project_key: 'ABC', launch_project: 'Other' }),
   }), {
-    projects: ['fixture', 'Other'],
+    projects: ['ABC', 'JIRA', 'Other'],
     labels: ['terminal-first'],
     jiraStatuses: ['In Progress', 'Shipped'],
   });
@@ -2704,7 +2746,6 @@ test('extension activation registers the bounded surface and explicit launch com
         fixture: {
           path: tempRoot,
           config: {
-            jira_project_key: 'JIRA',
             gitlab_project_path: 'group/fixture',
             default_branch: 'main',
           },

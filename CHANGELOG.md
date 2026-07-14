@@ -14,6 +14,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Changed
 
+- Separated Jira namespace metadata from local repository links; tickets now use only explicit operator-selected projects for launch and provider configuration.
 - Generalized repository instructions so they do not assume a specific machine or workspace path.
 - Clarified that the public source is available for portfolio and security review under an all-rights-reserved evaluation license.
 - Renamed the merge-request browser action to make clear that Kronos opens a page but does not create an MR.

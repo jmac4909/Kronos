@@ -532,7 +532,9 @@ export class ManagedProviderMonitor {
     let sonarReadFailure: string | undefined;
     if (jenkinsUrl) {
       try {
-        const jenkinsBranch = configuredSonarBranchName(state, session.ticketKey) || undefined;
+        const jenkinsBranch = sonarTarget?.branch
+          || configuredSonarBranchName(state, session.ticketKey)
+          || undefined;
         jenkins = await jenkinsRestClient.buildContext(
           jenkinsUrl,
           jenkinsBranch ? { branch: jenkinsBranch } : {},
@@ -554,7 +556,9 @@ export class ManagedProviderMonitor {
         const discoveredProjectKey = jenkins.sonarProjectKey
           || (!sonarTarget && isSonarRestConfigured() ? sonarProjectKeyHeuristic(state, session) : undefined);
         if (discoveredProjectKey) {
-          const branch = jenkins.sonarBranch || configuredSonarBranchName(state, session.ticketKey);
+          const branch = jenkins.sonarBranch
+            || sonarTarget?.branch
+            || configuredSonarBranchName(state, session.ticketKey);
           const discoveredOverridesMismatch = Boolean(jenkins.sonarProjectKey
             && sonarTarget?.projectKey !== jenkins.sonarProjectKey);
           if (branch && (!sonarTarget || discoveredOverridesMismatch)) {

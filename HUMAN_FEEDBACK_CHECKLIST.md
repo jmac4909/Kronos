@@ -69,13 +69,14 @@ Use a real ticket only when its provider data is approved for local context capt
 4. Reopen **Configure Project Integrations** from Setup and confirm the saved values appear for all registered projects and the observed Git branch was the initial default.
 5. Confirm the Jira board shows the project name, absolute path, and the branch currently named by Git `HEAD`.
 6. Use **Add Project** in the top row of two Jira cards, attach projects from the selected roots, and confirm the control changes to the project name while each ticket workspace and Work row show the right branch and launch directory.
-7. Switch branches yourself in the terminal, refresh or reopen the board, and confirm Kronos reflects the new branch without running a Git command.
-8. Start Claude for the linked ticket and confirm its new terminal starts in the selected project directory and its terminal tab shows both the ticket key and current Git branch, such as `Claude · JIRA-123 @ feature/name`.
-9. Choose **Manage Focused Terminal** on an existing terminal and confirm linking does not change that terminal's directory or send `cd`.
-10. Poll the linked ticket and confirm its selected local project's GitLab/Jenkins/SonarQube identifiers are used. Then unlink the local project and confirm future ticket launches fall back to the configured workspace/home behavior while Jira/provider project tags remain.
-11. Open the separate **Projects** view. Confirm every registered project shows its current branch and clean/dirty status, including staged or conflicted detail when present. Use its refresh action after switching branches, then open status/diff and verify the repository is unchanged.
-12. Insert the project's `[GIT-project]` context into its explicitly attached session. Confirm the composer previews changed paths, potential credential material is redacted from the private artifact, and the terminal line is not submitted.
-13. Use **Open merge request page**. Confirm an existing MR opens when known; otherwise a prefilled GitLab new-MR browser page opens and no MR is created until you act in GitLab.
+7. Load at least two tickets with the same Jira namespace, such as `ABC-123` and `ABC-124`, while four repositories are registered under one discovery root. Confirm none is linked by default; link each ticket explicitly to a different repository and confirm Jira refresh preserves only those choices.
+8. Switch branches yourself in the terminal, refresh or reopen the board, and confirm Kronos reflects the new branch without running a Git command.
+9. Start Claude for the linked ticket and confirm its new terminal starts in the selected project directory and its terminal tab shows both the ticket key and current Git branch, such as `Claude · JIRA-123 @ feature/name`.
+10. Choose **Manage Focused Terminal** on an existing terminal and confirm linking does not change that terminal's directory or send `cd`.
+11. Poll the linked ticket and confirm only its explicitly selected local project's GitLab/Jenkins/SonarQube identifiers are used. Then unlink the local project and confirm future launches use workspace/home fallback and no registered repository is inferred from the Jira key.
+12. Open the separate **Projects** view. Confirm every registered project shows its current branch and clean/dirty status, including staged or conflicted detail when present. Use its refresh action after switching branches, then open status/diff and verify the repository is unchanged.
+13. Insert the project's `[GIT-project]` context into its explicitly attached session. Confirm the composer previews changed paths, potential credential material is redacted from the private artifact, and the terminal line is not submitted.
+14. Use **Open merge request page**. Confirm an existing MR opens when known; otherwise a prefilled GitLab new-MR browser page opens and no MR is created until you act in GitLab.
 
 ## Start Claude for a Ticket
 

@@ -51,13 +51,13 @@ Work is the Jira-centered entry point and presents a board rather than an unstru
 It supports:
 
 - refreshing Jira work metadata;
-- searching tickets and filtering by status, project, and label;
+- searching tickets and filtering by status, Jira namespace, explicitly linked local project, and label;
 - hiding or showing completed work by the configured default, explicitly overriding it, and clearing filters reversibly;
 - opening one canonical ticket workspace;
 - explicitly discovering local projects from open workspace folders and configured roots, within configured depth/result limits, then registering only selected folders;
 - configuring each registered project's GitLab project ID/path, Jenkins job URL, SonarQube project key, and default monitoring branch through a guided local editor;
 - reading a registered project's current Git branch without invoking Git, plus explicitly reading status and a bounded diff through VS Code's built-in Git model;
-- choosing or unlinking one primary local launch project for a ticket while preserving Jira/provider project associations;
+- choosing or unlinking one primary local launch project for a ticket while preserving the separate Jira namespace metadata;
 - managing the explicitly focused terminal for that ticket;
 - explicitly creating and focusing a Claude terminal linked to that ticket;
 - inserting Jira, GitLab MR/pipeline, or combined Jenkins/SonarQube context.
@@ -71,13 +71,13 @@ The ticket workspace prioritizes either terminal-first sequence:
 3. insert the context needed now;
 4. continue working in the operator-owned terminal.
 
-Project linking changes local Kronos metadata only. A new ticket-launched terminal may use the linked project folder as its starting directory. Linking never changes branch, index, worktree, or repository state, and never changes the current directory of an existing terminal.
+Project linking changes local Kronos metadata only. A Jira key such as `ABC-123` contributes the Jira namespace `ABC` for display and filtering, but it never selects, creates, or infers a local repository. Only the operator's explicit **Add Project** / **Choose Ticket Project and Branch** action links a ticket to one registered project. A new ticket-launched terminal may use that linked project folder as its starting directory. Linking never changes branch, index, worktree, or repository state, and never changes the current directory of an existing terminal.
 
-Project discovery roots, scan depth, and result limit are operator settings. An explicit Work/Setup action opens VS Code's native multi-folder picker, merges the selected machine-local parent folders into the configured roots, and immediately presents bounded discovery results. The registration editor sorts registered projects first and checked, followed by unchecked discoveries; accepting it makes that checked set authoritative. Newly registered projects immediately open a guided integration editor; Setup can reopen it for every registered project. The editor accepts only project-specific read identifiers and URLs, shows credential readiness without credential values, and pre-fills the default monitoring branch from the currently observed Git branch. Blank optional fields clear that binding. When a ticket has an explicit launch project, that project's integration values override provider-association defaults for GitLab, Jenkins, and SonarQube polling. Unregistering a linked project requires confirmation, clears affected local launch links, and preserves Jira/provider project associations. Discovery skips symbolic child directories and dependency trees and reads only directory and Git `HEAD` metadata. Registered projects become available from the prominent **Add Project** control at the top of every Jira card and from the ticket workspace. Jira completed-work visibility and additional completed status names are mapped settings shared by the Work tree and Jira board.
+Project discovery roots, scan depth, and result limit are operator settings. An explicit Work/Setup action opens VS Code's native multi-folder picker, merges the selected machine-local parent folders into the configured roots, and immediately presents bounded discovery results. The registration editor sorts registered projects first and checked, followed by unchecked discoveries; accepting it makes that checked set authoritative. Newly registered projects immediately open a guided integration editor; Setup can reopen it for every registered project. The editor accepts only project-specific read identifiers and URLs, shows credential readiness without credential values, and pre-fills the default monitoring branch from the currently observed Git branch. Blank optional fields clear that binding. A ticket receives GitLab, Jenkins, and SonarQube project configuration only from its explicit local project link; Jira project keys and legacy project tags are never defaults. Unregistering a linked project requires confirmation and clears affected local launch links without changing Jira namespace metadata. Discovery skips symbolic child directories and dependency trees and reads only directory and Git `HEAD` metadata. Registered projects become available from the prominent **Add Project** control at the top of every Jira card and from the ticket workspace. Jira completed-work visibility and additional completed status names are mapped settings shared by the Work tree and Jira board.
 
 It does not plan or execute software-delivery work.
 
-Only an action invoked from the ticket path creates a ticket link. A standalone **New Claude** action never invents or inherits a Jira identity.
+Only an explicit project action invoked from the ticket path creates a ticket-to-repository link. Jira refresh, a shared Jira namespace, project registration, provider setup, polling, and standalone **New Claude** never create one.
 
 ### Sessions
 
@@ -172,7 +172,7 @@ Monitoring is read-only and belongs to an active provider-bound work session. A 
 
 Monitoring can observe GitLab, Jenkins, and SonarQube. Jira remains explicitly refreshed from Work rather than continuously monitored as terminal content.
 
-Saving project integration data, linking a ticket project, attaching a monitored ticket session, resuming monitoring, or refreshing Jira requests an immediate bounded provider poll in addition to the interval. When no MR is already known, GitLab polling automatically searches open MRs by the observed current source branch and then by Jira key in title/description. Exactly one match is bound locally; ambiguous results are reported and never guessed. MR and CI insertion controls fetch reviewed evidence only and are not provider-connect controls.
+Saving project integration data, explicitly linking a ticket project, attaching a monitored ticket session, resuming monitoring, or refreshing Jira requests an immediate bounded provider poll in addition to the interval. Provider polling configuration comes only from that explicit project link or the session's explicit project identity. When no MR is already known, GitLab polling automatically searches open MRs by the observed current source branch and then by Jira key in title/description. Exactly one match is bound locally; ambiguous results are reported and never guessed. MR and CI insertion controls fetch reviewed evidence only and are not provider-connect controls.
 
 ## Audit and Local State
 

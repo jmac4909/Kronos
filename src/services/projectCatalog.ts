@@ -80,7 +80,7 @@ export function projectTicketProviderState(
     ...state,
     tickets: {
       ...state.tickets,
-      [ticketKey]: { ...ticket, projects: [...ticket.projects], mr, build },
+      [ticketKey]: { ...ticket, projects: [], mr, build },
     },
   };
 }
@@ -117,12 +117,18 @@ export function replaceRegisteredLocalProjects(
   const removedNames = new Set<string>();
   const projects: Record<string, Project> = {};
   for (const [name, project] of Object.entries(state.projects)) {
-    if (!project.path || selectedPaths.has(pathKey(project.path))) {
+    if (!project.path) {
+      if (shouldRetainProviderProject(name, project)) {
+        projects[name] = { ...project, config: { ...project.config } };
+      }
+      continue;
+    }
+    if (selectedPaths.has(pathKey(project.path))) {
       projects[name] = { ...project, config: { ...project.config } };
       continue;
     }
     removedNames.add(name);
-    if (shouldRetainProviderProject(state, name, project)) {
+    if (shouldRetainProviderProject(name, project)) {
       projects[name] = { config: { ...project.config } };
     }
   }
@@ -132,9 +138,9 @@ export function replaceRegisteredLocalProjects(
     projects,
     tickets: Object.fromEntries(Object.entries(state.tickets).map(([key, ticket]) => {
       if (!ticket.launch_project || !removedNames.has(ticket.launch_project)) {
-        return [key, { ...ticket, projects: [...ticket.projects] }];
+        return [key, { ...ticket, projects: [] }];
       }
-      const unlinked: Ticket = { ...ticket, projects: [...ticket.projects] };
+      const unlinked: Ticket = { ...ticket, projects: [] };
       delete unlinked.launch_project;
       return [key, unlinked];
     })),
@@ -153,10 +159,7 @@ export function replaceRegisteredLocalProjects(
   return next;
 }
 
-/**
- * Selects one local launch project without changing Jira/provider project
- * associations.
- */
+/** Selects or clears the ticket's sole explicit local-project association. */
 export function setTicketLocalProject(
   state: KronosState,
   ticketKeyValue: string,
@@ -172,7 +175,7 @@ export function setTicketLocalProject(
     if (!project?.path) { throw new Error(`Local project is not registered: ${projectName}`); }
     requiredProjectDirectory(project.path);
   }
-  const nextTicket: Ticket = { ...ticket, projects: [...ticket.projects] };
+  const nextTicket: Ticket = { ...ticket, projects: [] };
   if (projectName) { nextTicket.launch_project = projectName; }
   else { delete nextTicket.launch_project; }
   return {
@@ -233,23 +236,18 @@ export function setLocalProjectIntegrations(
     projects,
     tickets: Object.fromEntries(Object.entries(state.tickets).map(([key, ticket]) => [
       key,
-      { ...ticket, projects: [...ticket.projects] },
+      { ...ticket, projects: [] },
     ])),
   };
 }
 
-/** Provider associations are merged first; the explicit launch project wins. */
+/** Only the operator's explicit ticket-to-project link supplies provider configuration. */
 export function projectConfigurationForTicket(
   state: KronosState | null | undefined,
   ticket: Ticket | null | undefined,
 ): ProjectConfig {
-  if (!state || !ticket) { return {}; }
-  const config: ProjectConfig = {};
-  for (const name of [...new Set(ticket.projects.filter(name => name !== ticket.launch_project))]) {
-    Object.assign(config, state.projects[name]?.config || {});
-  }
-  if (ticket.launch_project) { Object.assign(config, state.projects[ticket.launch_project]?.config || {}); }
-  return config;
+  if (!state || !ticket?.launch_project) { return {}; }
+  return { ...(state.projects[ticket.launch_project]?.config || {}) };
 }
 
 export function listLocalProjects(state: KronosState | null | undefined): LocalProjectSummary[] {
@@ -343,10 +341,9 @@ function isProjectDirectory(value: string): boolean {
   }
 }
 
-function shouldRetainProviderProject(state: KronosState, name: string, project: Project): boolean {
+function shouldRetainProviderProject(name: string, project: Project): boolean {
   if (Object.keys(project.config).some(key => key !== 'repo_name')) { return true; }
-  if (project.config.repo_name && project.config.repo_name !== name) { return true; }
-  return Object.values(state.tickets).some(ticket => ticket.projects.includes(name));
+  return Boolean(project.config.repo_name && project.config.repo_name !== name);
 }
 
 function pathKey(value: string): string {

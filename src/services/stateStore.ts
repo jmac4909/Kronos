@@ -148,7 +148,6 @@ function normalizeProjectConfig(value: unknown): ProjectConfig {
   const raw = isRecord(value) ? value : {};
   const config: ProjectConfig = {};
   copyString(raw, config, 'repo_name');
-  copyString(raw, config, 'jira_project_key');
   copyString(raw, config, 'jira_ticket_filter');
   copyString(raw, config, 'gitlab_project_path');
   copyString(raw, config, 'jenkins_url');
@@ -173,12 +172,13 @@ function normalizeTicket(value: unknown): Ticket | undefined {
     priority: safeString(value['priority']) || 'Unknown',
     jira_status: safeString(value['jira_status']) || safeString(value['status']) || 'Unknown',
     source: 'jira',
-    projects: safeStringArray(value['projects']),
+    projects: [],
     mr: normalizeMergeRequest(value['mr']),
     build: normalizeBuild(value['build']),
   };
   const updated = safeString(value['updated']);
   const jiraStatusCategory = safeString(value['jira_status_category']);
+  const jiraProjectKey = safeString(value['jira_project_key']);
   const description = safeMultilineString(value['description']);
   const jiraUrl = safeHttpUrl(value['jira_url']);
   const launchProject = safeString(value['launch_project']);
@@ -186,6 +186,7 @@ function normalizeTicket(value: unknown): Ticket | undefined {
   const attachments = normalizeAttachments(value['attachments']);
   if (updated) { ticket.updated = updated; }
   if (jiraStatusCategory) { ticket.jira_status_category = jiraStatusCategory; }
+  if (jiraProjectKey) { ticket.jira_project_key = jiraProjectKey; }
   if (description) { ticket.description = description; }
   if (jiraUrl) { ticket.jira_url = jiraUrl; }
   if (launchProject) { ticket.launch_project = launchProject; }
