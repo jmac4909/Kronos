@@ -26,6 +26,7 @@ The repository is ready for the operator-owned human feedback pass in `HUMAN_FEE
 ## Changes Found During This Audit
 
 - Repeated provider-read failures create durable transitions only when the normalized source state or error changes.
+- GitLab polling, status, and context insertion now share one target resolver: the newest valid durable binding owns MR identity, matching provider evidence may enrich it, configured local-project identity supplies its read target, and stale catalog MR identity cannot override it.
 - Work catalog schema v2 stores one explicit `linked_local_project`; schema-v1 links migrate, legacy inferred project tags are discarded, unavailable links are cleared with a load issue, and future schemas fail closed.
 - Work filtering now keeps Jira namespaces and explicit local projects in separate typed facets, selectors, persisted board state, and card attributes so one identity cannot satisfy the other filter.
 - Attention now shows only the newest transition for each project/provider/facet. Recoveries, later failures, builds, pipelines, and gate results replace stale rows; acknowledging the newest row cannot resurrect an older one. The append-only audit history is unchanged.

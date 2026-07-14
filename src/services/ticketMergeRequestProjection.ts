@@ -1,10 +1,76 @@
-import type { MergeRequest, Ticket } from '../state/types';
+import type { MergeRequest, ProjectConfig, Ticket } from '../state/types';
+import { configuredGitLabProjectPathFromMergeRequestUrl } from './gitlabRestClient';
 import type { GitLabMergeRequestDigest } from './gitlabMergeRequestTransitions';
 import {
   newestWorkSessionProviderBinding,
   type WorkSessionProviderBinding,
   type WorkSessionRecord,
 } from './workSessionStore';
+
+export interface ReconciledGitLabMergeRequestTarget {
+  iid: number;
+  projectIdOrPath: string;
+  source: 'binding' | 'catalog';
+  url?: string;
+}
+
+/** Returns the explicit GitLab project identity configured for one local project. */
+export function configuredGitLabProjectIdentity(config: ProjectConfig | null | undefined): string | undefined {
+  const value = config?.gitlab_project_id || config?.gitlab_project_path;
+  return value ? String(value) : undefined;
+}
+
+/**
+ * Reconciles durable session identity, Work projection, and explicit project
+ * configuration. A valid session binding always owns MR identity; catalog
+ * evidence may enrich only the same IID and can never override it.
+ */
+export function reconcileKnownGitLabMergeRequestTarget(
+  ticket: Ticket | null | undefined,
+  workSession: WorkSessionRecord | null | undefined,
+  configuredProject: string | number | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): ReconciledGitLabMergeRequestTarget | undefined {
+  const binding = latestGitLabMergeRequestBinding(workSession);
+  const bindingIid = positiveInteger(binding?.subjectId);
+  const catalogIid = positiveInteger(ticket?.mr?.iid);
+  const configuredProjectId = configuredProject ? String(configuredProject) : undefined;
+  if (bindingIid) {
+    const projectIdOrPath = binding?.projectId
+      || configuredGitLabProjectPathFromMergeRequestUrl(binding?.url, env)
+      || configuredProjectId;
+    if (!projectIdOrPath) { return undefined; }
+    return {
+      iid: bindingIid,
+      projectIdOrPath,
+      source: 'binding',
+      ...(binding?.url ? { url: binding.url } : {}),
+    };
+  }
+  if (!catalogIid) { return undefined; }
+  const projectIdOrPath = configuredProjectId
+    || configuredGitLabProjectPathFromMergeRequestUrl(ticket?.mr?.url, env);
+  if (!projectIdOrPath) { return undefined; }
+  return {
+    iid: catalogIid,
+    projectIdOrPath,
+    source: 'catalog',
+    ...(ticket?.mr?.url ? { url: ticket.mr.url } : {}),
+  };
+}
+
+/** Chooses the source branch used before ticket-key MR discovery. */
+export function mergeRequestDiscoverySourceBranch(
+  ticket: Ticket | null | undefined,
+  observedProjectBranch?: string,
+): string | undefined {
+  const branch = ticket?.mr?.source_branch
+    || ticket?.mr?.sourceBranch
+    || ticket?.mr?.branch
+    || ticket?.mr?.head_branch
+    || observedProjectBranch;
+  return branch && !branch.startsWith('detached@') ? branch : undefined;
+}
 
 /**
  * Returns the newest locally bound merge request. Provider discovery writes

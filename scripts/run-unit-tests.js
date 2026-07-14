@@ -910,6 +910,62 @@ test('effective ticket MR rejects stale catalog and monitor identities after a n
   );
 });
 
+test('GitLab target reconciliation gives one deterministic identity to polling and insertion', () => {
+  const ticket = fixtureTicket({
+    mr: {
+      iid: 77,
+      state: 'opened',
+      review_status: 'pending_review',
+      url: 'https://gitlab.example/catalog/project/-/merge_requests/77',
+      source_branch: 'feature/JIRA-123',
+    },
+  });
+  const boundSession = {
+    ticketKey: 'JIRA-123',
+    providerBindings: [{
+      provider: 'gitlab',
+      resource: 'merge-request',
+      subjectId: '88',
+      url: 'https://gitlab.example/bound/project/-/merge_requests/88',
+      attachedAt: '2026-07-14T13:00:00.000Z',
+    }],
+  };
+  assert.deepEqual(ticketMergeRequestProjection.reconcileKnownGitLabMergeRequestTarget(
+    ticket,
+    boundSession,
+    'configured/project',
+    { GITLAB_BASE_URL: 'https://gitlab.example', GITLAB_TOKEN: 'test-token' },
+  ), {
+    iid: 88,
+    projectIdOrPath: 'bound/project',
+    source: 'binding',
+    url: 'https://gitlab.example/bound/project/-/merge_requests/88',
+  });
+  assert.deepEqual(ticketMergeRequestProjection.reconcileKnownGitLabMergeRequestTarget(
+    ticket,
+    { ticketKey: 'JIRA-123', providerBindings: [] },
+    'configured/project',
+  ), {
+    iid: 77,
+    projectIdOrPath: 'configured/project',
+    source: 'catalog',
+    url: 'https://gitlab.example/catalog/project/-/merge_requests/77',
+  });
+  assert.equal(ticketMergeRequestProjection.reconcileKnownGitLabMergeRequestTarget(
+    fixtureTicket(),
+    { ticketKey: 'JIRA-123', providerBindings: [] },
+    'configured/project',
+  ), undefined);
+  assert.equal(
+    ticketMergeRequestProjection.mergeRequestDiscoverySourceBranch(ticket, 'fallback-branch'),
+    'feature/JIRA-123',
+  );
+  assert.equal(
+    ticketMergeRequestProjection.mergeRequestDiscoverySourceBranch(fixtureTicket(), 'detached@1234567'),
+    undefined,
+  );
+});
+
 test('explicit local project links preserve unrelated provider records and report branch without running Git', () => {
   const projectRoot = path.join(tempRoot, 'project-catalog-fixture');
   const alternateRoot = path.join(tempRoot, 'project-catalog-alternate');

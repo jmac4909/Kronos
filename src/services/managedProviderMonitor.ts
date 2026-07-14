@@ -1,7 +1,6 @@
 import * as crypto from 'crypto';
 import type { KronosState as KronosStateSnapshot } from '../state/types';
 import {
-  configuredGitLabProjectPathFromMergeRequestUrl,
   gitlabRestClient,
   type GitLabMergeRequestMonitorSnapshot,
 } from './gitlabRestClient';
@@ -68,7 +67,13 @@ import {
 import { optionalTrimmedStringFromUnknown } from './records';
 import { unknownErrorMessage } from './errorUtils';
 import { projectConfigurationForTicket, readProjectGitBranch } from './projectCatalog';
-import { effectiveTicketMergeRequest, latestGitLabMergeRequestBinding } from './ticketMergeRequestProjection';
+import {
+  configuredGitLabProjectIdentity,
+  effectiveTicketMergeRequest,
+  latestGitLabMergeRequestBinding,
+  mergeRequestDiscoverySourceBranch,
+  reconcileKnownGitLabMergeRequestTarget,
+} from './ticketMergeRequestProjection';
 import { isProviderReadTransitionKind, providerReadStateSignature } from './providerReadTransitions';
 
 export interface ManagedProviderPollResult {
@@ -225,23 +230,22 @@ export class ManagedProviderMonitor {
     let discoveryDetail: string | undefined;
     if (!target) {
       const config = projectConfigurationForMonitoringSession(state, session);
-      const configuredProject = config.gitlab_project_id || config.gitlab_project_path;
+      const configuredProject = configuredGitLabProjectIdentity(config);
       if (configuredProject) {
-        const sourceBranch = ticket?.mr?.source_branch
-          || ticket?.mr?.sourceBranch
-          || ticket?.mr?.branch
-          || ticket?.mr?.head_branch
-          || (session.projectPath ? readProjectGitBranch(session.projectPath)?.branch : undefined);
+        const sourceBranch = mergeRequestDiscoverySourceBranch(
+          ticket,
+          session.projectPath ? readProjectGitBranch(session.projectPath)?.branch : undefined,
+        );
         try {
           const discovery = await gitlabRestClient.discoverOpenMergeRequest({
-            projectIdOrPath: String(configuredProject),
+            projectIdOrPath: configuredProject,
             ticketKey: session.ticketKey,
-            ...(sourceBranch && !sourceBranch.startsWith('detached@') ? { sourceBranch } : {}),
+            ...(sourceBranch ? { sourceBranch } : {}),
           });
           if (discovery.match) {
             target = {
               iid: discovery.match.iid,
-              projectIdOrPath: String(configuredProject),
+              projectIdOrPath: configuredProject,
               ...(discovery.match.webUrl ? { providerUrl: discovery.match.webUrl } : {}),
             };
             discoveryDetail = `Matched automatically by ${discovery.strategy === 'source-branch' ? 'current branch' : 'ticket key'}.`;
@@ -1536,24 +1540,17 @@ export function configuredGitLabPollingTarget(
   session: TicketWorkSessionRecord,
 ): ConfiguredGitLabPollingTarget | null {
   const ticket = state?.tickets[session.ticketKey];
-  const binding = latestGitLabMergeRequestBinding(session);
-  const ticketIid = ticket?.mr?.iid;
-  const boundIid = Number(binding?.subjectId);
-  const useBinding = Number.isSafeInteger(boundIid) && boundIid > 0;
-  const iid = Number(useBinding ? boundIid : ticketIid);
   const config = projectConfigurationForMonitoringSession(state, session);
-  const configuredProject = config.gitlab_project_id || config.gitlab_project_path;
-  const catalogMatches = Number.isSafeInteger(ticketIid) && ticketIid === iid;
-  const projectIdOrPath = (useBinding ? binding?.projectId : undefined)
-    || (useBinding ? configuredGitLabProjectPathFromMergeRequestUrl(binding?.url, process.env) : undefined)
-    || (configuredProject ? String(configuredProject) : undefined)
-    || (catalogMatches ? configuredGitLabProjectPathFromMergeRequestUrl(ticket?.mr?.url, process.env) : undefined);
-  if (!Number.isSafeInteger(iid) || iid <= 0 || !projectIdOrPath) { return null; }
-  const providerUrl = (useBinding ? binding?.url : undefined) || (catalogMatches ? ticket?.mr?.url : undefined);
+  const target = reconcileKnownGitLabMergeRequestTarget(
+    ticket,
+    session,
+    configuredGitLabProjectIdentity(config),
+  );
+  if (!target) { return null; }
   return {
-    iid,
-    projectIdOrPath,
-    ...(providerUrl ? { providerUrl } : {}),
+    iid: target.iid,
+    projectIdOrPath: target.projectIdOrPath,
+    ...(target.url ? { providerUrl: target.url } : {}),
   };
 }
 

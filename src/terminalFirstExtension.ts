@@ -12,7 +12,6 @@ import { buildFallbackJiraTicketContext, normalizeJiraTicketContext, type JiraTi
 import { isJiraRestConfigured, jiraRestClient, type JiraAttachmentContentSnapshot } from './services/jiraRestClient';
 import { writeJiraContextArtifacts } from './services/jiraContextStore';
 import {
-  configuredGitLabProjectPathFromMergeRequestUrl,
   gitlabRestClient,
   isGitLabRestConfigured,
   normalizeGitLabApiBaseUrl,
@@ -128,8 +127,11 @@ import {
 } from './services/projectIntegrationView';
 import { readGitLabMergeRequestMonitorSnapshot } from './services/gitlabMergeRequestMonitorStore';
 import {
+  configuredGitLabProjectIdentity,
   latestGitLabMergeRequestBindingAcrossSessions,
   latestGitLabMergeRequestBinding,
+  mergeRequestDiscoverySourceBranch,
+  reconcileKnownGitLabMergeRequestTarget,
   withEffectiveTicketMergeRequest,
 } from './services/ticketMergeRequestProjection';
 
@@ -1032,8 +1034,6 @@ class TerminalFirstRuntime implements vscode.Disposable {
       ? { ...session, ticketKey }
       : null;
     const polling = monitoringSession?.status === 'active' && monitoringSession.monitoring.enabled;
-    const mrBinding = latestGitLabMergeRequestBinding(monitoringSession);
-    const mrIid = ticket.mr?.iid || (mrBinding && /^[1-9][0-9]*$/.test(mrBinding.subjectId) ? Number(mrBinding.subjectId) : undefined);
     const gitLabTarget = monitoringSession ? configuredGitLabPollingTarget(this.state.state, monitoringSession) : null;
     const gitLabConfigured = Boolean(gitLabTarget || config.gitlab_project_id || config.gitlab_project_path);
     const gitLab: ProviderPollingViewStatus = !gitLabConfigured
@@ -1042,8 +1042,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
         ? { provider: 'GitLab', state: 'setup', detail: 'Project linked; credentials need Doctor.' }
         : !polling
           ? { provider: 'GitLab', state: 'paused', detail: 'Starts automatically with an active project session carrying this ticket context.' }
-          : mrIid
-            ? { provider: 'GitLab', state: 'active', detail: `Polling MR !${mrIid}, review, pipeline, jobs, and tests.` }
+          : gitLabTarget
+            ? { provider: 'GitLab', state: 'active', detail: `Polling MR !${gitLabTarget.iid}, review, pipeline, jobs, and tests.` }
             : { provider: 'GitLab', state: 'discovering', detail: 'Polling is active; finding a unique open MR by branch or ticket key.' };
 
     const ciTargets = monitoringSession ? configuredCiPollingTargets(this.state.state, monitoringSession) : {};
@@ -1332,7 +1332,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     }
     const currentMergeRequest = latestGitLabMergeRequestBinding(updated);
     const currentMatchesTicket = currentMergeRequest?.subjectId === String(ticket.mr?.iid || '');
-    const gitLabProject = config?.gitlab_project_id || config?.gitlab_project_path;
+    const gitLabProject = configuredGitLabProjectIdentity(config);
     const mergeRequestNeedsEnrichment = currentMatchesTicket && Boolean(
       (gitLabProject && !currentMergeRequest?.projectId)
       || (ticket.mr?.url && !currentMergeRequest?.url),
@@ -2686,34 +2686,19 @@ class TerminalFirstRuntime implements vscode.Disposable {
     return pick?.session;
   }
 
-  private gitLabProjectId(ticket: Ticket): string | undefined {
-    const config = this.projectConfig(ticket);
-    const configuredProject = config?.gitlab_project_id || config?.gitlab_project_path;
-    if (configuredProject) { return String(configuredProject); }
-    return configuredGitLabProjectPathFromMergeRequestUrl(ticket.mr?.url, process.env);
-  }
-
   private async resolveGitLabInsertionTarget(
     ticketKey: string,
     ticket: Ticket,
   ): Promise<GitLabInsertionTarget | undefined> {
     const session = getWorkSessionForTicketContext(ticketKey);
-    const savedBinding = latestGitLabMergeRequestBinding(session);
-    const configuredProject = this.gitLabProjectId(ticket);
-    if (savedBinding && /^[1-9][0-9]*$/.test(savedBinding.subjectId)) {
-      const iid = Number(savedBinding.subjectId);
-      const projectIdOrPath = savedBinding.projectId
-        || configuredGitLabProjectPathFromMergeRequestUrl(savedBinding.url, process.env)
-        || configuredProject;
-      if (Number.isSafeInteger(iid) && projectIdOrPath) {
-        const target: GitLabInsertionTarget = { iid, projectIdOrPath };
-        if (savedBinding.url) { target.url = savedBinding.url; }
-        return target;
-      }
-    }
-
-    if (ticket.mr?.iid && configuredProject) {
-      return { iid: ticket.mr.iid, projectIdOrPath: configuredProject, url: ticket.mr.url };
+    const configuredProject = configuredGitLabProjectIdentity(this.projectConfig(ticket));
+    const knownTarget = reconcileKnownGitLabMergeRequestTarget(ticket, session, configuredProject);
+    if (knownTarget) {
+      return {
+        iid: knownTarget.iid,
+        projectIdOrPath: knownTarget.projectIdOrPath,
+        ...(knownTarget.url ? { url: knownTarget.url } : {}),
+      };
     }
 
     if (!configuredProject) {
@@ -2723,17 +2708,16 @@ class TerminalFirstRuntime implements vscode.Disposable {
       return undefined;
     }
 
-    const sourceBranch = ticket.mr?.source_branch
-      || ticket.mr?.sourceBranch
-      || ticket.mr?.branch
-      || ticket.mr?.head_branch
-      || (session?.projectPath ? readProjectGitBranch(session.projectPath)?.branch : undefined);
+    const sourceBranch = mergeRequestDiscoverySourceBranch(
+      ticket,
+      session?.projectPath ? readProjectGitBranch(session.projectPath)?.branch : undefined,
+    );
     let discovery;
     try {
       discovery = await gitlabRestClient.discoverOpenMergeRequest({
         projectIdOrPath: configuredProject,
         ticketKey,
-        ...(sourceBranch && !sourceBranch.startsWith('detached@') ? { sourceBranch } : {}),
+        ...(sourceBranch ? { sourceBranch } : {}),
       });
     } catch (error: unknown) {
       const detail = unknownErrorMessage(error, 'GitLab merge-request discovery failed.');
