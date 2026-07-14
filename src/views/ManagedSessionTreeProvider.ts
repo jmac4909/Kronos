@@ -1,12 +1,7 @@
 import * as vscode from 'vscode';
-import type { KronosState, ProjectConfig } from '../state/types';
 import { OperatorTerminalRegistry } from '../services/operatorTerminalRegistry';
 import { WorkSessionRecord, listWorkSessions } from '../services/workSessionStore';
-import { listLocalProjects, readProjectGitBranch } from '../services/projectCatalog';
-import { readProjectGitEvidence } from '../services/vscodeGitReadService';
-import { isGitLabRestConfigured } from '../services/gitlabRestClient';
-import { isJenkinsRestConfigured } from '../services/jenkinsRestClient';
-import { isSonarRestConfigured } from '../services/sonarRestClient';
+import { readProjectGitBranch } from '../services/projectCatalog';
 
 export interface ManagedSessionCommandTarget {
   workSessionId: string;
@@ -14,17 +9,10 @@ export interface ManagedSessionCommandTarget {
   liveTerminalBindingIds: readonly string[];
 }
 
-export interface RegisteredProjectCommandTarget {
-  projectName: string;
-  projectPath: string;
-}
-
 type WorkSessionLoader = () => WorkSessionRecord[];
-type StateLoader = () => KronosState | null;
-type SessionTreeElement = SessionSectionTreeItem | ManagedSessionTreeItem | ManagedSessionMessageTreeItem
-  | RegisteredProjectTreeItem | ProjectActionTreeItem;
+type SessionTreeElement = ManagedSessionTreeItem | ManagedSessionMessageTreeItem;
 
-/** Sessions and registered projects share one product view, while terminals remain operator-owned. */
+/** Operator-owned terminal sessions stay independent from registered project inventory. */
 export class ManagedSessionTreeProvider implements vscode.TreeDataProvider<SessionTreeElement>, vscode.Disposable {
   private readonly changeEmitter = new vscode.EventEmitter<SessionTreeElement | undefined>();
   readonly onDidChangeTreeData = this.changeEmitter.event;
@@ -32,52 +20,19 @@ export class ManagedSessionTreeProvider implements vscode.TreeDataProvider<Sessi
   constructor(
     private readonly operatorTerminals: OperatorTerminalRegistry<vscode.Terminal>,
     private readonly loadWorkSessions: WorkSessionLoader = () => listWorkSessions(),
-    private readonly loadState: StateLoader = () => null,
   ) {}
 
   getTreeItem(element: SessionTreeElement): vscode.TreeItem { return element; }
 
   async getChildren(element?: SessionTreeElement): Promise<SessionTreeElement[]> {
-    if (!element) {
-      return [new SessionSectionTreeItem('sessions'), new SessionSectionTreeItem('projects')];
-    }
-    if (element instanceof SessionSectionTreeItem && element.section === 'sessions') {
-      const sessions = this.safeLoadWorkSessions().sort((left, right) => sessionSortOrder(left, right));
-      return sessions.length > 0
-        ? sessions.map(session => new ManagedSessionTreeItem(
-          session,
-          this.operatorTerminals.listBindings(session.id).map(binding => binding.bindingId),
-        ))
-        : [new ManagedSessionMessageTreeItem('session')];
-    }
-    if (element instanceof SessionSectionTreeItem && element.section === 'projects') {
-      const state = this.safeLoadState();
-      const projects = listLocalProjects(state);
-      if (projects.length === 0) { return [new ManagedSessionMessageTreeItem('project')]; }
-      const sessions = this.safeLoadWorkSessions();
-      return Promise.all(projects.map(async project => {
-        const evidence = await readProjectGitEvidence(project.path, { includeDiff: false });
-        const config = state?.projects[project.name]?.config || {};
-        const linkedSessionCount = sessions.filter(session =>
-          session.projectName === project.name
-            && session.ticketKeys.length > 0
-            && session.status === 'active'
-            && session.monitoring.enabled
-        ).length;
-        return new RegisteredProjectTreeItem(
-          { projectName: project.name, projectPath: project.path },
-          evidence.branch || project.branch,
-          evidence.available ? evidence.changeCount : undefined,
-          config,
-          linkedSessionCount,
-          evidence.warning,
-        );
-      }));
-    }
-    if (element instanceof RegisteredProjectTreeItem) {
-      return projectActions(element.target);
-    }
-    return [];
+    if (element) { return []; }
+    const sessions = this.safeLoadWorkSessions().sort((left, right) => sessionSortOrder(left, right));
+    return sessions.length > 0
+      ? sessions.map(session => new ManagedSessionTreeItem(
+        session,
+        this.operatorTerminals.listBindings(session.id).map(binding => binding.bindingId),
+      ))
+      : [new ManagedSessionMessageTreeItem()];
   }
 
   refresh(): void { this.changeEmitter.fire(undefined); }
@@ -89,24 +44,6 @@ export class ManagedSessionTreeProvider implements vscode.TreeDataProvider<Sessi
       console.warn(`Kronos managed-session refresh failed: ${errorMessage(error)}`);
       return [];
     }
-  }
-
-  private safeLoadState(): KronosState | null {
-    try { return this.loadState(); }
-    catch (error: unknown) {
-      console.warn(`Kronos project refresh failed: ${errorMessage(error)}`);
-      return null;
-    }
-  }
-}
-
-class SessionSectionTreeItem extends vscode.TreeItem {
-  constructor(readonly section: 'sessions' | 'projects') {
-    super(section === 'sessions' ? 'Sessions' : 'Projects', vscode.TreeItemCollapsibleState.Expanded);
-    this.id = `kronos-section:${section}`;
-    this.contextValue = `kronos_${section}_section`;
-    this.iconPath = new vscode.ThemeIcon(section === 'sessions' ? 'terminal' : 'folder-library');
-    this.description = section === 'sessions' ? 'interactive terminals' : 'registered local work';
   }
 }
 
@@ -143,80 +80,17 @@ export class ManagedSessionTreeItem extends vscode.TreeItem implements ManagedSe
   }
 }
 
-class RegisteredProjectTreeItem extends vscode.TreeItem {
-  constructor(
-    readonly target: RegisteredProjectCommandTarget,
-    branch: string | undefined,
-    changeCount: number | undefined,
-    config: ProjectConfig,
-    linkedSessionCount: number,
-    warning?: string,
-  ) {
-    super(target.projectName, vscode.TreeItemCollapsibleState.Collapsed);
-    this.id = `registered-project:${target.projectName}`;
-    this.contextValue = 'registered_project';
-    this.iconPath = new vscode.ThemeIcon('repo');
-    const status = changeCount === undefined ? 'status unavailable' : `${changeCount} change${changeCount === 1 ? '' : 's'}`;
-    this.description = `${branch || 'branch unavailable'} • ${status}`;
-    const providers = [
-      providerStatus('GitLab', Boolean(config.gitlab_project_id || config.gitlab_project_path), isGitLabRestConfigured(), linkedSessionCount),
-      providerStatus('Jenkins', Boolean(config.jenkins_url), isJenkinsRestConfigured(), linkedSessionCount),
-      providerStatus('SonarQube', Boolean(config.sonar_project_key), isSonarRestConfigured(), linkedSessionCount),
-    ];
-    this.tooltip = [
-      `Project: ${target.projectName}`,
-      `Path: ${target.projectPath}`,
-      `Branch: ${branch || 'unavailable'}`,
-      `Git status: ${status}`,
-      `Active monitored ticket sessions: ${linkedSessionCount}`,
-      ...providers,
-      ...(warning ? [`Git read note: ${warning}`] : []),
-      'Expand for status, diff, MR, CI, and context actions.',
-    ].join('\n');
-    this.command = { command: 'kronos.openProjectGitStatus', title: 'Open Project Git Status', arguments: [target] };
-  }
-}
-
-class ProjectActionTreeItem extends vscode.TreeItem {
-  constructor(label: string, icon: string, command: string, target: RegisteredProjectCommandTarget, description?: string) {
-    super(label, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'registered_project_action';
-    this.iconPath = new vscode.ThemeIcon(icon);
-    if (description) { this.description = description; }
-    this.command = { command, title: label, arguments: [target] };
-  }
-}
-
 class ManagedSessionMessageTreeItem extends vscode.TreeItem {
-  constructor(kind: 'session' | 'project') {
-    super(kind === 'session' ? 'New Claude session' : 'Discover and register projects', vscode.TreeItemCollapsibleState.None);
-    this.contextValue = kind === 'session' ? 'managed_session_empty' : 'registered_project_empty';
-    this.description = kind === 'session' ? 'no Jira ticket required' : 'choose parent folders in Settings';
-    this.iconPath = new vscode.ThemeIcon(kind === 'session' ? 'add' : 'folder-opened');
+  constructor() {
+    super('New Claude session', vscode.TreeItemCollapsibleState.None);
+    this.contextValue = 'managed_session_empty';
+    this.description = 'no Jira ticket required';
+    this.iconPath = new vscode.ThemeIcon('add');
     this.command = {
-      command: kind === 'session' ? 'kronos.newClaudeSession' : 'kronos.registerWorkspaceProject',
-      title: kind === 'session' ? 'New Claude Session' : 'Discover and Manage Local Projects',
+      command: 'kronos.newClaudeSession',
+      title: 'New Claude Session',
     };
   }
-}
-
-function projectActions(target: RegisteredProjectCommandTarget): ProjectActionTreeItem[] {
-  return [
-    new ProjectActionTreeItem('View Git status and diff', 'diff', 'kronos.openProjectGitStatus', target),
-    new ProjectActionTreeItem('Insert working diff in context', 'symbol-keyword', 'kronos.insertProjectGitContext', target, 'non-submitting'),
-    new ProjectActionTreeItem('Open merge request page', 'git-merge', 'kronos.openProjectMergeRequest', target),
-    new ProjectActionTreeItem('Insert MR evidence', 'git-merge', 'kronos.insertProjectGitLabContext', target),
-    new ProjectActionTreeItem('Insert Jenkins / Sonar evidence', 'beaker', 'kronos.insertProjectCiContext', target),
-    new ProjectActionTreeItem('Configure provider polling', 'settings-gear', 'kronos.configureProjectIntegrations', target),
-  ];
-}
-
-function providerStatus(name: string, targetConfigured: boolean, credentialsReady: boolean, activeSessions: number): string {
-  if (!targetConfigured) { return `${name}: project setup needed`; }
-  if (!credentialsReady) { return `${name}: target saved, credentials need Doctor`; }
-  return activeSessions > 0
-    ? `${name}: automatic polling active for ${activeSessions} ticket session${activeSessions === 1 ? '' : 's'}`
-    : `${name}: ready; automatic polling starts with a ticket session`;
 }
 
 function sessionSortOrder(left: WorkSessionRecord, right: WorkSessionRecord): number {

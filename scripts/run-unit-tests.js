@@ -2396,6 +2396,7 @@ test('project Git evidence reads only the bounded VS Code Git model', async () =
     status: index === 0 ? 0 : index === 1 ? 7 : 5,
   }));
   let openRepositoryCalls = 0;
+  let repositoryVisible = true;
   const repository = {
     rootUri: { fsPath: projectPath },
     state: {
@@ -2418,9 +2419,12 @@ test('project Git evidence reads only the bounded VS Code Git model', async () =
             getAPI(version) {
               assert.equal(version, 1);
               return {
-                repositories: [repository],
-                getRepository() { return repository; },
-                async openRepository() { openRepositoryCalls += 1; },
+                get repositories() { return repositoryVisible ? [repository] : []; },
+                getRepository() { return repositoryVisible ? repository : null; },
+                async openRepository() {
+                  openRepositoryCalls += 1;
+                  repositoryVisible = true;
+                },
               };
             },
           },
@@ -2454,6 +2458,16 @@ test('project Git evidence reads only the bounded VS Code Git model', async () =
     const rendered = gitEvidence.renderProjectGitEvidence('Fixture', evidence);
     assert.match(rendered, /VS Code built-in Git model \(read-only\)/);
     assert.match(rendered, /Branch: feature\/git-evidence/);
+    repositoryVisible = false;
+    const loadedEvidence = await gitEvidence.readProjectGitEvidence(projectPath, {
+      includeDiff: false,
+      openRepositoryIfNeeded: true,
+    });
+    assert.equal(openRepositoryCalls, 1, 'a registered repository missing from the Git model is loaded once for read-only status');
+    assert.equal(loadedEvidence.available, true);
+    assert.equal(loadedEvidence.branch, 'feature/git-evidence');
+    assert.equal(loadedEvidence.changeCount, 502);
+    assert.equal(loadedEvidence.diff, '', 'the Projects tree status read does not load the full diff');
   } finally {
     delete require.cache[servicePath];
   }
@@ -2711,10 +2725,28 @@ test('extension activation registers the bounded surface and explicit launch com
     fs.mkdirSync(path.join(tempRoot, '.git'), { recursive: true });
     fs.writeFileSync(path.join(tempRoot, '.git', 'HEAD'), 'ref: refs/heads/feature/runtime-project\n');
     require(modulePath).activate(context);
-    assert.deepEqual(registeredViews, ['kronosWork', 'kronosSessions', 'kronosAttention']);
+    assert.deepEqual(registeredViews, ['kronosWork', 'kronosSessions', 'kronosProjects', 'kronosAttention']);
     const expectedCommands = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
       .contributes.commands.map(command => command.command);
     assert.deepEqual(registeredCommands, expectedCommands);
+    const sessionItems = await registeredTreeProviders.get('kronosSessions').getChildren();
+    assert.equal(sessionItems.some(item => item.label === 'Projects'), false, 'Sessions must not contain a nested Projects section');
+    const projectItems = await registeredTreeProviders.get('kronosProjects').getChildren();
+    assert.equal(projectItems.length, 1);
+    assert.equal(projectItems[0].label, 'fixture');
+    assert.equal(projectItems[0].description, 'feature/runtime-project • 1 change');
+    assert.equal(projectItems[0].contextValue, 'registered_project');
+    assert.match(projectItems[0].tooltip, /Git status: 1 total, 0 staged, 1 modified/);
+    const projectActions = await registeredTreeProviders.get('kronosProjects').getChildren(projectItems[0]);
+    assert.deepEqual(projectActions.map(item => item.label), [
+      'View Git status and diff',
+      'Insert working diff in context',
+      'Open merge request page',
+      'Insert MR evidence',
+      'Insert Jenkins / Sonar evidence',
+      'Configure provider polling',
+    ]);
+    await commandHandlers.get('kronos.refreshProjects')();
 
     await commandHandlers.get('kronos.openJiraBoard')();
     const jiraBoardPanel = createdWebviewPanels.find(panel => panel.viewType === 'kronosJiraWorkBoard');

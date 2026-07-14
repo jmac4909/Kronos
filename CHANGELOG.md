@@ -6,6 +6,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Added
 
+- Dedicated Projects view with current branch, clean/dirty status, read-only Git loading, and existing project evidence actions.
 - Recruiter-facing product overview, architecture, engineering metrics, and synthetic product renders.
 - Branded Marketplace icon and preview metadata.
 - Public-surface validation for tracked local state, machine paths, employer identifiers, private keys, and high-confidence token shapes.
@@ -23,7 +24,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Added
 
-- Three focused VS Code views: Work, Sessions, and Attention.
+- Four focused VS Code views: Work, Sessions, Projects, and Attention.
 - Jira work board with bounded local filtering and project/branch linkage.
 - Explicit validated Claude terminal launch and non-submitting context insertion.
 - Read-only Jira, GitLab, Jenkins, and SonarQube clients.

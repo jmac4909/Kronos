@@ -25,6 +25,7 @@ Runtime code uses only the VS Code API and Node built-ins. Do not add runtime de
 - `src/terminalFirstExtension.ts` owns the audited public command surface.
 - Work renders a Jira board with search, status, project, and label filters. Completed rows are hidden by default and explicitly showable.
 - `src/views/ManagedSessionTreeProvider.ts` renders standalone and ticket-linked operator-managed sessions.
+- `src/views/ProjectTreeProvider.ts` renders registered repositories with read-only branch/status and bounded project actions.
 - `src/views/AttentionTreeProvider.ts` renders unacknowledged provider transitions.
 - `src/state/TerminalFirstState.ts` refreshes the bounded Jira Work catalog through native GET requests.
 - Jira normalization recursively removes null/blank/empty values while preserving meaningful `false` and `0` values.
@@ -32,7 +33,7 @@ Runtime code uses only the VS Code API and Node built-ins. Do not add runtime de
 - context stores write private, content-addressed artifacts under `~/.kronos` or `KRONOS_DIR`.
 - work-session and monitor stores persist terminal metadata and provider transitions, never terminal content.
 
-The activity container exposes exactly three views: Work, Sessions, and Attention. Ticket association is created only by a ticket-triggered action; **New Claude** must never invent a Jira key. Every visible capability must stay within the explicit Claude launch, read, insert, monitor, and audit product boundary.
+The activity container exposes exactly four views: Work, Sessions, Projects, and Attention. Ticket association is created only by a ticket-triggered action; **New Claude** must never invent a Jira key. Every visible capability must stay within the explicit Claude launch, read, insert, monitor, and audit product boundary.
 
 ## Build and Validation
 

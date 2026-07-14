@@ -40,11 +40,11 @@ const allowedDevDependencies = new Set(['@types/node', '@types/vscode', 'typescr
 for (const name of Object.keys(manifest.devDependencies || {})) {
   if (!allowedDevDependencies.has(name)) { fail(`unexpected development dependency: ${name}`); }
 }
-if (manifest.contributes.commands.length !== 35) { fail('expected exactly 35 terminal-first commands'); }
-if (manifest.contributes.views.kronos.length !== 3) { fail('expected exactly Work, Sessions, and Attention'); }
+if (manifest.contributes.commands.length !== 36) { fail('expected exactly 36 terminal-first commands'); }
+if (manifest.contributes.views.kronos.length !== 4) { fail('expected exactly Work, Sessions, Projects, and Attention'); }
 if (Object.keys(manifest.contributes.configuration.properties || {}).length !== 10) { fail('expected exactly ten mapped terminal-first settings'); }
 
-requireMarkers('README.md', ['zero third-party runtime dependencies', 'Work', 'Sessions', 'Attention']);
+requireMarkers('README.md', ['zero third-party runtime dependencies', 'Work', 'Sessions', 'Projects', 'Attention']);
 requireMarkers('docs/terminal-first-product-contract.md', ['Ownership Invariants', 'Context Insertion Contract', 'Monitoring Contract']);
 requireMarkers('HUMAN_FEEDBACK_CHECKLIST.md', ['Non-Negotiable Boundary', 'Stop Conditions', 'Signoff Bar']);
 
@@ -76,6 +76,7 @@ for (const expected of [
   'out/terminalFirstExtension.js',
   'out/views/WorkTreeProvider.js',
   'out/views/ManagedSessionTreeProvider.js',
+  'out/views/ProjectTreeProvider.js',
   'out/views/AttentionTreeProvider.js',
   'out/services/claudeTerminalLauncher.js',
   'out/services/projectCatalog.js',

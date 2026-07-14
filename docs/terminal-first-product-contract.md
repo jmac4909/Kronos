@@ -42,7 +42,7 @@ Persisted terminal names and process IDs are descriptive metadata, not durable i
 
 ## Navigation Contract
 
-Kronos exposes exactly three activity views.
+Kronos exposes exactly four activity views.
 
 ### Work
 
@@ -81,7 +81,7 @@ Only an action invoked from the ticket path creates a ticket link. A standalone 
 
 ### Sessions
 
-Sessions is the durable operational view with two ordered sections: interactive Sessions first and registered Projects below it.
+Sessions is the durable operational view for interactive operator-owned terminals. Registered repositories are intentionally kept in the separate Projects view.
 
 Each session presents:
 
@@ -95,13 +95,19 @@ Each session presents:
 
 Supported session actions are focus, explicit reattach, detach, pause monitoring, resume monitoring, poll now, open audit, stop management, and confirmed local removal. Removal never closes a terminal; it removes the session record and colocated monitor snapshots while retaining shared audit history and saved context artifacts.
 
-Each registered Project exposes branch and read-only status, an explicit bounded diff view, a secret-redacted Git-context insertion action, an existing-MR or prefilled new-MR browser action, ticket-scoped MR/CI evidence insertion, and provider setup. These actions use VS Code's built-in Git read model and provider REST reads; they never stage, commit, push, create an MR through an API, or otherwise mutate Git/provider state.
-
 Selecting any Session means “open its terminal.” A live attachment is focused immediately. When VS Code has discarded the ephemeral attachment, Kronos never guesses from a saved process ID or duplicate terminal name: it reconnects the only unclaimed open terminal or asks the operator to choose one, then focuses it.
 
 **New Claude** creates a project-oriented session with a workspace-derived title, validates the configured Claude command/name/cwd, creates and focuses one terminal, and starts Claude. The created terminal tab includes the branch read from the actual launch directory when Git `HEAD` is available. **Start Claude for Ticket** also includes the initiating ticket key in that title. This is launch-time display metadata only: Kronos does not invoke Git and does not write to or rename an existing terminal. A new project session contains no fake or placeholder ticket key. An operator may later attach one or more real Jira contexts to any explicitly managed terminal; this never creates or submits terminal input automatically. Legacy ticket-keyed records remain readable for migration compatibility, but Sessions and monitoring are presented and deduplicated by project when a project is known.
 
 Stopping management disables monitoring and detaches the in-memory association. It never closes the terminal.
+
+### Projects
+
+Projects is the registered local repository inventory. It is a peer of Sessions rather than a nested session section, because repository state and terminal lifecycle are independent concerns.
+
+Each registered Project shows its current branch and clean, dirty, staged, or conflicted state. Refreshing the view asks VS Code's built-in Git model to load a registered repository when necessary, reads status without loading the full diff, and falls back to bounded local Git `HEAD` metadata for the branch. Selecting the project opens a complete bounded status/diff document; expanding it exposes secret-redacted Git-context insertion, an existing-MR or prefilled new-MR browser action, ticket-scoped MR/CI evidence insertion, and provider setup. The Projects toolbar refreshes branch/status, manages the registered project set and discovery roots, and can request the normal provider poll.
+
+These actions use VS Code's built-in Git read model and provider REST reads. They never stage, commit, push, create an MR through an API, or otherwise mutate Git or provider state.
 
 ### Attention
 
@@ -198,7 +204,8 @@ The installed extension has zero third-party runtime dependencies. Kronos uses t
 The public terminal-first command surface is intentionally limited to:
 
 - Work: refresh the Jira board; search/filter/show completed/clear filters; open ticket workspace; start Claude for the selected ticket; manage a focused terminal; insert Jira/MR/CI context;
-- Sessions: create a project-oriented Claude session; add another Jira context; poll providers; open audit; focus/reattach/detach terminal; stop or remove local management; pause/resume monitoring; view registered project status/diff; insert project Git/MR/CI evidence; open an existing or prefilled new MR page; configure project providers;
+- Sessions: create a project-oriented Claude session; add another Jira context; poll providers; open audit; focus/reattach/detach terminal; stop or remove local management; pause/resume monitoring;
+- Projects: refresh registered branch/status; manage discovery and registration; view bounded status/diff; insert project Git/MR/CI evidence; open an existing or prefilled new MR page; configure project providers;
 - Attention: acknowledge item and open provider;
 - Operations: Setup, Doctor, and Settings.
 

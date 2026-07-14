@@ -25,7 +25,7 @@ Stop the review immediately if any boundary is crossed.
 2. Install with `code --install-extension kronos-0.1.0.vsix --force`.
 3. Reload VS Code.
 4. Open the Kronos activity icon.
-5. Confirm exactly three views are visible: **Work**, **Sessions**, and **Attention**.
+5. Confirm exactly four views are visible: **Work**, **Sessions**, **Projects**, and **Attention**, with no nested Projects section inside Sessions.
 6. Run **Kronos: Setup** and confirm its dedicated dashboard clearly groups Claude launch, discovery folders, registered projects, Jira, monitoring providers, and private state without exposing secrets. Exercise its Doctor, Jira Board, Settings, folder, and project buttons.
 7. Run **Kronos: Doctor** and confirm its dedicated dashboard shows ready/review/blocked totals, places actionable problems first, refreshes in place, and reports Jira/provider/Claude readiness without displaying credential values.
 8. Open **Kronos: Settings** and identify the Claude command, terminal-name, cwd behavior, and polling options. Keep the command at `claude` or a trusted `claude-*` wrapper with only approved interactive flags for the launch tests; provider credentials remain in the private environment-file path shown by Setup.
@@ -73,7 +73,7 @@ Use a real ticket only when its provider data is approved for local context capt
 8. Start Claude for the linked ticket and confirm its new terminal starts in the selected project directory and its terminal tab shows both the ticket key and current Git branch, such as `Claude · JIRA-123 @ feature/name`.
 9. Choose **Manage Focused Terminal** on an existing terminal and confirm linking does not change that terminal's directory or send `cd`.
 10. Poll the linked ticket and confirm its selected local project's GitLab/Jenkins/SonarQube identifiers are used. Then unlink the local project and confirm future ticket launches fall back to the configured workspace/home behavior while Jira/provider project tags remain.
-11. In Sessions, expand **Projects** below the session list. Confirm every registered project shows branch and change count; open its status/diff and verify the repository is unchanged.
+11. Open the separate **Projects** view. Confirm every registered project shows its current branch and clean/dirty status, including staged or conflicted detail when present. Use its refresh action after switching branches, then open status/diff and verify the repository is unchanged.
 12. Insert the project's `[GIT-project]` context into its explicitly attached session. Confirm the composer previews changed paths, potential credential material is redacted from the private artifact, and the terminal line is not submitted.
 13. Use **Open merge request page**. Confirm an existing MR opens when known; otherwise a prefilled GitLab new-MR browser page opens and no MR is created until you act in GitLab.
 
@@ -178,7 +178,7 @@ Stop and record the exact action if:
 
 The terminal-first trial is ready for broader feedback when:
 
-- only Work, Sessions, and Attention appear in the Kronos activity container;
+- only Work, Sessions, Projects, and Attention appear in the Kronos activity container;
 - the Jira board can search/filter status/project/label, hide completed work by default, and show it on request;
 - a reviewer can complete both standalone New Claude and ticket-to-terminal-to-context journeys without source-code knowledge;
 - explicit Claude starts create/focus one terminal and execute only the validated Claude command once;

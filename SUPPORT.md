@@ -20,7 +20,7 @@ Include:
 
 - Kronos commit or package version;
 - operating system, VS Code version, and Node.js version;
-- the affected surface: Work, Sessions, Attention, Setup, Doctor, or context composer;
+- the affected surface: Work, Sessions, Projects, Attention, Setup, Doctor, or context composer;
 - concise reproduction steps using synthetic data;
 - expected and observed behavior;
 - the relevant validation command and whether it passed.

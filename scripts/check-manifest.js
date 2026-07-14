@@ -24,6 +24,7 @@ const EXPECTED_COMMANDS = [
   'kronos.detachWorkSessionTerminal',
   'kronos.closeWorkSession',
   'kronos.removeWorkSession',
+  'kronos.refreshProjects',
   'kronos.openProjectGitStatus',
   'kronos.insertProjectGitContext',
   'kronos.openProjectMergeRequest',
@@ -42,6 +43,7 @@ const EXPECTED_COMMANDS = [
 const EXPECTED_VIEWS = [
   { id: 'kronosWork', name: 'Work' },
   { id: 'kronosSessions', name: 'Sessions' },
+  { id: 'kronosProjects', name: 'Projects' },
   { id: 'kronosAttention', name: 'Attention' },
 ];
 

@@ -28,6 +28,7 @@ Kronos solves a narrow enterprise-development problem: the evidence needed for a
 | --- | --- |
 | **Work** | Search and filter Jira work, link a local project and branch, then open a focused ticket workspace. |
 | **Sessions** | Organize operator-owned Claude terminals by local project, attach multiple Jira contexts when useful, and never read terminal contents. |
+| **Projects** | Track each registered repository's current branch and clean/dirty status, then open bounded diff, MR, CI, and provider actions. |
 | **Attention** | Show the newest meaningful provider state by project, resurface still-open MRs after the next poll, and retain full history in the private audit. |
 | **Context composer** | Review fetched evidence, edit the focus, and place one shell-inert line in the chosen terminal with submission disabled. |
 
@@ -69,7 +70,7 @@ The complete normative boundary is in the [terminal-first product contract](docs
 
 ```mermaid
 flowchart LR
-    O[Operator] --> UI[VS Code: Work / Sessions / Attention]
+    O[Operator] --> UI[VS Code: Work / Sessions / Projects / Attention]
     UI --> C[Command and service layer]
 
     C -->|bounded GET reads| P[Jira / GitLab / Jenkins / SonarQube]
@@ -94,11 +95,11 @@ The installed extension uses the VS Code API and Node built-ins only. It has **z
 | Measure | Current preview |
 | --- | ---: |
 | Enterprise provider integrations | 4 |
-| Focused VS Code views | 3 |
+| Focused VS Code views | 4 |
 | Audited terminal-write paths | 2 |
-| Manifest-covered commands | 35 |
+| Manifest-covered commands | 36 |
 | Manifest-covered settings | 10 |
-| Reachable runtime modules checked for cycles/dead exports | 60 |
+| Reachable runtime modules checked for cycles/dead exports | 61 |
 | Third-party runtime dependencies | 0 |
 | Automated Node/DOM/board tests | 71 |
 
@@ -121,7 +122,7 @@ npm run package
 code --install-extension kronos-0.1.0.vsix --force
 ```
 
-Reload VS Code and open the Kronos activity icon. The extension exposes exactly three views: **Work**, **Sessions**, and **Attention**.
+Reload VS Code and open the Kronos activity icon. The extension exposes exactly four views: **Work**, **Sessions**, **Projects**, and **Attention**.
 
 ### Isolated synthetic fixture
 

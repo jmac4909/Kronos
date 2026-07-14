@@ -3,7 +3,8 @@ import * as os from 'os';
 import type { KronosState, ProjectConfig, Ticket } from './state/types';
 import { TerminalFirstState } from './state/TerminalFirstState';
 import { WorkTreeProvider } from './views/WorkTreeProvider';
-import { ManagedSessionTreeProvider, type RegisteredProjectCommandTarget } from './views/ManagedSessionTreeProvider';
+import { ManagedSessionTreeProvider } from './views/ManagedSessionTreeProvider';
+import { ProjectTreeProvider, type RegisteredProjectCommandTarget } from './views/ProjectTreeProvider';
 import { AttentionTreeProvider } from './views/AttentionTreeProvider';
 import { defaultProviderEnvPath, loadProviderEnv } from './services/providerEnv';
 import { unknownErrorMessage } from './services/errorUtils';
@@ -229,7 +230,10 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private readonly sessionTree = new ManagedSessionTreeProvider(
     this.operatorTerminals,
     () => listWorkSessions(),
+  );
+  private readonly projectTree = new ProjectTreeProvider(
     () => this.state.state,
+    () => listWorkSessions(),
   );
   private readonly attentionTree = new AttentionTreeProvider();
   private readonly output = vscode.window.createOutputChannel('Kronos Terminal Work Companion');
@@ -264,9 +268,11 @@ class TerminalFirstRuntime implements vscode.Disposable {
     this.disposables.push(
       vscode.window.registerTreeDataProvider('kronosWork', this.workTree),
       vscode.window.registerTreeDataProvider('kronosSessions', this.sessionTree),
+      vscode.window.registerTreeDataProvider('kronosProjects', this.projectTree),
       vscode.window.registerTreeDataProvider('kronosAttention', this.attentionTree),
       this.state.onDidChange(() => {
         this.workTree.refresh();
+        this.projectTree.refresh();
         this.refreshTicketPanels();
         this.renderJiraBoardPanel();
         this.renderSetupPanel();
@@ -315,6 +321,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     this.operatorTerminals.clear();
     this.workTree.dispose();
     this.sessionTree.dispose();
+    this.projectTree.dispose();
     this.attentionTree.dispose();
     this.state.dispose();
     this.output.dispose();
@@ -343,6 +350,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     this.command('kronos.detachWorkSessionTerminal', async argument => this.detachManagedTerminal(argument));
     this.command('kronos.closeWorkSession', async argument => this.stopManagingSession(argument));
     this.command('kronos.removeWorkSession', async argument => this.removeManagedSession(argument));
+    this.command('kronos.refreshProjects', () => this.projectTree.refresh());
     this.command('kronos.openProjectGitStatus', async argument => this.openProjectGitStatus(argument));
     this.command('kronos.insertProjectGitContext', async argument => this.insertProjectGitContext(argument));
     this.command('kronos.openProjectMergeRequest', async argument => this.openProjectMergeRequest(argument));
@@ -1996,6 +2004,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
         content: renderProjectGitEvidence(project.projectName, evidence),
       });
       await vscode.window.showTextDocument(document, { preview: true });
+      this.projectTree.refresh();
       if (!evidence.available) {
         void vscode.window.showWarningMessage(evidence.warning || 'VS Code Git status is unavailable for this project.');
       }
@@ -2802,6 +2811,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private refreshTerminalFirstViews(): void {
     this.workTree.refresh();
     this.sessionTree.refresh();
+    this.projectTree.refresh();
     this.attentionTree.refresh();
     this.refreshTicketPanels();
     this.renderJiraBoardPanel();

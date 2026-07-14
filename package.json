@@ -75,6 +75,10 @@
           "name": "Sessions"
         },
         {
+          "id": "kronosProjects",
+          "name": "Projects"
+        },
+        {
           "id": "kronosAttention",
           "name": "Attention"
         }
@@ -192,6 +196,11 @@
         "icon": "$(trash)"
       },
       {
+        "command": "kronos.refreshProjects",
+        "title": "Kronos: Refresh Project Branches and Status",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "kronos.openProjectGitStatus",
         "title": "Kronos: View Project Git Status and Diff",
         "icon": "$(open-preview)"
@@ -300,23 +309,38 @@
           "group": "navigation@2"
         },
         {
-          "command": "kronos.pollManagedWorkSessions",
-          "when": "view == kronosSessions || view == kronosAttention",
+          "command": "kronos.refreshProjects",
+          "when": "view == kronosProjects",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kronos.registerWorkspaceProject",
+          "when": "view == kronosProjects",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kronos.configureProjectDiscoveryFolders",
+          "when": "view == kronosProjects",
           "group": "navigation@3"
         },
         {
+          "command": "kronos.pollManagedWorkSessions",
+          "when": "view == kronosSessions || view == kronosProjects || view == kronosAttention",
+          "group": "navigation@4"
+        },
+        {
           "command": "kronos.setup",
-          "when": "view == kronosWork || view == kronosSessions || view == kronosAttention",
+          "when": "view == kronosWork || view == kronosSessions || view == kronosProjects || view == kronosAttention",
           "group": "navigation@8"
         },
         {
           "command": "kronos.doctor",
-          "when": "view == kronosWork || view == kronosSessions || view == kronosAttention",
+          "when": "view == kronosWork || view == kronosSessions || view == kronosProjects || view == kronosAttention",
           "group": "navigation@9"
         },
         {
           "command": "kronos.settings",
-          "when": "view == kronosWork || view == kronosSessions || view == kronosAttention",
+          "when": "view == kronosWork || view == kronosSessions || view == kronosProjects || view == kronosAttention",
           "group": "navigation@10"
         }
       ],

@@ -25,9 +25,10 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 assert.deepEqual(packageJson.contributes.views.kronos.map(view => view.id), [
   'kronosWork',
   'kronosSessions',
+  'kronosProjects',
   'kronosAttention',
 ]);
-assert.equal(packageJson.contributes.commands.length, 35);
+assert.equal(packageJson.contributes.commands.length, 36);
 assert.equal(Object.keys(packageJson.contributes.configuration.properties).length, 10);
 assert.equal(work.tickets['JIRA-123'].launch_project, 'fixture-service');
 assert.equal(

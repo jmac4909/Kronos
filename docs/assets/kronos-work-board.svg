@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
   <title id="title">Kronos Jira Work Board product preview</title>
-  <desc id="desc">A synthetic dark-theme VS Code window showing Kronos Work, Sessions, Attention, local projects, Jira filters, and three ticket columns.</desc>
+  <desc id="desc">A synthetic dark-theme VS Code window showing Kronos Work, Sessions, Projects, Attention, Jira filters, and three ticket columns.</desc>
   <defs>
     <linearGradient id="window" x1="0" y1="0" x2="1440" y2="900" gradientUnits="userSpaceOnUse">
       <stop stop-color="#111827"/>
