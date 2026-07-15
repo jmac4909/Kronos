@@ -37,7 +37,11 @@
       "automated": [
         { "file": "scripts/run-unit-tests.js", "test": "Attention stream identity is stable by project, provider, resource, logical subject, and facet" },
         { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" },
-        { "file": "scripts/run-unit-tests.js", "test": "GitLab MR review monitoring retains complete facets across partial reads and dedupes read health" }
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab MR review monitoring retains complete facets across partial reads and dedupes read health" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab merge-request transition matrix covers every declared structural transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab pipeline transition matrix covers every declared pipeline, job, and test transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Jenkins and SonarQube transition matrices cover every declared CI transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" }
       ],
       "humanGates": ["live-providers"]
     },
@@ -96,7 +100,8 @@
         { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder gives one deterministic event to one transition" },
         { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder suppresses unchanged read health but records a real change" },
         { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider read failures normalize to stable operator-safe categories" },
-        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider read components and fingerprints are canonical and bounded" }
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider read components and fingerprints are canonical and bounded" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" }
       ],
       "humanGates": []
     },

@@ -10,8 +10,8 @@ import {
   listWorkSessions,
   newestWorkSessionProviderBinding,
 } from '../services/workSessionStore';
+import { currentAttentionTransitions } from '../services/attentionProjection';
 import { normalizeProviderPublicUrl } from '../services/providerUrls';
-import { providerTransitionStreamKey } from '../services/providerTransitionStreams';
 
 export interface AttentionCommandTarget {
   eventId: string;
@@ -111,19 +111,9 @@ export class AttentionTreeProvider implements vscode.TreeDataProvider<AttentionT
       return [];
     }
 
-    const acknowledged = new Set<string>();
-    for (const event of events) {
-      if (event.type !== 'notification.acknowledged') { continue; }
-      const acknowledgedEventId = event.metadata?.['acknowledgedEventId'];
-      if (typeof acknowledgedEventId === 'string' && acknowledgedEventId) {
-        acknowledged.add(attentionEventKey(event.sessionId, acknowledgedEventId));
-      }
-    }
-
     const sessions = this.safeLoadWorkSessions();
     const sessionsById = new Map(sessions.map(session => [session.id, session]));
-    return latestProviderTransitions(events, sessionsById)
-      .filter(event => !acknowledged.has(attentionEventKey(event.sessionId, event.id)))
+    return currentAttentionTransitions(events, sessions)
       .map(event => {
         const session = sessionsById.get(event.sessionId);
         const providerChoices = providerChoicesForEvent(event, session);
@@ -147,25 +137,6 @@ export class AttentionTreeProvider implements vscode.TreeDataProvider<AttentionT
       return [];
     }
   }
-}
-
-function latestProviderTransitions(
-  events: readonly MonitorEvent[],
-  sessionsById: ReadonlyMap<string, WorkSessionRecord>,
-): MonitorEvent[] {
-  const newestFirst = events
-    .map((event, index) => ({ event, index }))
-    .filter(({ event }) => event.type === 'provider.transition' && sessionsById.has(event.sessionId))
-    .sort((left, right) => right.event.at.localeCompare(left.event.at)
-      || left.index - right.index
-      || right.event.id.localeCompare(left.event.id));
-  const latestByStream = new Map<string, MonitorEvent>();
-  for (const { event } of newestFirst) {
-    const session = sessionsById.get(event.sessionId);
-    const key = providerTransitionStreamKey(event, session);
-    if (!latestByStream.has(key)) { latestByStream.set(key, event); }
-  }
-  return [...latestByStream.values()];
 }
 
 export type AttentionTreeItem = AttentionGroupTreeItem | AttentionEventTreeItem | AttentionMessageTreeItem;
@@ -428,10 +399,6 @@ function providerLabel(source: MonitorEventSource): string {
 function displayTimestamp(value: string): string {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
-}
-
-function attentionEventKey(sessionId: string, eventId: string): string {
-  return `${sessionId}:${eventId}`;
 }
 
 function errorMessage(error: unknown): string {

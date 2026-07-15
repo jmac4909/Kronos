@@ -14,7 +14,8 @@ flowchart LR
   S --> V
   B --> M[Managed provider monitor]
   M --> E[Append-only event owner]
-  E --> V
+  E --> A[Pure current Attention projection]
+  A --> V
   C --> X[Editable context composer]
   C --> K[Private bounded Context Basket]
   K --> X
@@ -38,6 +39,7 @@ flowchart LR
 | Provider binding | `workSessionStore.ts` | Embedded bounded normalized provider/resource/subject/project/URL record with attachment time | Semantic replacement prevents duplicate bindings; provider URLs are normalized and origin-safe before use; newest valid durable MR binding owns MR identity | Polling, Work projection, Attention, context reads |
 | MR, pipeline, read-health, and CI baselines | The matching `*MonitorStore.ts` or transition service | Private bounded normalized digest files under the session; shared atomic file primitive | Incomplete reads retain last complete facets; malformed, symbolic, oversized, or identity-raced state fails closed; no raw provider response is stored | Managed provider monitor and transition comparison |
 | Provider transition reconciliation | `providerTransitionRecorder.ts`, with read normalization in `providerReadHealth.ts` | Deterministic event ID plus newest normalized provider-read state | Exact events and unchanged read-health signatures are suppressed; actual recovery/change appends | Attention, audit, monitoring summaries |
+| Current Attention projection | `attentionProjection.ts` | Pure rebuild from bounded normalized transition/acknowledgement records plus canonical session identity | Selects the newest event per canonical stream before applying acknowledgement, so restart is deterministic and an acknowledged newest row cannot resurrect stale history | Attention tree |
 | Provider health visibility | `workSessionStore.ts`, projected by `providerMonitoringHealth.ts` | Per-session attempt/success/change/error/suppression fields; project values are derived | Missing additive fields remain valid; legacy successful polls are used only when their failure count was zero | Sessions and Projects |
 | Monitoring lease | `managedMonitorLease.ts` | One exclusive private lease per `KRONOS_DIR`, bounded owner/expiry record, renewable pins | POSIX requires `O_NOFOLLOW`; Windows uses exclusive creation and lstat/fstat identity checks; loss of ownership stops persistence and the next provider read | Managed provider monitor |
 | Monitor and audit event ledger | `monitorEventStore.ts` | Append-only bounded JSONL records with canonical event, session, source, subject, state, and metadata fields | Invalid lines are skipped; reads are bounded tails; Attention projects newest state but never deletes history | Attention, session audit |

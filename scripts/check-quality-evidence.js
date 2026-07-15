@@ -34,6 +34,11 @@ if (failures.length > 0) {
   console.log(
     `Kronos quality evidence OK (${matrix.featureGroups.length} feature groups, ${evidenceCount} checked automated references, ${matrix.humanGates.length} explicit human gates).`,
   );
+  for (const group of matrix.featureGroups) {
+    console.log(
+      `- ${group.id}: ${group.automated.length} automated reference${group.automated.length === 1 ? '' : 's'}; human gates: ${group.humanGates.join(', ') || 'none'}.`,
+    );
+  }
   console.log(`Human gates still required: ${matrix.humanGates.map(gate => gate.id).join(', ')}.`);
 }
 
@@ -107,6 +112,7 @@ function checkReadmeMetrics(packageJson, readmeSource) {
     'scripts/run-scale-accessibility-tests.js',
     'scripts/run-work-orchestration-tests.js',
     'scripts/run-provider-reconciliation-tests.js',
+    'scripts/run-attention-transition-matrix-tests.js',
     'scripts/run-provider-health-visibility-tests.js',
     'scripts/run-context-basket-tests.js',
     'scripts/run-local-evidence-search-tests.js',

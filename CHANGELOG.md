@@ -10,6 +10,7 @@ All notable changes to the Kronos preview are documented here.
 - Added ephemeral bounded local evidence search across session titles, explicit Jira contexts, registered projects/branches, provider bindings, artifact labels, and audit-event summaries without reading or indexing terminal content.
 - Added private local Markdown/JSON handoff bundles for up to 100 selected redacted context/audit references and hashes; exports never include terminal content, copy source payloads, or post to a provider.
 - Added up to 20 explicit per-project Jenkins/SonarQube branch-routing profiles with exact MR-branch selection and an optional explicit fallback; profiles never infer ticket links or switch Git branches.
+- Added a source-checked transition matrix for every declared GitLab MR, pipeline/job/test, Jenkins, and SonarQube transition, and extracted restart-safe current Attention projection from the view.
 - Prioritized extension improvement roadmap covering identity, terminal lifecycle, provider reconciliation, Attention, cross-platform persistence, UX, maintainability, and release evidence.
 - Dedicated Projects view with current branch, clean/dirty status, read-only Git loading, and existing project evidence actions.
 - Recruiter-facing product overview, architecture, engineering metrics, and synthetic product renders.
