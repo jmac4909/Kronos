@@ -24,6 +24,11 @@
         { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "session removal deletes only colocated state and registry detachment never controls the terminal" },
         { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "explicit Claude launch creates and focuses exactly one terminal with or without a cwd" },
         { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions present project, branch, Jira contexts, attachment, monitoring, and latest result at a glance" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions never present detached, closed, stopped, paused, or removed-project records as active" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions action language keeps Open Terminal, reconnect, detach, monitoring, audit, stop, and remove distinct" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "terminal titles capture ticket and observed branch once at launch within the VS Code name bound" },
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search covers sessions, tickets, projects, branches, providers, artifacts, and events without terminal content" },
         { "file": "scripts/run-unit-tests.js", "test": "Claude terminal launch is explicit, focused, validated, and operator-triggered" },
         { "file": "scripts/run-unit-tests.js", "test": "work-session lifecycle never requires a terminal process owner" },
         { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
@@ -1002,6 +1007,76 @@
       "requirements": ["G09-evidence-03:2b7bcd99"],
       "automated": [
         { "file": "scripts/run-project-catalog-tests.js", "test": "project integration presentation exposes readiness without provider identifiers or credentials" }
+      ]
+    },
+    {
+      "requirements": ["G10-goal:25373a8c"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions present project, branch, Jira contexts, attachment, monitoring, and latest result at a glance" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "requirements": ["G10-case-01:904538e8"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "standalone work sessions persist without fake Jira identities and preserve legacy ticket records" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-02:c36b043f"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions present project, branch, Jira contexts, attachment, monitoring, and latest result at a glance" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-03:c5823dad"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "standalone work sessions persist without fake Jira identities and preserve legacy ticket records" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-04:5552e342"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions action language keeps Open Terminal, reconnect, detach, monitoring, audit, stop, and remove distinct" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-05:ee994e54"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions never present detached, closed, stopped, paused, or removed-project records as active" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-06:fe239727"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "terminal titles capture ticket and observed branch once at launch within the VS Code name bound" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-evidence-01:b32294b9"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions action language keeps Open Terminal, reconnect, detach, monitoring, audit, stop, and remove distinct" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "requirements": ["G10-evidence-02:9101d1e5"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "session removal deletes only colocated state and registry detachment never controls the terminal" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions action language keeps Open Terminal, reconnect, detach, monitoring, audit, stop, and remove distinct" }
+      ]
+    },
+    {
+      "requirements": ["G10-evidence-03:c671b0fb"],
+      "automated": [
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search covers sessions, tickets, projects, branches, providers, artifacts, and events without terminal content" }
       ]
     },
     {

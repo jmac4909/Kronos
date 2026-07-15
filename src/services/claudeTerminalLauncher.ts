@@ -81,6 +81,23 @@ export function normalizeClaudeTerminalLaunch(
   return normalized;
 }
 
+/** Captures ticket/project branch context once for the terminal created at launch. */
+export function buildClaudeTerminalTitle(baseNameValue: unknown, ticketKey?: string, branchValue?: unknown): string {
+  const baseName = normalizeTerminalName(baseNameValue);
+  const branch = singleLine(branchValue, 500);
+  const context = ticketKey
+    ? `${ticketKey}${branch ? ` @ ${branch}` : ''}`
+    : branch;
+  if (!context) { return baseName; }
+  const separator = ticketKey ? ' · ' : ' @ ';
+  const maximumContextLength = Math.max(1, MAX_TERMINAL_NAME_LENGTH - separator.length - 1);
+  const boundedContext = context.length > maximumContextLength
+    ? `${context.slice(0, Math.max(1, maximumContextLength - 1))}…`
+    : context;
+  const maximumBaseLength = Math.max(1, MAX_TERMINAL_NAME_LENGTH - separator.length - boundedContext.length);
+  return `${baseName.slice(0, maximumBaseLength)}${separator}${boundedContext}`;
+}
+
 /** Checks the extension-host PATH without executing the configured command. */
 export function probeClaudeExecutableAvailability(
   command: unknown = DEFAULT_CLAUDE_COMMAND,
@@ -182,6 +199,12 @@ function normalizeTerminalName(value: unknown): string {
     throw new Error(`Claude terminal name must be between 1 and ${MAX_TERMINAL_NAME_LENGTH} characters.`);
   }
   return normalized;
+}
+
+function singleLine(value: unknown, maxLength: number): string {
+  return typeof value === 'string'
+    ? value.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength)
+    : '';
 }
 
 function normalizeLaunchCwd(value: unknown): string | undefined {

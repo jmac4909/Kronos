@@ -98,6 +98,7 @@ import {
 import {
   DEFAULT_CLAUDE_COMMAND,
   DEFAULT_CLAUDE_TERMINAL_NAME,
+  buildClaudeTerminalTitle,
   launchClaudeTerminal,
   normalizeClaudeTerminalLaunch,
   probeClaudeExecutableAvailability,
@@ -3650,21 +3651,6 @@ function boundedIntegerSetting(value: unknown, fallback: number, minimum: number
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.max(minimum, Math.min(maximum, Math.floor(value)))
     : fallback;
-}
-
-function buildClaudeTerminalTitle(baseName: string, ticketKey?: string, branch?: string): string {
-  const branchLabel = safeProjectName(branch).slice(0, 500);
-  const context = ticketKey
-    ? `${ticketKey}${branchLabel ? ` @ ${branchLabel}` : ''}`
-    : branchLabel;
-  if (!context) { return baseName; }
-  const separator = ticketKey ? ' · ' : ' @ ';
-  const maximumContextLength = Math.max(1, 80 - separator.length - 1);
-  const boundedContext = context.length > maximumContextLength
-    ? `${context.slice(0, Math.max(1, maximumContextLength - 1))}…`
-    : context;
-  const maximumBaseLength = Math.max(1, 80 - separator.length - boundedContext.length);
-  return `${baseName.slice(0, maximumBaseLength)}${separator}${boundedContext}`;
 }
 
 function contextProviderReadStep(complete: boolean, detail: string): OperationStageInput {

@@ -13,6 +13,7 @@ const claudeTerminalLauncher = require('../out/services/claudeTerminalLauncher.j
 const { createOperatorTerminalRegistry } = require('../out/services/operatorTerminalRegistry.js');
 const terminalContextInsertion = require('../out/services/terminalContextInsertion.js');
 const workSessionLifecycle = require('../out/services/workSessionLifecycle.js');
+const sessionInventory = require('../out/services/sessionInventoryPresentation.js');
 const workSessions = require('../out/services/workSessionStore.js');
 const monitorEvents = require('../out/services/monitorEventStore.js');
 
@@ -89,6 +90,167 @@ test('one lifecycle projection distinguishes none, attached, paused, detached, c
     canPollProviders: false,
     canReconnect: true,
   });
+});
+
+test('Sessions present project, branch, Jira contexts, attachment, monitoring, and latest result at a glance', () => {
+  const options = {
+    kronosDir: path.join(tempRoot, 'session-inventory'),
+    now: new Date('2026-07-15T12:00:00.000Z'),
+  };
+  let session = workSessions.createStandaloneWorkSession({
+    title: 'Interactive investigation',
+    projectName: 'Application',
+    projectPath: tempRoot,
+  }, options);
+  session = workSessions.attachWorkSessionTerminal(session.id, {
+    bindingId: 'terminal-inventory',
+    name: 'Operator terminal metadata only',
+  }, options);
+  let presentation = sessionInventory.sessionInventoryPresentation(
+    session,
+    1,
+    300_000,
+    'feature/session-inventory',
+  );
+  assert.equal(presentation.label, 'Application: Interactive investigation');
+  assert.equal(
+    presentation.description,
+    'Application @ feature/session-inventory • no Jira context • 1 terminal attached',
+  );
+
+  session = workSessions.addWorkSessionTicketContext(session.id, 'JIRA-301', options);
+  session = workSessions.addWorkSessionTicketContext(session.id, 'JIRA-302', options);
+  session = workSessions.recordWorkSessionMonitoringResult(session.id, {
+    polled: 2,
+    failures: 1,
+    skipped: 0,
+    transitions: 1,
+    summary: 'GitLab succeeded; Jenkins needs operator review.',
+  }, options);
+  presentation = sessionInventory.sessionInventoryPresentation(
+    session,
+    1,
+    300_000,
+    'feature/session-inventory',
+  );
+  assert.equal(
+    presentation.description,
+    'Application @ feature/session-inventory • 2 Jira contexts • 1 terminal attached • poll partial',
+  );
+  assert.match(presentation.tooltip, /Ticket contexts: JIRA-301, JIRA-302/);
+  assert.match(presentation.tooltip, /Monitoring lifecycle: running/);
+  assert.match(presentation.tooltip, /Monitoring result: GitLab succeeded; Jenkins needs operator review\./);
+  assert.match(presentation.tooltip, /Primary action: Open Terminal\./);
+  assert.doesNotMatch(presentation.tooltip, /Operator terminal metadata only/);
+});
+
+test('Sessions never present detached, closed, stopped, paused, or removed-project records as active', () => {
+  const options = {
+    kronosDir: path.join(tempRoot, 'session-inventory-lifecycle'),
+    now: new Date('2026-07-15T12:00:00.000Z'),
+  };
+  let session = workSessions.createOrGetWorkSessionByTicket({
+    ticketKey: 'JIRA-303',
+    title: 'Lifecycle presentation',
+    projectName: 'Removed Project',
+    projectPath: tempRoot,
+  }, options);
+  session = workSessions.attachWorkSessionTerminal(session.id, {
+    bindingId: 'terminal-lifecycle-presentation',
+    name: 'Operator terminal',
+  }, options);
+  session = workSessions.setWorkSessionMonitoring(session.id, false, undefined, options);
+  assert.match(
+    sessionInventory.sessionInventoryPresentation(session, 1, 300_000, 'main').description,
+    /1 terminal attached • poll paused$/,
+  );
+
+  session = workSessions.detachWorkSessionTerminal(
+    session.id,
+    'terminal-lifecycle-presentation',
+    'operator detached',
+    options,
+  );
+  assert.match(
+    sessionInventory.sessionInventoryPresentation(session, 0, 300_000, 'main').description,
+    /terminal detached • poll paused$/,
+  );
+  session = workSessions.markWorkSessionTerminalClosed(
+    session.id,
+    'terminal-lifecycle-presentation',
+    'terminal closed',
+    options,
+  );
+  session = workSessions.setWorkSessionProject(session.id, {}, options);
+  session = workSessions.closeWorkSession(session.id, options);
+  const stopped = sessionInventory.sessionInventoryPresentation(session, 0, 300_000);
+  assert.equal(stopped.label, 'JIRA-303: Lifecycle presentation');
+  assert.equal(stopped.description, '1 Jira context • terminal closed • management stopped');
+
+  const newerActive = workSessions.createStandaloneWorkSession({ title: 'New active session' }, {
+    ...options,
+    now: new Date('2026-07-15T12:01:00.000Z'),
+  });
+  assert.deepEqual(
+    [session, newerActive].sort(sessionInventory.sessionInventorySortOrder).map(item => item.id),
+    [newerActive.id, session.id],
+  );
+});
+
+test('Sessions action language keeps Open Terminal, reconnect, detach, monitoring, audit, stop, and remove distinct', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  const titles = Object.fromEntries(manifest.contributes.commands.map(command => [command.command, command.title]));
+  assert.deepEqual({
+    open: titles['kronos.focusWorkSessionTerminal'],
+    reconnect: titles['kronos.reattachWorkSessionTerminal'],
+    detach: titles['kronos.detachWorkSessionTerminal'],
+    pause: titles['kronos.pauseWorkSessionMonitoring'],
+    resume: titles['kronos.resumeWorkSessionMonitoring'],
+    poll: titles['kronos.pollManagedWorkSessions'],
+    audit: titles['kronos.openWorkSessionAudit'],
+    stop: titles['kronos.closeWorkSession'],
+    remove: titles['kronos.removeWorkSession'],
+  }, {
+    open: 'Kronos: Open Session Terminal',
+    reconnect: 'Kronos: Reconnect Focused Terminal to Session',
+    detach: 'Kronos: Detach Terminal',
+    pause: 'Kronos: Pause Work Session Monitoring',
+    resume: 'Kronos: Resume Work Session Monitoring',
+    poll: 'Kronos: Poll Managed Providers',
+    audit: 'Kronos: Open Work Session Audit',
+    stop: 'Kronos: Stop Managing Work Session',
+    remove: 'Kronos: Remove Session from Kronos',
+  });
+  assert.equal(new Set(Object.values(titles).filter(title => title.includes('Session') || title.includes('Monitoring'))).size > 1, true);
+  const viewSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'views', 'ManagedSessionTreeProvider.ts'), 'utf8');
+  assert.match(viewSource, /this\.command = \{ command: 'kronos\.focusWorkSessionTerminal', title: 'Open Session Terminal'/);
+  const runtimeSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'terminalFirstExtension.ts'), 'utf8');
+  assert.match(runtimeSource, /local session record and monitoring snapshots will be deleted/);
+  assert.match(runtimeSource, /terminal.*remain open and untouched/);
+  assert.match(runtimeSource, /Shared audit history and saved context files are retained locally/);
+});
+
+test('terminal titles capture ticket and observed branch once at launch within the VS Code name bound', () => {
+  assert.equal(
+    claudeTerminalLauncher.buildClaudeTerminalTitle('Claude', undefined, 'feature/standalone'),
+    'Claude @ feature/standalone',
+  );
+  assert.equal(
+    claudeTerminalLauncher.buildClaudeTerminalTitle('Claude', 'JIRA-304', 'feature/ticket'),
+    'Claude · JIRA-304 @ feature/ticket',
+  );
+  const bounded = claudeTerminalLauncher.buildClaudeTerminalTitle(
+    'Claude terminal with an intentionally long configured presentation label',
+    'JIRA-305',
+    `feature/${'x'.repeat(200)}`,
+  );
+  assert.ok(bounded.length <= 80);
+  assert.match(bounded, /JIRA-305 @ feature\//);
+  assert.match(bounded, /…$/);
+  assert.equal(
+    claudeTerminalLauncher.buildClaudeTerminalTitle('Claude', 'JIRA-306', 'feature\nobserved'),
+    'Claude · JIRA-306 @ feature observed',
+  );
 });
 
 test('session removal deletes only colocated state and registry detachment never controls the terminal', () => {

@@ -12,7 +12,7 @@
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178C6">
   <img alt="VS Code 1.85 or newer" src="https://img.shields.io/badge/VS%20Code-%5E1.85-23A8F2">
   <img alt="Zero third-party runtime dependencies" src="https://img.shields.io/badge/runtime%20dependencies-0-22C55E">
-  <img alt="175 automated local tests" src="https://img.shields.io/badge/test%20suite-175%20local-22C55E">
+  <img alt="179 automated local tests" src="https://img.shields.io/badge/test%20suite-179%20local-22C55E">
   <img alt="Preview status" src="https://img.shields.io/badge/status-preview-F59E0B">
 </p>
 
@@ -103,9 +103,9 @@ The installed extension uses the VS Code API and Node built-ins only. It has **z
 | Audited terminal-write paths | 2 |
 | Manifest-covered commands | 40 |
 | Manifest-covered settings | 10 |
-| Reachable runtime modules checked for cycles/dead exports | 81 |
+| Reachable runtime modules checked for cycles/dead exports | 82 |
 | Third-party runtime dependencies | 0 |
-| Automated Node/DOM/board tests | 175 |
+| Automated Node/DOM/board tests | 179 |
 
 Automated gates also cover the runtime graph, security boundary, context governance, activation surface, provider transitions, private state, credential redaction, and packaged extension contents.
 
