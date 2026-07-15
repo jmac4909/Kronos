@@ -17,6 +17,11 @@
       "id": "terminal-and-sessions",
       "goals": ["G02", "G10"],
       "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "duplicate terminal names remain exact object identities across sessions and ambiguous bindings" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "one lifecycle projection distinguishes none, attached, paused, detached, closed, and stopped" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "session removal deletes only colocated state and registry detachment never controls the terminal" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "explicit Claude launch creates and focuses exactly one terminal with or without a cwd" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
         { "file": "scripts/run-unit-tests.js", "test": "Claude terminal launch is explicit, focused, validated, and operator-triggered" },
         { "file": "scripts/run-unit-tests.js", "test": "work-session lifecycle never requires a terminal process owner" },
         { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
@@ -184,6 +189,7 @@
   "repositoryChecks": [
     { "id": "roadmap-requirement-inventory", "file": "scripts/check-roadmap-evidence.js", "marker": "parseRoadmapRequirements" },
     { "id": "state-identity-ownership", "file": "docs/state-ownership.md", "marker": "| Ticket-to-project link |" },
+    { "id": "state-terminal-ownership", "file": "docs/state-ownership.md", "marker": "| Live terminal object attachment |" },
     { "id": "feature-human-summary", "file": "scripts/check-quality-evidence.js", "marker": "Kronos quality evidence OK" },
     { "id": "derived-doc-metrics", "file": "scripts/check-quality-evidence.js", "marker": "checkReadmeMetrics" },
     { "id": "required-release-gates", "file": "scripts/check-roadmap-evidence.js", "marker": "checkRequiredReleaseGates" },
@@ -268,6 +274,91 @@
       "automated": [
         { "file": "scripts/run-project-catalog-tests.js", "test": "unlinked tickets stay unlinked across refresh, registration, reload, polling selection, and standalone sessions" }
       ]
+    },
+    {
+      "requirements": ["G02-goal:cf78a993"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "duplicate terminal names remain exact object identities across sessions and ambiguous bindings" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "one lifecycle projection distinguishes none, attached, paused, detached, closed, and stopped" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "session removal deletes only colocated state and registry detachment never controls the terminal" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "checks": ["state-terminal-ownership"],
+      "humanGates": ["operator-terminal", "real-vscode", "windows-native"]
+    },
+    {
+      "requirements": ["G02-case-01:b50a0d6f"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "explicit Claude launch creates and focuses exactly one terminal with or without a cwd" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-02:a4399be2", "G02-case-03:84e01dca"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-04:308e09e6"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "duplicate terminal names remain exact object identities across sessions and ambiguous bindings" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-05:9956e0af"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "duplicate terminal names remain exact object identities across sessions and ambiguous bindings" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-06:a9a45d1f"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-07:4435d8cd"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-08:fa5171ba"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "one lifecycle projection distinguishes none, attached, paused, detached, closed, and stopped" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-09:bab6b6e3"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "session removal deletes only colocated state and registry detachment never controls the terminal" },
+        { "file": "scripts/run-unit-tests.js", "test": "removing a work session deletes its record and colocated snapshots without touching external artifacts" }
+      ]
+    },
+    {
+      "requirements": ["G02-evidence-01:01798bf1"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "one lifecycle projection distinguishes none, attached, paused, detached, closed, and stopped" }
+      ],
+      "checks": ["state-terminal-ownership"]
+    },
+    {
+      "requirements": ["G02-evidence-02:bcfb5a13"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-evidence-03:502aebe6"],
+      "humanGates": ["operator-terminal", "real-vscode", "windows-native"]
     },
     {
       "requirements": ["G16-goal:b55b5b6c"],

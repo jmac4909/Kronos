@@ -112,6 +112,7 @@ function checkReadmeMetrics(packageJson, readmeSource) {
     'scripts/run-scale-accessibility-tests.js',
     'scripts/run-provider-readiness-tests.js',
     'scripts/run-project-catalog-tests.js',
+    'scripts/run-terminal-lifecycle-tests.js',
     'scripts/run-work-orchestration-tests.js',
     'scripts/run-provider-reconciliation-tests.js',
     'scripts/run-attention-transition-matrix-tests.js',

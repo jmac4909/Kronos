@@ -20,6 +20,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Changed
 
+- Closed G02's synthetic terminal-lifecycle cases with a focused suite and activation races covering workspace/home launches, linked/unlinked tickets, non-launching existing-terminal management, duplicate terminal names, exact reconnect choice, focus changes during fetch, close/rebind invalidation, lifecycle projection, and removal isolation; real Linux/Windows VS Code focus and reconnect remain explicit human gates.
 - Closed all 12 canonical-identity roadmap clauses with direct regressions for multiple repositories under one Jira namespace, independent explicit ticket links, unlinked-ticket persistence and provider isolation, multi-ticket standalone sessions, resource-specific provider bindings, and schema-v1 migration/fail-closed recovery.
 - Replaced goal-presence-only validation with a fingerprinted case-level roadmap inventory: all 230 G01-G22 goal statements, cases, and completion clauses now report direct automated evidence, required human signoff, or an explicit open count, and stale mappings fail closed when roadmap text changes.
 - Extracted provider environment parsing/safety, shared readiness, and Setup/Doctor readiness projection from the monolithic unit harness into a dedicated `provider:readiness` suite retained by `npm test`.

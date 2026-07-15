@@ -3151,6 +3151,7 @@ test('extension activation registers the bounded surface and explicit launch com
       },
       tickets: {
         'JIRA-123': fixtureTicket({ linked_local_project: 'fixture' }),
+        'JIRA-222': fixtureTicket({ summary: 'Explicitly unlinked launch fixture', linked_local_project: undefined }),
         'JIRA-456': fixtureTicket({ summary: 'Attachment race fixture', linked_local_project: 'fixture' }),
         'JIRA-789': fixtureTicket({ summary: 'Closed-before-attach fixture', linked_local_project: 'fixture' }),
         'JIRA-999': fixtureTicket({ summary: 'Launch failure fixture', linked_local_project: 'fixture' }),
@@ -3474,6 +3475,36 @@ test('extension activation registers the bounded surface and explicit launch com
     await commandHandlers.get('kronos.newClaudeSession')();
     assert.equal(createdTerminals.length, 1, 'a rapid sequential standalone click must be ignored during the cooldown');
 
+    const originalWorkspaceName = vscode.workspace.name;
+    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const originalDateNow = Date.now;
+    const noWorkspaceLaunchTime = originalDateNow() + 2_000;
+    vscode.workspace.name = undefined;
+    vscode.workspace.workspaceFolders = undefined;
+    Date.now = () => noWorkspaceLaunchTime;
+    try {
+      await commandHandlers.get('kronos.newClaudeSession')();
+    } finally {
+      Date.now = originalDateNow;
+      vscode.workspace.name = originalWorkspaceName;
+      vscode.workspace.workspaceFolders = originalWorkspaceFolders;
+    }
+    assert.equal(createdTerminals.length, 2, 'New Claude must also work without an open workspace');
+    const noWorkspaceTerminalRecord = createdTerminals.pop();
+    assert.equal(noWorkspaceTerminalRecord.options.cwd, os.homedir());
+    assert.deepEqual(noWorkspaceTerminalRecord.actions, [
+      ['show', false],
+      ['sendText', 'claude', true],
+    ]);
+    const noWorkspaceSession = workSessions.listWorkSessions().find(session =>
+      session.kind === 'standalone' && session.projectPath === os.homedir());
+    assert.ok(noWorkspaceSession);
+    assert.equal(noWorkspaceSession.projectName, undefined);
+    closeTerminalHandler(noWorkspaceTerminalRecord.terminal);
+    workSessions.removeWorkSession(noWorkspaceSession.id);
+    vscode.window.terminals = vscode.window.terminals.filter(terminal => terminal !== noWorkspaceTerminalRecord.terminal);
+    vscode.window.activeTerminal = createdTerminals[0].terminal;
+
     await commandHandlers.get('kronos.startClaudeForTicket')({ ticketKey: 'JIRA-123' });
     assert.equal(createdTerminals.length, 2);
     const ticketSession = workSessions.getWorkSessionByTicket('JIRA-123');
@@ -3487,6 +3518,41 @@ test('extension activation registers the bounded surface and explicit launch com
       ['show', false],
       ['sendText', 'claude', true],
     ]);
+    const linkedTicketTerminalCount = createdTerminals.length;
+    await commandHandlers.get('kronos.startClaudeForTicket')({ ticketKey: 'JIRA-222' });
+    assert.equal(createdTerminals.length, linkedTicketTerminalCount + 1);
+    const unlinkedTicketSession = workSessions.getWorkSessionByTicket('JIRA-222');
+    const unlinkedTicketTerminalRecord = createdTerminals.at(-1);
+    assert.equal(unlinkedTicketSession.projectName, undefined);
+    assert.equal(unlinkedTicketSession.projectPath, undefined);
+    assert.equal(
+      unlinkedTicketTerminalRecord.options.cwd,
+      tempRoot,
+      'an unlinked ticket uses the workspace fallback without inventing a project link',
+    );
+    closeTerminalHandler(unlinkedTicketTerminalRecord.terminal);
+    workSessions.removeWorkSession(unlinkedTicketSession.id);
+    vscode.window.terminals = vscode.window.terminals.filter(terminal => terminal !== unlinkedTicketTerminalRecord.terminal);
+    vscode.window.activeTerminal = createdTerminals[1].terminal;
+
+    const existingTerminalActions = [];
+    const existingTerminal = {
+      name: 'Existing operator terminal',
+      processId: Promise.resolve(2850),
+      show(preserveFocus) { existingTerminalActions.push(['show', preserveFocus]); },
+      sendText(text, shouldExecute) { existingTerminalActions.push(['sendText', text, shouldExecute]); },
+    };
+    const createdBeforeManage = createdTerminals.length;
+    vscode.window.terminals.push(existingTerminal);
+    vscode.window.activeTerminal = existingTerminal;
+    await commandHandlers.get('kronos.manageActiveTerminal')({ ticketKey: 'JIRA-222' });
+    assert.equal(createdTerminals.length, createdBeforeManage, 'managing an existing terminal must not create another terminal');
+    assert.deepEqual(existingTerminalActions, [], 'managing an existing terminal must not focus, launch, or write to it');
+    assert.equal(workSessions.getWorkSessionByTicket('JIRA-222').terminals.at(-1).status, 'attached');
+    closeTerminalHandler(existingTerminal);
+    workSessions.removeWorkSession(workSessions.getWorkSessionByTicket('JIRA-222').id);
+    vscode.window.terminals = vscode.window.terminals.filter(terminal => terminal !== existingTerminal);
+    vscode.window.activeTerminal = createdTerminals[1].terminal;
     await commandHandlers.get('kronos.openWorkSessionAudit')({ workSessionId: ticketSession.id });
     assert.match(openedTextDocuments.at(-1).content, /JIRA\\-123/);
     assert.match(openedTextDocuments.at(-1).content, /does not collect operator terminal input or output/);
@@ -3536,6 +3602,36 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.deepEqual(reconnectedActions, [['show', false]], 'selecting a detached Session must reconnect and open the sole unclaimed terminal');
     assert.equal(workSessions.getWorkSessionByTicket('JIRA-123').terminals.at(-1).name, 'Restored JIRA-123 terminal');
 
+    const duplicateCandidateActions = [[], []];
+    const duplicateCandidates = duplicateCandidateActions.map((actions, index) => ({
+      name: 'Duplicate terminal name',
+      processId: Promise.resolve(2910 + index),
+      show(preserveFocus) { actions.push(['show', preserveFocus]); },
+      sendText(text, shouldExecute) { actions.push(['sendText', text, shouldExecute]); },
+    }));
+    const detachedDuplicateSession = workSessions.createOrGetWorkSessionByTicket({
+      ticketKey: 'JIRA-222',
+      title: 'Duplicate terminal chooser fixture',
+    });
+    vscode.window.terminals = [reconnectedTerminal, ...duplicateCandidates];
+    vscode.window.activeTerminal = undefined;
+    singlePickHandler = items => items.find(item => item.description === 'open terminal 2');
+    await commandHandlers.get('kronos.focusWorkSessionTerminal')({ workSessionId: detachedDuplicateSession.id });
+    assert.deepEqual(lastSinglePickItems.map(item => item.label), [
+      'Duplicate terminal name',
+      'Duplicate terminal name',
+    ]);
+    assert.deepEqual(lastSinglePickItems.map(item => item.description), [
+      'open terminal 1',
+      'open terminal 2',
+    ]);
+    assert.deepEqual(duplicateCandidateActions[0], []);
+    assert.deepEqual(duplicateCandidateActions[1], [['show', false]], 'the operator-chosen duplicate-name terminal must open exactly');
+    closeTerminalHandler(duplicateCandidates[1]);
+    workSessions.removeWorkSession(detachedDuplicateSession.id);
+    vscode.window.terminals = [reconnectedTerminal];
+    vscode.window.activeTerminal = reconnectedTerminal;
+
     deferNextProcessId = true;
     const racedLaunch = commandHandlers.get('kronos.startClaudeForTicket')({ ticketKey: 'JIRA-456' });
     for (let index = 0; index < 10 && !resolveDeferredProcessId; index += 1) { await Promise.resolve(); }
@@ -3562,6 +3658,37 @@ test('extension activation registers the bounded surface and explicit launch com
     process.env.JIRA_EMAIL = 'fixture@example.test';
     process.env.JIRA_API_TOKEN = 'fixture-context-token';
     try {
+      const activeSwitchPanelCount = createdWebviewPanels.length;
+      const originalTargetWrites = racedTerminalRecord.actions.length;
+      const fetchingWhileFocusChanges = commandHandlers.get('kronos.insertJiraContext')({ ticketKey: 'JIRA-456' });
+      for (let index = 0; index < 10 && !resolveJiraContextFetch; index += 1) { await Promise.resolve(); }
+      assert.equal(typeof resolveJiraContextFetch, 'function');
+      const unrelatedActiveActions = [];
+      const unrelatedActiveTerminal = {
+        name: 'Unrelated newly focused terminal',
+        processId: Promise.resolve(3050),
+        show(preserveFocus) { unrelatedActiveActions.push(['show', preserveFocus]); },
+        sendText(text, shouldExecute) { unrelatedActiveActions.push(['sendText', text, shouldExecute]); },
+      };
+      vscode.window.terminals.push(unrelatedActiveTerminal);
+      vscode.window.activeTerminal = unrelatedActiveTerminal;
+      resolveJiraContextFetch(jiraContext.buildFallbackJiraTicketContext(
+        'JIRA-456',
+        fixtureTicket({ summary: 'Focus changed during fetch fixture', linked_local_project: 'fixture' }),
+        [],
+      ));
+      await fetchingWhileFocusChanges;
+      const focusChangedComposer = createdWebviewPanels.slice(activeSwitchPanelCount)
+        .find(panel => panel.viewType === 'kronosContextComposer');
+      assert.ok(focusChangedComposer);
+      await focusChangedComposer.receive({ command: 'insertDraft', focus: 'Keep the originally selected terminal.' });
+      assert.equal(racedTerminalRecord.actions.length, originalTargetWrites + 1);
+      assert.equal(racedTerminalRecord.actions.at(-1)[2], false);
+      assert.deepEqual(unrelatedActiveActions, [], 'changing the active terminal during fetch must not redirect context');
+      vscode.window.terminals = vscode.window.terminals.filter(terminal => terminal !== unrelatedActiveTerminal);
+      vscode.window.activeTerminal = racedTerminalRecord.terminal;
+
+      resolveJiraContextFetch = undefined;
       const panelCountBeforeFetchRace = createdWebviewPanels.length;
       const writesBeforeFetchRace = racedTerminalRecord.actions.length;
       const fetchingContext = commandHandlers.get('kronos.insertJiraContext')({ ticketKey: 'JIRA-456' });
