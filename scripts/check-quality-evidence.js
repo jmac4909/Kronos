@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { testSuiteFiles } = require('./test-suite-files.js');
 
 const root = path.resolve(__dirname, '..');
 const failures = [];
@@ -104,31 +105,8 @@ function checkAutomatedEvidence(groupId, evidence) {
 }
 
 function checkReadmeMetrics(packageJson, readmeSource) {
-  const testFiles = [
-    'scripts/run-command-routing-tests.js',
-    'scripts/run-product-surface-contract-tests.js',
-    'scripts/run-feature-journey-tests.js',
-    'scripts/run-unit-tests.js',
-    'scripts/run-webview-dom-tests.js',
-    'scripts/run-jira-work-board-tests.js',
-    'scripts/run-provider-contract-tests.js',
-    'scripts/run-scale-accessibility-tests.js',
-    'scripts/run-provider-readiness-tests.js',
-    'scripts/run-project-catalog-tests.js',
-    'scripts/run-provider-binding-reconciliation-tests.js',
-    'scripts/run-terminal-lifecycle-tests.js',
-    'scripts/run-persistence-recovery-tests.js',
-    'scripts/run-schema-invariant-tests.js',
-    'scripts/run-release-surface-tests.js',
-    'scripts/run-failure-contract-tests.js',
-    'scripts/run-work-orchestration-tests.js',
-    'scripts/run-provider-reconciliation-tests.js',
-    'scripts/run-attention-transition-matrix-tests.js',
-    'scripts/run-provider-health-visibility-tests.js',
-    'scripts/run-context-basket-tests.js',
-    'scripts/run-local-evidence-search-tests.js',
-    'scripts/run-handoff-branch-profile-tests.js',
-  ];
+  const testFiles = testSuiteFiles(packageJson);
+  if (testFiles.length === 0) { fail('npm test must expose at least one discoverable Node test runner.'); }
   const actual = new Map([
     ['Enterprise provider integrations', 4],
     ['Focused VS Code views', Array.isArray(packageJson.contributes?.views?.kronos) ? packageJson.contributes.views.kronos.length : 0],

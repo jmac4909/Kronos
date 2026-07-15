@@ -40,7 +40,8 @@
         { "file": "scripts/run-product-surface-contract-tests.js", "test": "registered project actions start ticket-free Claude before read-only and provider actions" },
         { "file": "scripts/run-product-surface-contract-tests.js", "test": "non-Jira ticket workspaces omit Jira insertion without weakening terminal ownership" },
         { "file": "scripts/run-feature-journey-tests.js", "test": "project session stays ticket-free until context is explicit, then becomes monitoring eligible without changing kind" },
-        { "file": "scripts/run-feature-journey-tests.js", "test": "manifest Claude modes and validated launcher commands cannot drift apart" }
+        { "file": "scripts/run-feature-journey-tests.js", "test": "manifest Claude modes and validated launcher commands cannot drift apart" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "managed Sessions tree covers every lifecycle context and loader fallback" }
       ],
       "humanGates": ["operator-terminal", "real-vscode"]
     },
@@ -87,7 +88,8 @@
         { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "reconciled provider URLs are credential-free and rejected outside the configured origin" },
         { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "multi-project reconciliation stays inside the explicitly linked project session set" },
         { "file": "scripts/run-product-surface-contract-tests.js", "test": "Attention group identity is local-project-only and collision-safe for unassigned work" },
-        { "file": "scripts/run-product-surface-contract-tests.js", "test": "provider glyphs stay distinct while all Attention severities share green yellow red state colors" }
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "provider glyphs stay distinct while all Attention severities share green yellow red state colors" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "GitLab pipeline snapshot persistence covers missing, complete, malformed, and unsafe identities" }
       ],
       "humanGates": ["live-providers"]
     },
@@ -131,7 +133,8 @@
         { "file": "scripts/run-product-surface-contract-tests.js", "test": "registered project actions start ticket-free Claude before read-only and provider actions" },
         { "file": "scripts/run-product-surface-contract-tests.js", "test": "discovery, setup, and project management each retain one canonical UI home" },
         { "file": "scripts/run-feature-journey-tests.js", "test": "explicit project journey keeps one stable identity across Work, Projects, Sessions, and Attention" },
-        { "file": "scripts/run-feature-journey-tests.js", "test": "unregistering a project clears launch authority but preserves Jira namespace and provider-only metadata" }
+        { "file": "scripts/run-feature-journey-tests.js", "test": "unregistering a project clears launch authority but preserves Jira namespace and provider-only metadata" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "Projects tree covers empty, clean, changed, unavailable, action, and failed-loader branches" }
       ],
       "humanGates": ["real-vscode"]
     },
@@ -192,7 +195,9 @@
         { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider read components and fingerprints are canonical and bounded" },
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" },
         { "file": "scripts/run-product-surface-contract-tests.js", "test": "primary button hierarchy keeps Work, Sessions, Projects, and Attention focused" },
-        { "file": "scripts/run-product-surface-contract-tests.js", "test": "verification matrix keeps every shipped feature group under named automated evidence" }
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "verification matrix keeps every shipped feature group under named automated evidence" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "date normalization covers valid, invalid, primitive, and unsupported values" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "coverage policy discovers the npm test graph and fails closed on missing or regressed metrics" }
       ],
       "humanGates": []
     },
@@ -297,7 +302,8 @@
     { "id": "exact-vsix-release-surface", "file": "scripts/release-surface.js", "marker": "releaseSurfaceFailures" },
     { "id": "release-preflight-order", "file": "scripts/run-release-surface-tests.js", "marker": "manifest.scripts['release:preflight']" },
     { "id": "product-claim-coherence", "file": "scripts/release-surface.js", "marker": "releaseDocumentationFailures" },
-    { "id": "published-branch-verifier", "file": "scripts/verify-published-branch.js", "marker": "local and remote branch heads do not match" }
+    { "id": "published-branch-verifier", "file": "scripts/verify-published-branch.js", "marker": "local and remote branch heads do not match" },
+    { "id": "runtime-coverage-policy", "file": "scripts/run-code-coverage.js", "marker": "COVERAGE_THRESHOLDS" }
   ],
   "requirementEvidence": [
     {
@@ -1387,7 +1393,7 @@
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" },
         { "file": "scripts/run-unit-tests.js", "test": "Setup and Doctor render bounded operation dashboards with allowlisted actions" }
       ],
-      "checks": ["runtime-responsibility-graph"]
+      "checks": ["runtime-responsibility-graph", "runtime-coverage-policy"]
     },
     {
       "requirements": ["G14-evidence-01:ff81fe1b"],

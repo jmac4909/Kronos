@@ -15,6 +15,16 @@ export interface ManagedSessionCommandTarget {
   liveTerminalBindingIds: readonly string[];
 }
 
+export type ManagedSessionContextValue =
+  | 'standalone_session_attached'
+  | 'standalone_session_detached'
+  | 'standalone_session_closed'
+  | 'work_session_attached'
+  | 'work_session_detached'
+  | 'work_session_attached_paused'
+  | 'work_session_detached_paused'
+  | 'work_session_closed';
+
 type WorkSessionLoader = () => WorkSessionRecord[];
 type ProjectDisplayNameLoader = (projectName: string) => string | undefined;
 type SessionTreeElement = ManagedSessionTreeItem | ManagedSessionMessageTreeItem;
@@ -90,19 +100,31 @@ export class ManagedSessionTreeItem extends vscode.TreeItem implements ManagedSe
     };
     if (this.ticketKey) { commandTarget.ticketKey = this.ticketKey; }
     this.id = `work-session:${session.id}`;
-    const projectMonitoringSession = session.kind === 'standalone'
-      && session.ticketKeys.length > 0
-      && Boolean(session.projectName || session.projectPath);
-    this.contextValue = session.kind === 'standalone' && !projectMonitoringSession
-      ? session.status === 'closed' ? 'standalone_session_closed' : attached ? 'standalone_session_attached' : 'standalone_session_detached'
-      : session.status === 'closed' ? 'work_session_closed'
-        : !session.monitoring.enabled ? attached ? 'work_session_attached_paused' : 'work_session_detached_paused'
-          : attached ? 'work_session_attached' : 'work_session_detached';
+    this.contextValue = managedSessionContextValue(session, attached);
     this.description = presentation.description;
     this.tooltip = presentation.tooltip;
     this.iconPath = sessionIcon(session, attached);
     this.command = { command: 'kronos.focusWorkSessionTerminal', title: 'Open Session Terminal', arguments: [commandTarget] };
   }
+}
+
+/** Keeps the manifest's Session action contexts exhaustive and reviewable. */
+export function managedSessionContextValue(
+  session: WorkSessionRecord,
+  attached: boolean,
+): ManagedSessionContextValue {
+  const projectMonitoringSession = session.kind === 'standalone'
+    && session.ticketKeys.length > 0
+    && Boolean(session.projectName || session.projectPath);
+  if (session.kind === 'standalone' && !projectMonitoringSession) {
+    if (session.status === 'closed') { return 'standalone_session_closed'; }
+    return attached ? 'standalone_session_attached' : 'standalone_session_detached';
+  }
+  if (session.status === 'closed') { return 'work_session_closed'; }
+  if (!session.monitoring.enabled) {
+    return attached ? 'work_session_attached_paused' : 'work_session_detached_paused';
+  }
+  return attached ? 'work_session_attached' : 'work_session_detached';
 }
 
 class ManagedSessionMessageTreeItem extends vscode.TreeItem {

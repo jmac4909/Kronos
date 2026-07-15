@@ -56,12 +56,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectTreeE
         openRepositoryIfNeeded: true,
       });
       const config = state?.projects[project.name]?.config || {};
-      const linkedSessions = sessions.filter(session =>
-        session.projectName === project.name
-          && session.ticketKeys.length > 0
-          && session.status === 'active'
-          && session.monitoring.enabled
-      );
+      const linkedSessions = sessions.filter(session => activeProjectMonitoringSession(session, project.name));
       return new RegisteredProjectTreeItem(
         { projectName: project.name, projectPath: project.path, displayName: project.displayName },
         evidence,
@@ -90,6 +85,13 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectTreeE
       return [];
     }
   }
+}
+
+function activeProjectMonitoringSession(session: WorkSessionRecord, projectName: string): boolean {
+  return session.projectName === projectName
+    && session.ticketKeys.length > 0
+    && session.status === 'active'
+    && session.monitoring.enabled;
 }
 
 class RegisteredProjectTreeItem extends vscode.TreeItem implements RegisteredProjectCommandTarget {
