@@ -1,4 +1,3 @@
-import * as crypto from 'crypto';
 import type { KronosState as KronosStateSnapshot } from '../state/types';
 import {
   gitlabRestClient,
@@ -65,7 +64,7 @@ import {
   type WorkSessionRecord,
 } from './workSessionStore';
 import { optionalTrimmedStringFromUnknown } from './records';
-import { boundedOperationFailure, unknownErrorMessage } from './errorUtils';
+import { unknownErrorMessage } from './errorUtils';
 import { projectConfigurationForTicket, readProjectGitBranch } from './projectCatalog';
 import {
   configuredGitLabProjectIdentity,
@@ -74,8 +73,20 @@ import {
   mergeRequestDiscoverySourceBranch,
   reconcileKnownGitLabMergeRequestTarget,
 } from './ticketMergeRequestProjection';
-import { isProviderReadTransitionKind, providerReadStateSignature } from './providerReadTransitions';
 import { providerTransitionStreamKey } from './providerTransitionStreams';
+import {
+  appendTransitionOnce,
+  deterministicEventId,
+  type AppendTransitionInput,
+} from './providerTransitionRecorder';
+import {
+  deterministicReadStatusFingerprint,
+  jenkinsIncompleteReadComponents,
+  providerReadFailureReason,
+  readFailureLabel,
+  sonarIncompleteReadComponents,
+  type ProviderReadState,
+} from './providerReadHealth';
 
 export interface ManagedProviderPollResult {
   polled: number;
@@ -1157,90 +1168,6 @@ function appendCiTransitionOnce(
   return notice(event, session, transitionIsFailure(transition.kind) ? 'warning' : 'information', url, 'kronos.insertCiContext');
 }
 
-interface AppendTransitionInput {
-  session: TicketWorkSessionRecord;
-  source: MonitorEventSource;
-  summary: string;
-  subject: MonitorEventSubject;
-  state: string;
-  fingerprint: string;
-  beforeState?: string;
-  beforeFingerprint?: string;
-  artifactPath: string;
-  transitionKey: string;
-  metadata: Record<string, string | number | boolean | null>;
-}
-
-function appendTransitionOnce(input: AppendTransitionInput): MonitorEvent | null {
-  if (repeatsCurrentProviderReadState(input)) { return null; }
-  const id = deterministicEventId(
-    input.session.id,
-    input.source,
-    input.transitionKey,
-    input.subject.id,
-    input.fingerprint,
-  );
-  if (readMonitorEvent(id)) { return null; }
-  const eventInput: Parameters<typeof appendMonitorEvent>[0] = {
-    id,
-    sessionId: input.session.id,
-    type: 'provider.transition',
-    source: input.source,
-    summary: input.summary,
-    subject: input.subject,
-    after: { state: input.state, fingerprint: input.fingerprint },
-    artifactPath: input.artifactPath,
-    metadata: {
-      ...input.metadata,
-      transitionKey: input.transitionKey,
-      transitionStreamKey: providerTransitionStreamKey({
-        sessionId: input.session.id,
-        source: input.source,
-        subject: input.subject,
-        metadata: input.metadata,
-      }, input.session),
-    },
-  };
-  if (input.beforeState && input.beforeFingerprint) {
-    eventInput.before = { state: input.beforeState, fingerprint: input.beforeFingerprint };
-  }
-  return appendMonitorEvent(eventInput);
-}
-
-function repeatsCurrentProviderReadState(input: AppendTransitionInput): boolean {
-  const transitionKind = input.metadata['transitionKind'];
-  if (transitionKind !== 'provider_read_failed'
-    && transitionKind !== 'provider_read_partial'
-    && transitionKind !== 'provider_read_recovered') {
-    return false;
-  }
-  const previous = listMonitorEvents({
-    sessionId: input.session.id,
-    source: input.source,
-    types: ['provider.transition'],
-    limit: 2000,
-  }).find(event => event.subject?.kind === input.subject.kind
-    && event.subject.id === input.subject.id
-    && isProviderReadTransitionKind(event.metadata?.['transitionKind']));
-  if (!previous) { return false; }
-  return providerReadStateSignature(
-    previous.metadata?.['readState'],
-    previous.after?.state,
-    previous.metadata?.['readReason'],
-    previous.metadata?.['readComponents'],
-  ) === providerReadStateSignature(
-    input.metadata['readState'],
-    input.state,
-    input.metadata['readReason'],
-    input.metadata['readComponents'],
-  );
-}
-
-function deterministicEventId(...parts: string[]): string {
-  const hash = crypto.createHash('sha256').update(parts.join('\u0000')).digest('hex');
-  return `transition-${hash.slice(0, 48)}`;
-}
-
 function gitLabDigestUnhealthy(digest: GitLabPipelineDigest): boolean {
   return FAILURE_PIPELINE_STATUSES.has(digest.status.toLowerCase())
     || digest.failedJobs.length > 0
@@ -1406,43 +1333,6 @@ function mergeRequestReadStatusSummary(
     : `${prefix} provider reads are partial (${components}).`;
 }
 
-function providerReadFailureReason(error: unknown): string {
-  const failure = boundedOperationFailure(error, 'Provider read unavailable.');
-  if (failure.kind === 'authentication' || failure.kind === 'permission') { return failure.kind; }
-  if (failure.kind === 'not_found') { return 'not_found'; }
-  if (failure.kind === 'rate_limit') { return 'rate_limited'; }
-  if (failure.kind === 'response_limit') { return 'safety_limit'; }
-  if (failure.kind === 'configuration') { return 'configuration'; }
-  if (failure.kind === 'timeout' || failure.kind === 'dns' || failure.kind === 'tls' || failure.kind === 'network') {
-    return failure.kind;
-  }
-  const message = failure.summary.toLowerCase();
-  const statusMatch = /\bhttp\s+(\d{3})\b/.exec(message);
-  const status = statusMatch?.[1] ? Number(statusMatch[1]) : undefined;
-  if (status !== undefined && status >= 500) { return 'provider_5xx'; }
-  if (status !== undefined) { return 'provider_4xx'; }
-  return failure.kind === 'malformed_response' ? 'malformed_response' : 'unavailable';
-}
-
-function readFailureLabel(reason: string): string {
-  if (reason === 'authentication') { return 'authentication unavailable'; }
-  if (reason === 'permission') { return 'read permission unavailable'; }
-  if (reason === 'not_found') { return 'merge request not found'; }
-  if (reason === 'rate_limited') { return 'provider rate limited'; }
-  if (reason === 'provider_5xx') { return 'provider server error'; }
-  if (reason === 'provider_4xx') { return 'provider request refused'; }
-  if (reason === 'timeout') { return 'request timed out'; }
-  if (reason === 'dns') { return 'provider hostname unavailable'; }
-  if (reason === 'tls') { return 'provider TLS verification failed'; }
-  if (reason === 'safety_limit') { return 'bounded read limit reached'; }
-  if (reason === 'configuration') { return 'provider configuration unavailable'; }
-  if (reason === 'network') { return 'network unavailable'; }
-  if (reason === 'malformed_response') { return 'provider response was malformed'; }
-  return 'provider unavailable';
-}
-
-type ProviderReadState = 'complete' | 'partial' | 'failed';
-
 function appendProviderReadStatusTransition(
   session: TicketWorkSessionRecord,
   provider: 'jenkins' | 'sonar',
@@ -1511,34 +1401,6 @@ function appendProviderReadStatusTransition(
       'kronos.insertCiContext',
     )
     : null;
-}
-
-function deterministicReadStatusFingerprint(
-  provider: 'jenkins' | 'sonar',
-  state: ProviderReadState,
-  reason: string,
-  generation: number,
-  components: string,
-): string {
-  return crypto.createHash('sha256')
-    .update(JSON.stringify({ provider, state, reason, generation, components }))
-    .digest('hex');
-}
-
-function jenkinsIncompleteReadComponents(context: JenkinsBuildContext): string[] {
-  return [
-    ...(!context.completeness.buildComplete ? ['build'] : []),
-    ...(context.completeness.testReport === 'partial' ? ['tests'] : []),
-    ...(context.completeness.stages === 'partial' ? ['stages'] : []),
-  ];
-}
-
-function sonarIncompleteReadComponents(context: SonarBranchContext): string[] {
-  return [
-    ...(!context.completeness.qualityGateComplete ? ['quality-gate'] : []),
-    ...(!context.completeness.measuresComplete ? ['measures'] : []),
-    ...(!context.completeness.issuesComplete ? ['issues'] : []),
-  ];
 }
 
 function ciDigestState(digest: CiMonitorDigest): string {

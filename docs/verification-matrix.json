@@ -92,7 +92,11 @@
         { "file": "scripts/run-work-orchestration-tests.js", "test": "scheduled Work refreshes coalesce behind one in-flight read" },
         { "file": "scripts/run-work-orchestration-tests.js", "test": "a newer explicit Work refresh supersedes a late stale result" },
         { "file": "scripts/run-work-orchestration-tests.js", "test": "a failed Work refresh releases ownership for the next request" },
-        { "file": "scripts/run-work-orchestration-tests.js", "test": "disposing Work refresh orchestration aborts its active read" }
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "disposing Work refresh orchestration aborts its active read" },
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder gives one deterministic event to one transition" },
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder suppresses unchanged read health but records a real change" },
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider read failures normalize to stable operator-safe categories" },
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider read components and fingerprints are canonical and bounded" }
       ],
       "humanGates": []
     },
