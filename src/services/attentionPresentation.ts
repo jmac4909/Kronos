@@ -3,6 +3,8 @@ import { normalizeProviderPublicUrl } from './providerUrls';
 import type { WorkSessionProviderBinding, WorkSessionRecord } from './workSessionStore';
 
 export type AttentionSeverity = 'information' | 'warning' | 'failure' | 'recovery' | 'partial' | 'blocked';
+export type AttentionProviderIconId = 'git-pull-request' | 'server-process' | 'shield';
+export type AttentionSeverityColorId = 'charts.green' | 'charts.yellow' | 'charts.red';
 
 export interface AttentionProviderChoice {
   label: string;
@@ -108,6 +110,31 @@ export function attentionSeverity(event: MonitorEvent): AttentionSeverity {
     return 'warning';
   }
   return 'information';
+}
+
+/** Keeps provider identity in the glyph while every provider shares one state-color language. */
+export function attentionProviderIconId(source: MonitorEventSource): AttentionProviderIconId | undefined {
+  switch (source) {
+    case 'gitlab': return 'git-pull-request';
+    case 'jenkins': return 'server-process';
+    case 'sonar': return 'shield';
+    default: return undefined;
+  }
+}
+
+/** Green is healthy/recovered, yellow needs review/is partial, and red is failed/blocked. */
+export function attentionSeverityColorId(severity: AttentionSeverity): AttentionSeverityColorId {
+  switch (severity) {
+    case 'information':
+    case 'recovery':
+      return 'charts.green';
+    case 'warning':
+    case 'partial':
+      return 'charts.yellow';
+    case 'failure':
+    case 'blocked':
+      return 'charts.red';
+  }
 }
 
 /** Multiple retained Jenkins builds and SonarQube branches are always newest-first. */

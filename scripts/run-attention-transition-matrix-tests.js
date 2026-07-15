@@ -258,19 +258,32 @@ test('Attention collapses newer pipeline, build, test, gate, and issue occurrenc
 
 test('Attention presentation covers information, warning, failure, recovery, partial, and blocked severities', () => {
   const cases = [
-    ['information', 'initial_mr_observed', 'opened/mergeable'],
-    ['warning', 'changes_requested', 'opened/requested_changes'],
-    ['failure', 'pipeline_failed', 'failed'],
-    ['recovery', 'pipeline_recovered', 'success'],
-    ['partial', 'provider_read_partial', 'monitoring/partial'],
-    ['blocked', 'monitoring_blocked', 'monitoring/blocked'],
+    ['information', 'charts.green', 'initial_mr_observed', 'opened/mergeable'],
+    ['warning', 'charts.yellow', 'changes_requested', 'opened/requested_changes'],
+    ['failure', 'charts.red', 'pipeline_failed', 'failed'],
+    ['recovery', 'charts.green', 'pipeline_recovered', 'success'],
+    ['partial', 'charts.yellow', 'provider_read_partial', 'monitoring/partial'],
+    ['blocked', 'charts.red', 'monitoring_blocked', 'monitoring/blocked'],
   ];
-  for (const [expected, transitionKind, state] of cases) {
+  for (const [expected, color, transitionKind, state] of cases) {
     assert.equal(
       attention.attentionSeverity(transitionEvent(`severity-${expected}`, '2026-07-15T16:00:00.000Z', transitionKind, state)),
       expected,
     );
+    assert.equal(attention.attentionSeverityColorId(expected), color);
   }
+  const providers = [
+    ['gitlab', 'git-pull-request'],
+    ['jenkins', 'server-process'],
+    ['sonar', 'shield'],
+  ];
+  for (const [provider, icon] of providers) {
+    assert.equal(attention.attentionProviderIconId(provider), icon);
+    for (const [severity, color] of cases) {
+      assert.equal(attention.attentionSeverityColorId(severity), color, `${provider} ${severity} color`);
+    }
+  }
+  assert.equal(attention.attentionProviderIconId('jira'), undefined);
 });
 
 test('Attention rows expose project, provider, subject, observed time, changed time, and why', () => {

@@ -16,8 +16,10 @@ import { providerBindingsForEvent } from '../services/providerBindingReconciliat
 import {
   attentionActionContext,
   attentionEventPresentation,
+  attentionProviderIconId,
   attentionProviderChoicesForEvent,
   attentionSeverity,
+  attentionSeverityColorId,
   attentionTicketKey,
   type AttentionProviderChoice,
 } from '../services/attentionPresentation';
@@ -302,13 +304,10 @@ const METADATA_TOOLTIP_FIELDS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 function eventIcon(event: MonitorEvent): vscode.ThemeIcon {
-  // Provider identity is the fastest way to distinguish adjacent Attention rows.
-  // Severity remains explicit in the row description and tooltip, so these
-  // theme-aware colors are never the only status signal.
-  switch (event.source) {
-    case 'gitlab': return new vscode.ThemeIcon('git-pull-request', new vscode.ThemeColor('charts.orange'));
-    case 'jenkins': return new vscode.ThemeIcon('server-process', new vscode.ThemeColor('charts.red'));
-    case 'sonar': return new vscode.ThemeIcon('shield', new vscode.ThemeColor('charts.blue'));
+  const providerIcon = attentionProviderIconId(event.source);
+  if (providerIcon) {
+    const severity = attentionSeverity(event);
+    return new vscode.ThemeIcon(providerIcon, new vscode.ThemeColor(attentionSeverityColorId(severity)));
   }
   switch (attentionSeverity(event)) {
     case 'failure': return new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed'));

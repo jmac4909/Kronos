@@ -3407,7 +3407,7 @@ test('extension activation registers the bounded surface and explicit launch com
       'new failures, recoveries, and partial reads replace older stale rows while audit history is retained',
     );
     assert.equal(retainedFailureItems[0].iconPath.id, 'server-process');
-    assert.equal(retainedFailureItems[0].iconPath.color.id, 'charts.red');
+    assert.equal(retainedFailureItems[0].iconPath.color.id, 'charts.yellow');
     assert.match(retainedFailureItems[0].description, /Jenkins.*partial/);
     assert.deepEqual(
       retainedFailureItems[0].providerChoices.map(choice => choice.label),
@@ -3514,7 +3514,7 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.deepEqual(attentionItem.providerChoices.map(choice => choice.label), ['feature/two', 'feature/one']);
     assert.equal(attentionItem.contextValue, 'attention_provider_ticket_ci');
     assert.equal(attentionItem.iconPath.id, 'shield');
-    assert.equal(attentionItem.iconPath.color.id, 'charts.blue');
+    assert.equal(attentionItem.iconPath.color.id, 'charts.red');
     assert.match(attentionItem.description, /fixture • SonarQube • Quality gate feature\/one • failure • observed .* • changed /);
     assert.match(attentionItem.tooltip, /Why attention: JIRA-321 Sonar branch fixture\./);
     singlePickHandler = items => items.find(item => item.label === 'feature/two');
@@ -3529,7 +3529,7 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.equal(missingUrlItem.providerUrl, undefined);
     assert.equal(missingUrlItem.contextValue, 'attention_repair_ticket_gitlab');
     assert.equal(missingUrlItem.iconPath.id, 'git-pull-request');
-    assert.equal(missingUrlItem.iconPath.color.id, 'charts.orange');
+    assert.equal(missingUrlItem.iconPath.color.id, 'charts.green');
     assert.match(missingUrlItem.description, /GitLab.*information/);
     assert.equal(missingUrlItem.command.command, 'kronos.configureProjectIntegrations');
     assert.equal(missingUrlItem.command.arguments[0].projectName, 'fixture');
