@@ -13,7 +13,10 @@
         { "file": "scripts/run-jira-work-board-tests.js", "test": "board terminology and dense-card rendering keep Jira namespaces separate from local repositories" },
         { "file": "scripts/run-jira-work-board-tests.js", "test": "board action and focus contract covers every declared action exactly once" },
         { "file": "scripts/run-product-surface-contract-tests.js", "test": "rich Jira filtering searches every useful field and composes independent namespaces" },
-        { "file": "scripts/run-product-surface-contract-tests.js", "test": "Jira board keeps filtering and launch controls while ticket workspace owns detailed context controls" }
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "Jira board keeps filtering and launch controls while ticket workspace owns detailed context controls" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "explicit project journey keeps one stable identity across Work, Projects, Sessions, and Attention" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "unregistering a project clears launch authority but preserves Jira namespace and provider-only metadata" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "Work and Jira board free-text search index the same rich ticket evidence" }
       ],
       "humanGates": ["operator-terminal"]
     },
@@ -35,7 +38,9 @@
         { "file": "scripts/run-unit-tests.js", "test": "work-session lifecycle never requires a terminal process owner" },
         { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" },
         { "file": "scripts/run-product-surface-contract-tests.js", "test": "registered project actions start ticket-free Claude before read-only and provider actions" },
-        { "file": "scripts/run-product-surface-contract-tests.js", "test": "non-Jira ticket workspaces omit Jira insertion without weakening terminal ownership" }
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "non-Jira ticket workspaces omit Jira insertion without weakening terminal ownership" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "project session stays ticket-free until context is explicit, then becomes monitoring eligible without changing kind" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "manifest Claude modes and validated launcher commands cannot drift apart" }
       ],
       "humanGates": ["operator-terminal", "real-vscode"]
     },
@@ -123,7 +128,9 @@
         { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" },
         { "file": "scripts/run-jira-work-board-tests.js", "test": "board lists registered local project paths and current Git branches" },
         { "file": "scripts/run-product-surface-contract-tests.js", "test": "registered project actions start ticket-free Claude before read-only and provider actions" },
-        { "file": "scripts/run-product-surface-contract-tests.js", "test": "discovery, setup, and project management each retain one canonical UI home" }
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "discovery, setup, and project management each retain one canonical UI home" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "explicit project journey keeps one stable identity across Work, Projects, Sessions, and Attention" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "unregistering a project clears launch authority but preserves Jira namespace and provider-only metadata" }
       ],
       "humanGates": ["real-vscode"]
     },
@@ -262,7 +269,8 @@
         { "file": "scripts/run-release-surface-tests.js", "test": "release surface validator fails closed on sensitive and development-only package files" },
         { "file": "scripts/run-release-surface-tests.js", "test": "release documents and package metadata remain linked to current evidence" },
         { "file": "scripts/run-release-surface-tests.js", "test": "public surface scan precedes both tests and release packaging" },
-        { "file": "scripts/run-release-surface-tests.js", "test": "publish verifier requires a clean named branch and exact remote head" }
+        { "file": "scripts/run-release-surface-tests.js", "test": "publish verifier requires a clean named branch and exact remote head" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "manifest Claude modes and validated launcher commands cannot drift apart" }
       ],
       "humanGates": ["operator-terminal", "windows-native", "multi-window", "live-providers"]
     }
