@@ -92,7 +92,11 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectTreeE
   }
 }
 
-class RegisteredProjectTreeItem extends vscode.TreeItem {
+class RegisteredProjectTreeItem extends vscode.TreeItem implements RegisteredProjectCommandTarget {
+  readonly projectName: string;
+  readonly projectPath: string;
+  readonly displayName?: string;
+
   constructor(
     readonly target: RegisteredProjectCommandTarget,
     evidence: ProjectGitEvidence,
@@ -101,6 +105,9 @@ class RegisteredProjectTreeItem extends vscode.TreeItem {
     monitoringHealth: ProviderMonitoringHealth,
   ) {
     super(target.displayName || target.projectName, vscode.TreeItemCollapsibleState.Collapsed);
+    this.projectName = target.projectName;
+    this.projectPath = target.projectPath;
+    if (target.displayName) { this.displayName = target.displayName; }
     const gitStatus = projectGitStatusPresentation(evidence);
     this.id = `registered-project:${target.projectName}`;
     this.contextValue = 'registered_project';

@@ -3352,6 +3352,8 @@ test('extension activation registers the bounded surface and explicit launch com
     const projectItems = await registeredTreeProviders.get('kronosProjects').getChildren();
     assert.equal(projectItems.length, 1);
     assert.equal(projectItems[0].label, 'fixture');
+    assert.equal(projectItems[0].projectName, 'fixture');
+    assert.equal(projectItems[0].projectPath, tempRoot);
     assert.equal(projectItems[0].description, 'feature/runtime-project • 1 change • poll paused');
     assert.equal(projectItems[0].contextValue, 'registered_project');
     assert.match(projectItems[0].tooltip, /Git status: 1 total, 0 staged, 1 modified/);
@@ -3862,8 +3864,8 @@ test('extension activation registers the bounded surface and explicit launch com
     vscode.window.terminals = vscode.window.terminals.filter(terminal => terminal !== noWorkspaceTerminalRecord.terminal);
     vscode.window.activeTerminal = createdTerminals[0].terminal;
 
-    await commandHandlers.get('kronos.newClaudeSession')({ projectName: 'fixture', projectPath: tempRoot });
-    assert.equal(createdTerminals.length, 2, 'a Project action creates exactly one project-scoped terminal');
+    await commandHandlers.get('kronos.newClaudeSession')(projectItems[0]);
+    assert.equal(createdTerminals.length, 2, 'the inline Project-row action creates exactly one project-scoped terminal');
     const projectTerminalRecord = createdTerminals.at(-1);
     assert.equal(projectTerminalRecord.options.cwd, tempRoot);
     assert.equal(projectTerminalRecord.options.name, 'Claude @ feature/runtime-project');
