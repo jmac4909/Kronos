@@ -266,9 +266,11 @@ function buildArtifactSummary(artifacts: readonly WorkSessionContextArtifact[]):
 
 function buildProviderBindings(workSession: WorkSessionRecord | undefined): string {
   const bindings = workSession?.providerBindings || [];
-  const rows = bindings.map(binding => `<li><strong>${escapeHtml(binding.provider)}</strong> · ${escapeHtml(binding.resource)} · ${escapeHtml(singleLine(binding.subjectId, 300))}</li>`);
+  const rows = bindings.slice(-12).reverse()
+    .map(binding => `<li><strong>${escapeHtml(binding.provider)}</strong> · ${escapeHtml(binding.resource)} · ${escapeHtml(singleLine(binding.subjectId, 300))}</li>`);
   return `<section class="kronos-card">
     <h2>Provider Bindings</h2>
+    ${bindings.length > rows.length ? `<div class="muted">Showing the newest ${rows.length} of ${bindings.length} local bindings.</div>` : ''}
     ${rows.length > 0 ? `<ul class="provider-binding-list">${rows.join('')}</ul>` : '<div class="muted">No provider bindings.</div>'}
   </section>`;
 }

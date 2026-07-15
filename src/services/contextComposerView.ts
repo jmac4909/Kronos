@@ -23,11 +23,19 @@ export interface ContextComposerInput {
 }
 
 export function buildContextComposerHtml(input: ContextComposerInput): string {
+  const title = boundedSingleLine(input.title, 300);
+  const subtitle = boundedSingleLine(input.subtitle, 2_000);
+  const sourceLabel = boundedSingleLine(input.sourceLabel, 300);
+  const terminalName = boundedSingleLine(input.terminalName, 300);
+  const reference = boundedMultiline(input.reference, 8_192);
+  const suggestedFocus = boundedMultiline(input.suggestedFocus, 2_000);
   const evidence = input.evidence.slice(0, 20).map(item => `<article class="evidence-item">
-    <h3>${escapeHtml(item.label)}</h3>
-    <div>${escapeHtml(item.detail)}</div>
+    <h3>${escapeHtml(boundedSingleLine(item.label, 300))}</h3>
+    <div>${escapeHtml(boundedMultiline(item.detail, 4_000))}</div>
   </article>`).join('');
-  const warnings = input.warnings.slice(0, 20).map(warning => `<div class="message warn">${escapeHtml(warning)}</div>`).join('');
+  const warnings = input.warnings.slice(0, 20)
+    .map(warning => `<div class="message warn">${escapeHtml(boundedSingleLine(warning, 1_000))}</div>`)
+    .join('');
   const script = [
     webviewRuntimeScriptTag(input.nonce, webviewRuntimeScriptUri(input.scriptUri)),
     `<script nonce="${escapeAttr(input.nonce)}" id="kronos-context-composer-script" src="${escapeAttr(input.scriptUri)}" data-kronos-script-kind="context-composer" data-kronos-ready-command="__kronosWebviewReady"></script>`,
@@ -59,10 +67,10 @@ ${kronosWebviewBaseCss()}
 <body><main class="kronos-shell composer-shell">
   <header class="kronos-header composer-header">
     <div>
-      <h1 class="kronos-title">${escapeHtml(input.title)}</h1>
-      <div class="kronos-subtitle">${escapeHtml(input.subtitle)}</div>
+      <h1 class="kronos-title">${escapeHtml(title)}</h1>
+      <div class="kronos-subtitle">${escapeHtml(subtitle)}</div>
     </div>
-    <span class="kronos-pill info composer-source">${escapeHtml(input.sourceLabel)}</span>
+    <span class="kronos-pill info composer-source">${escapeHtml(sourceLabel)}</span>
   </header>
   ${warnings}
   <div class="composer-layout">
@@ -70,10 +78,10 @@ ${kronosWebviewBaseCss()}
       <h2>Edit the instruction</h2>
       <p class="composer-help">Add what Claude should focus on. Kronos keeps the fetched context reference fixed, safely quotes your note, and inserts one editable line without pressing Enter.</p>
       <label class="kronos-section-title" for="context-focus">Operator focus</label>
-      <textarea id="context-focus" class="composer-focus" maxlength="2000" spellcheck="true" autofocus>${escapeHtml(input.suggestedFocus)}</textarea>
+      <textarea id="context-focus" class="composer-focus" maxlength="2000" spellcheck="true" autofocus>${escapeHtml(suggestedFocus)}</textarea>
       <div class="kronos-section-title">Fixed context reference</div>
-      <div class="composer-reference">${escapeHtml(input.reference)}</div>
-      <div class="kronos-muted">Target terminal: ${escapeHtml(input.terminalName)}</div>
+      <div class="composer-reference">${escapeHtml(reference)}</div>
+      <div class="kronos-muted">Target terminal: ${escapeHtml(terminalName)}</div>
       <div class="kronos-action-row composer-actions">
         <button type="button" class="kronos-button primary" data-action="insertDraft">Place in Terminal</button>
         <button type="button" class="kronos-button" data-action="openArtifact">Open Full Context</button>
@@ -91,4 +99,12 @@ ${kronosWebviewBaseCss()}
 </main>
 ${script}
 </body></html>`;
+}
+
+function boundedSingleLine(value: string, maxLength: number): string {
+  return value.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+
+function boundedMultiline(value: string, maxLength: number): string {
+  return value.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u2028\u2029]/g, '').trim().slice(0, maxLength);
 }

@@ -79,13 +79,16 @@ function sessionInventoryTooltip(
   const terminalCounts = { attached: 0, detached: 0, closed: 0 };
   for (const terminal of session.terminals) { terminalCounts[terminal.status] += 1; }
   const providerBindings = session.providerBindings.length > 0
-    ? session.providerBindings.map(binding => `${binding.provider} ${binding.resource} ${binding.subjectId}`).join(', ')
+    ? boundedListSummary(
+      session.providerBindings.map(binding => `${binding.provider} ${binding.resource} ${binding.subjectId}`),
+      12,
+    )
     : 'none yet; configured providers are discovered automatically';
   const completeArtifacts = session.artifacts.filter(artifact => artifact.complete).length;
   const health = sessionProviderMonitoringHealth(session, pollIntervalMs);
   const lines = [
     `Work session: ${session.id}`,
-    `Ticket contexts: ${session.ticketKeys.join(', ') || 'none'}`,
+    `Ticket contexts: ${session.ticketKeys.length > 0 ? boundedListSummary(session.ticketKeys, 20) : 'none'}`,
     `Title: ${session.title}`,
     `Management lifecycle: ${lifecycle.management}`,
     `Terminal lifecycle: ${lifecycle.terminal}`,
@@ -116,4 +119,10 @@ function sessionInventoryTooltip(
   if (observedBranch) { lines.splice(6, 0, `Git branch: ${observedBranch}`); }
   if (session.closedAt) { lines.push(`Closed: ${session.closedAt}`); }
   return lines.join('\n');
+}
+
+function boundedListSummary(values: readonly string[], limit: number): string {
+  const visible = values.slice(0, limit).join(', ');
+  const remaining = values.length - Math.min(values.length, limit);
+  return remaining > 0 ? `${visible}, +${remaining} more` : visible;
 }

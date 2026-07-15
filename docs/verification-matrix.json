@@ -183,6 +183,9 @@
         { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket board stays inside the checked render and output budget" },
         { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket filtering and facet collection stay inside the checked CPU budget" },
         { "file": "scripts/run-scale-accessibility-tests.js", "test": "2000 supplied audit events render only the newest 500 inside the checked budget" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "maximum project and session collections render bounded summaries within local budgets" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "large artifact previews render summaries without copying provider payloads into the DOM" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "scale budget documents every bounded collection and supersession rule" },
         { "file": "scripts/run-scale-accessibility-tests.js", "test": "shared webview accessibility CSS and form labels cover focus, forced colors, and narrow panels" },
         { "file": "scripts/run-scale-accessibility-tests.js", "test": "an aborted Jira read rejects before transport and is not reported as a provider failure" }
       ],
@@ -1523,6 +1526,66 @@
     {
       "requirements": ["G16-evidence-05:1d8066fe"],
       "checks": ["human-gates-required"]
+    },
+    {
+      "requirements": ["G17-goal:7a1a1111"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket board stays inside the checked render and output budget" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "maximum project and session collections render bounded summaries within local budgets" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "large artifact previews render summaries without copying provider payloads into the DOM" }
+      ],
+      "humanGates": ["real-vscode", "operator-terminal"]
+    },
+    {
+      "requirements": ["G17-case-01:fb2fc118"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket board stays inside the checked render and output budget" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "maximum project and session collections render bounded summaries within local budgets" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "2000 supplied audit events render only the newest 500 inside the checked budget" }
+      ]
+    },
+    {
+      "requirements": ["G17-case-02:a9ec1eb5"],
+      "automated": [
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "scheduled Work refreshes coalesce behind one in-flight read" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "a newer explicit Work refresh supersedes a late stale result" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "an aborted Jira read rejects before transport and is not reported as a provider failure" },
+        { "file": "scripts/run-unit-tests.js", "test": "one monitor coalesces overlapping polls instead of reporting a false cross-window lease owner" }
+      ]
+    },
+    {
+      "requirements": ["G17-case-03:a301e7df"],
+      "humanGates": ["real-vscode", "operator-terminal"]
+    },
+    {
+      "requirements": ["G17-case-04:9eba4482"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "large artifact previews render summaries without copying provider payloads into the DOM" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "maximum project and session collections render bounded summaries within local budgets" }
+      ]
+    },
+    {
+      "requirements": ["G17-evidence-01:5bac77e7"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "scale budget documents every bounded collection and supersession rule" }
+      ]
+    },
+    {
+      "requirements": ["G17-evidence-02:20023984"],
+      "automated": [
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "a newer explicit Work refresh supersedes a late stale result" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "disposing Work refresh orchestration aborts its active read" }
+      ]
+    },
+    {
+      "requirements": ["G17-evidence-03:613cd49b"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket board stays inside the checked render and output budget" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "maximum project and session collections render bounded summaries within local budgets" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "large artifact previews render summaries without copying provider payloads into the DOM" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "shared webview accessibility CSS and form labels cover focus, forced colors, and narrow panels" }
+      ],
+      "humanGates": ["real-vscode", "operator-terminal"]
     },
     {
       "requirements": ["G19-goal:eb6d907a"],

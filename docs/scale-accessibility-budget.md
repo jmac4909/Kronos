@@ -32,6 +32,8 @@ The deterministic local scale gate uses deliberately generous CI ceilings so it 
 - Build a 500-ticket board with long summaries and labels in under 2,000 ms and under 8 MiB of HTML.
 - Filter and derive facets for 500 tickets in under 1,000 ms.
 - Render a 2,000-event supplied audit ledger into its 500-event Markdown summary in under 1,000 ms and under 2 MiB.
+- Render all 200 project-integration forms in under 2,000 ms and under 8 MiB, and project 200 maximally rich Session summaries in under 1,000 ms with each tooltip below 10,000 characters.
+- Render at most 20 bounded evidence summaries and 20 warnings from an oversized provider preview in under 1,000 ms and under 256 KiB; the full payload remains available only through its private artifact reference.
 - A newer explicit Jira refresh aborts the prior transport signal and owns the only state write. Scheduled refreshes and overlapping provider polls coalesce.
 
 These are extension-host construction budgets, not claims about network latency or VS Code paint time. Real VS Code zoom, screen-reader, Windows, and live-provider behavior remains a human gate in `HUMAN_FEEDBACK_CHECKLIST.md`.
