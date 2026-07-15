@@ -68,6 +68,7 @@
         { "file": "scripts/run-unit-tests.js", "test": "Attention stream identity is stable by project, provider, resource, logical subject, and facet" },
         { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" },
         { "file": "scripts/run-unit-tests.js", "test": "registered project configuration polls GitLab Jenkins and Sonar without a ticket or terminal Session" },
+        { "file": "scripts/run-unit-tests.js", "test": "managed CI polling emits first healthy observations when providers join an existing baseline" },
         { "file": "scripts/run-unit-tests.js", "test": "GitLab MR review monitoring retains complete facets across partial reads and dedupes read health" },
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab merge-request transition matrix covers every declared structural transition" },
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab pipeline transition matrix covers every declared pipeline, job, and test transition" },
@@ -678,6 +679,12 @@
       "requirements": ["G04-case-15:110cf2b2"],
       "automated": [
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention collapses provider-read health into GitLab MR, Jenkins build, and SonarQube branch truth" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-16:c70f3ac7"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "managed CI polling emits first healthy observations when providers join an existing baseline" }
       ]
     },
     {

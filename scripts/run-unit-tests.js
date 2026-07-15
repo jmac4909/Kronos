@@ -1206,6 +1206,147 @@ test('registered project configuration polls GitLab Jenkins and Sonar without a 
   }
 });
 
+test('managed CI polling emits first healthy observations when providers join an existing baseline', async () => {
+  const jenkinsLateRoot = path.join(tempRoot, 'jenkins-late-monitoring');
+  const sonarLateRoot = path.join(tempRoot, 'sonar-late-monitoring');
+  for (const [rootPath, branch] of [
+    [jenkinsLateRoot, 'feature/jenkins-late'],
+    [sonarLateRoot, 'feature/sonar-late'],
+  ]) {
+    fs.mkdirSync(path.join(rootPath, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(rootPath, '.git', 'HEAD'), `ref: refs/heads/${branch}\n`);
+  }
+  const projectState = (name, rootPath, branch) => {
+    const state = stateStore.emptyWorkCatalog();
+    state.projects[name] = {
+      path: rootPath,
+      config: {
+        jenkins_url: `https://jenkins.example/job/${name.toLowerCase()}`,
+        sonar_project_key: `team:${name.toLowerCase()}`,
+        sonar_branch: branch,
+      },
+    };
+    return state;
+  };
+  let state = projectState('JenkinsLate', jenkinsLateRoot, 'feature/jenkins-late');
+  let unavailableProvider = 'jenkins';
+  const originals = {
+    jenkins: jenkinsRestModule.jenkinsRestClient.buildContext,
+    sonar: sonarRestModule.sonarRestClient.branchContext,
+    jenkinsUrl: process.env.JENKINS_URL,
+    sonarUrl: process.env.SONAR_HOST_URL,
+  };
+  process.env.JENKINS_URL = 'https://jenkins.example';
+  process.env.SONAR_HOST_URL = 'https://sonar.example';
+  jenkinsRestModule.jenkinsRestClient.buildContext = async jobOrBuildUrl => {
+    if (unavailableProvider === 'jenkins') { throw new Error('Jenkins request timed out'); }
+    return {
+      schemaVersion: 1,
+      provider: 'jenkins',
+      fetchedAt: '2026-07-15T16:00:00.000Z',
+      jobOrBuildUrl,
+      build: {
+        number: 84,
+        status: 'SUCCESS',
+        building: false,
+        url: `${jobOrBuildUrl}/84/`,
+        causes: [],
+        artifacts: [],
+        changes: [],
+      },
+      completeness: {
+        complete: true,
+        buildComplete: true,
+        testReport: 'complete',
+        stages: 'complete',
+        configuration: 'complete',
+        logsIncluded: false,
+        warnings: [],
+      },
+    };
+  };
+  sonarRestModule.sonarRestClient.branchContext = async (projectKey, branch) => {
+    if (unavailableProvider === 'sonar') { throw new Error('SonarQube request timed out'); }
+    return {
+      schemaVersion: 1,
+      provider: 'sonarqube',
+      fetchedAt: '2026-07-15T16:00:01.000Z',
+      projectKey,
+      branch,
+      dashboardUrl: `https://sonar.example/dashboard?id=${encodeURIComponent(projectKey)}&branch=${encodeURIComponent(branch)}`,
+      qualityGate: { status: 'OK', conditions: [] },
+      measures: [],
+      issues: [],
+      completeness: {
+        complete: true,
+        qualityGateComplete: true,
+        measuresComplete: true,
+        issuesComplete: true,
+        issuesFetched: 0,
+        issuePages: 1,
+        issueResponseBytes: 2,
+        issuesTotal: 0,
+        warnings: [],
+      },
+    };
+  };
+  try {
+    const monitor = new managedProviderMonitor.ManagedProviderMonitor({ state: () => state });
+    const jenkinsMissing = await monitor.poll();
+    assert.equal(jenkinsMissing.transitions, 2, 'Sonar baseline and Jenkins read failure are both retained');
+    unavailableProvider = '';
+    const jenkinsArrived = await monitor.poll();
+    assert.equal(jenkinsArrived.transitions, 2, 'Jenkins recovery and first healthy build are both audited');
+    const jenkinsOwner = projectMonitoringStore.readProjectMonitoringRecord('JenkinsLate');
+    assert.ok(jenkinsOwner);
+    const jenkinsEvents = monitorEventStore.listMonitorEvents({
+      sessionId: jenkinsOwner.id,
+      types: ['provider.transition'],
+      limit: 2000,
+    });
+    const firstJenkins = jenkinsEvents.filter(event => event.source === 'jenkins'
+      && event.metadata?.transitionKind === 'initial_healthy');
+    assert.equal(firstJenkins.length, 1, 'a healthy Jenkins provider joining a Sonar baseline alerts exactly once');
+    assert.deepEqual(
+      attentionProjection.currentAttentionTransitions(jenkinsEvents, [jenkinsOwner])
+        .filter(event => event.source === 'jenkins')
+        .map(event => event.metadata?.transitionKind),
+      ['initial_healthy'],
+      'the Jenkins read recovery collapses behind the first healthy build',
+    );
+
+    state = projectState('SonarLate', sonarLateRoot, 'feature/sonar-late');
+    unavailableProvider = 'sonar';
+    const sonarMissing = await monitor.poll();
+    assert.equal(sonarMissing.transitions, 2, 'Jenkins baseline and Sonar read failure are both retained');
+    unavailableProvider = '';
+    const sonarArrived = await monitor.poll();
+    assert.equal(sonarArrived.transitions, 2, 'Sonar recovery and first healthy gate are both audited');
+    const sonarOwner = projectMonitoringStore.readProjectMonitoringRecord('SonarLate');
+    assert.ok(sonarOwner);
+    const sonarEvents = monitorEventStore.listMonitorEvents({
+      sessionId: sonarOwner.id,
+      types: ['provider.transition'],
+      limit: 2000,
+    });
+    const firstSonar = sonarEvents.filter(event => event.source === 'sonar'
+      && event.metadata?.transitionKind === 'initial_healthy');
+    assert.equal(firstSonar.length, 1, 'a healthy SonarQube provider joining a Jenkins baseline alerts exactly once');
+    assert.deepEqual(
+      attentionProjection.currentAttentionTransitions(sonarEvents, [sonarOwner])
+        .filter(event => event.source === 'sonar')
+        .map(event => event.metadata?.transitionKind),
+      ['initial_healthy'],
+      'the SonarQube read recovery collapses behind the first healthy gate',
+    );
+  } finally {
+    jenkinsRestModule.jenkinsRestClient.buildContext = originals.jenkins;
+    sonarRestModule.sonarRestClient.branchContext = originals.sonar;
+    restoreEnv('JENKINS_URL', originals.jenkinsUrl);
+    restoreEnv('SONAR_HOST_URL', originals.sonarUrl);
+  }
+});
+
 test('local monitoring blockers transition once, recover once, and retain audit history', async () => {
   const session = workSessions.createOrGetWorkSessionByTicket({
     ticketKey: 'JIRA-909',

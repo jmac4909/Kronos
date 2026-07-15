@@ -121,6 +121,7 @@ Cases to cover:
 - The first completed healthy Jenkins build appears once, just like the first healthy MR and SonarQube gate.
 - Jenkins aborted, canceled, cancelled, and unstable results plus SonarQube warning gates use the same unhealthy classification for baselines and later transitions.
 - Provider-read failure or partial state replaces the related GitLab MR, Jenkins build, or SonarQube branch row; recovery reveals the newest provider result instead of adding a second green row.
+- A provider that first becomes available after another CI provider established the combined baseline still emits its one initial healthy Jenkins build or SonarQube gate observation.
 
 Completion evidence:
 

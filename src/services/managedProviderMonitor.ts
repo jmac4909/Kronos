@@ -786,8 +786,8 @@ export class ManagedProviderMonitor {
       const snapshotPath = ciMonitorSnapshotPath(session.id);
       if (!retainLease()) { return leaseLost(result); }
 
+      notices.push(...initialCiNotices(session, digest, snapshotPath, previous));
       if (!previous) {
-        notices.push(...initialCiNotices(session, digest, snapshotPath));
         appendBaselineOnce(session, 'kronos', 'ci-monitor', monitoringOwnerSubjectId(session), ciDigestState(digest), digest.fingerprint, snapshotPath, {
           jenkinsIncluded: Boolean(digest.jenkins),
           sonarIncluded: Boolean(digest.sonar),
@@ -1163,9 +1163,10 @@ function initialCiNotices(
   session: ProviderMonitoringOwner,
   digest: CiMonitorDigest,
   artifactPath: string,
+  previous?: CiMonitorDigest | null,
 ): ManagedProviderNotice[] {
   const notices: ManagedProviderNotice[] = [];
-  const jenkins = digest.jenkins;
+  const jenkins = previous?.jenkins ? undefined : digest.jenkins;
   const jenkinsUnhealthy = Boolean(jenkins && (jenkinsStatusIsFailure(jenkins.status)
     || jenkins.failedTestCount > 0
     || jenkins.failedStageNames.length > 0));
@@ -1204,7 +1205,18 @@ function initialCiNotices(
       ));
     }
   }
-  const sonar = digest.sonar;
+  const currentSonar = digest.sonar;
+  const previousSonar = previous?.sonar;
+  const sonarIdentityChanged = Boolean(currentSonar && previousSonar
+    && (currentSonar.projectKey !== previousSonar.projectKey || currentSonar.branch !== previousSonar.branch));
+  const firstHealthyAvailableGate = Boolean(currentSonar && previousSonar
+    && !sonarIdentityChanged
+    && !previousSonar.gateAvailable
+    && currentSonar.gateAvailable
+    && sonarGateStatusIsSuccess(currentSonar.gateStatus));
+  const sonar = !previousSonar || sonarIdentityChanged || firstHealthyAvailableGate
+    ? currentSonar
+    : undefined;
   const sonarHealthy = Boolean(sonar?.gateAvailable && sonarGateStatusIsSuccess(sonar.gateStatus));
   const sonarUnhealthy = Boolean(sonar?.gateAvailable && sonarGateStatusIsFailure(sonar.gateStatus));
   if (sonar && (sonarHealthy || sonarUnhealthy)) {
