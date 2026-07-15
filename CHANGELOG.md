@@ -20,6 +20,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Changed
 
+- Extracted Projects Git-status presentation into a pure tested owner covering unavailable, clean, staged, modified, untracked, conflicted, and over-limit evidence.
 - Routed project Git evidence warnings and every tree-provider refresh fallback through the shared bounded, credential-redacted failure vocabulary while retaining usable read-only status after a diff-only failure.
 - Added exhaustive Jira-board filter-composition coverage across all five filter subsets plus direct Enter/Space card-activation assertions.
 - Extracted project registration, identity, configuration, discovery, and Git-pointer coverage from the monolithic unit harness into a dedicated `project:catalog` suite retained by the single `npm test` gate.

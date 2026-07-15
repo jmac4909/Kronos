@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { KronosState, ProjectConfig } from '../state/types';
 import { boundedOperationFailure } from '../services/errorUtils';
 import { listLocalProjects } from '../services/projectCatalog';
+import { projectGitStatusPresentation } from '../services/projectGitPresentation';
 import { providerReadiness } from '../services/providerReadiness';
 import {
   readProjectGitEvidence,
@@ -96,10 +97,11 @@ class RegisteredProjectTreeItem extends vscode.TreeItem {
     monitoringHealth: ProviderMonitoringHealth,
   ) {
     super(target.displayName || target.projectName, vscode.TreeItemCollapsibleState.Collapsed);
+    const gitStatus = projectGitStatusPresentation(evidence);
     this.id = `registered-project:${target.projectName}`;
     this.contextValue = 'registered_project';
     this.iconPath = projectIcon(evidence);
-    this.description = `${evidence.branch || 'branch unavailable'} • ${projectStatusLabel(evidence)} • ${providerMonitoringHealthSummary(monitoringHealth)}`;
+    this.description = `${evidence.branch || 'branch unavailable'} • ${gitStatus.label} • ${providerMonitoringHealthSummary(monitoringHealth)}`;
     const readiness = providerReadiness();
     const providers = [
       providerStatus('GitLab', Boolean(config.gitlab_project_id || config.gitlab_project_path), readiness.gitlab.configured, linkedSessionCount),
@@ -111,7 +113,7 @@ class RegisteredProjectTreeItem extends vscode.TreeItem {
       `Stable identity: ${target.projectName}`,
       `Path: ${target.projectPath}`,
       `Git branch: ${evidence.branch || 'unavailable'}`,
-      `Git status: ${projectStatusTooltip(evidence)}`,
+      `Git status: ${gitStatus.tooltip}`,
       'Git source: VS Code built-in Git model plus bounded local HEAD fallback',
       `Active monitored ticket sessions: ${linkedSessionCount}`,
       `Last monitoring attempt: ${monitoringHealth.lastAttemptAt || 'never'}`,
@@ -163,53 +165,14 @@ function projectActions(target: RegisteredProjectCommandTarget): ProjectActionTr
   ];
 }
 
-function projectStatusLabel(evidence: ProjectGitEvidence): string {
-  if (!evidence.available) { return 'status unavailable'; }
-  if (evidence.changeCount === 0) { return 'clean'; }
-  const staged = evidence.changes.filter(change => change.staged).length;
-  const conflicts = evidence.changes.filter(change => isConflictStatus(change.status)).length;
-  return [
-    `${evidence.changeCount} change${evidence.changeCount === 1 ? '' : 's'}`,
-    ...(staged > 0 ? [`${staged} staged`] : []),
-    ...(conflicts > 0 ? [`${conflicts} conflict${conflicts === 1 ? '' : 's'}`] : []),
-  ].join(' · ');
-}
-
-function projectStatusTooltip(evidence: ProjectGitEvidence): string {
-  if (!evidence.available) { return 'unavailable'; }
-  if (evidence.changeCount === 0) { return 'clean working tree'; }
-  const staged = evidence.changes.filter(change => change.staged).length;
-  const untracked = evidence.changes.filter(change => change.status === 'untracked').length;
-  const conflicts = evidence.changes.filter(change => isConflictStatus(change.status)).length;
-  const working = evidence.changes.filter(change =>
-    !change.staged && change.status !== 'untracked' && !isConflictStatus(change.status)
-  ).length;
-  return [
-    `${evidence.changeCount} total`,
-    `${staged} staged`,
-    `${working} modified`,
-    `${untracked} untracked`,
-    `${conflicts} conflicted`,
-  ].join(', ');
-}
-
 function projectIcon(evidence: ProjectGitEvidence): vscode.ThemeIcon {
-  if (!evidence.available) {
+  const state = projectGitStatusPresentation(evidence).state;
+  if (state === 'unavailable') {
     return new vscode.ThemeIcon('repo', new vscode.ThemeColor('problemsWarningIcon.foreground'));
   }
-  return evidence.changeCount === 0
+  return state === 'clean'
     ? new vscode.ThemeIcon('repo', new vscode.ThemeColor('testing.iconPassed'))
     : new vscode.ThemeIcon('repo', new vscode.ThemeColor('gitDecoration.modifiedResourceForeground'));
-}
-
-function isConflictStatus(status: string): boolean {
-  return status === 'added by us'
-    || status === 'added by them'
-    || status === 'deleted by us'
-    || status === 'deleted by them'
-    || status === 'both added'
-    || status === 'both deleted'
-    || status === 'both modified';
 }
 
 function providerStatus(name: string, targetConfigured: boolean, credentialsReady: boolean, activeSessions: number): string {

@@ -11,6 +11,7 @@ test.after(() => fs.rmSync(tempRoot, { recursive: true, force: true }));
 const stateStore = require('../out/services/stateStore.js');
 const projectCatalog = require('../out/services/projectCatalog.js');
 const projectDiscovery = require('../out/services/projectDiscovery.js');
+const projectGitPresentation = require('../out/services/projectGitPresentation.js');
 const jiraWorkCatalog = require('../out/services/jiraWorkCatalog.js');
 const managedProviderMonitor = require('../out/services/managedProviderMonitor.js');
 
@@ -242,6 +243,48 @@ test('Git worktree pointers are bounded and symbolic Git metadata is ignored', t
   fs.mkdirSync(unsafe, { recursive: true });
   if (!createSymlinkOrSkip(t, gitDirectory, path.join(unsafe, '.git'), 'dir')) { return; }
   assert.equal(projectCatalog.readProjectGitBranch(unsafe), undefined);
+});
+
+test('project Git presentation distinguishes unavailable, clean, staged, untracked, conflicted, and bounded states', () => {
+  const evidence = overrides => ({
+    projectPath: '/fixture/project',
+    changes: [],
+    changeCount: 0,
+    diff: '',
+    diffTruncated: false,
+    available: true,
+    ...overrides,
+  });
+  assert.deepEqual(projectGitPresentation.projectGitStatusPresentation(evidence({ available: false })), {
+    state: 'unavailable',
+    label: 'status unavailable',
+    tooltip: 'unavailable',
+    stagedCount: 0,
+    modifiedCount: 0,
+    untrackedCount: 0,
+    conflictCount: 0,
+  });
+  assert.equal(projectGitPresentation.projectGitStatusPresentation(evidence({})).label, 'clean');
+
+  const changed = projectGitPresentation.projectGitStatusPresentation(evidence({
+    changeCount: 504,
+    changes: [
+      { path: 'staged.ts', status: 'index modified', staged: true },
+      { path: 'working.ts', status: 'modified', staged: false },
+      { path: 'new.ts', status: 'untracked', staged: false },
+      { path: 'conflict.ts', status: 'both modified', staged: false },
+    ],
+    diffTruncated: true,
+  }));
+  assert.deepEqual(changed, {
+    state: 'changed',
+    label: '504 changes · 1 staged · 1 conflict',
+    tooltip: '504 total, 1 staged, 1 modified, 1 untracked, 1 conflicted',
+    stagedCount: 1,
+    modifiedCount: 1,
+    untrackedCount: 1,
+    conflictCount: 1,
+  });
 });
 
 test('project discovery honors configured roots, depth, limits, and workspace folders', () => {
