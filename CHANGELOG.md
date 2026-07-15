@@ -6,6 +6,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Added
 
+- Gave GitLab MR, Jenkins, and SonarQube Attention rows distinct theme-aware icons and colors while retaining written provider and severity labels for accessible status recognition.
 - Added a private bounded Context Basket for selecting Jira, GitLab MR, Jenkins/SonarQube, and local Git artifacts, reviewing provenance/freshness/completeness/size/hash/conflicts, explicitly refreshing sources, and placing one reference-only non-submitting bundle into an exact managed terminal.
 - Added ephemeral bounded local evidence search across session titles, explicit Jira contexts, registered projects/branches, provider bindings, artifact labels, and audit-event summaries without reading or indexing terminal content.
 - Added private local Markdown/JSON handoff bundles for up to 100 selected redacted context/audit references and hashes; exports never include terminal content, copy source payloads, or post to a provider.

@@ -302,6 +302,14 @@ const METADATA_TOOLTIP_FIELDS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 function eventIcon(event: MonitorEvent): vscode.ThemeIcon {
+  // Provider identity is the fastest way to distinguish adjacent Attention rows.
+  // Severity remains explicit in the row description and tooltip, so these
+  // theme-aware colors are never the only status signal.
+  switch (event.source) {
+    case 'gitlab': return new vscode.ThemeIcon('git-pull-request', new vscode.ThemeColor('charts.orange'));
+    case 'jenkins': return new vscode.ThemeIcon('server-process', new vscode.ThemeColor('charts.red'));
+    case 'sonar': return new vscode.ThemeIcon('shield', new vscode.ThemeColor('charts.blue'));
+  }
   switch (attentionSeverity(event)) {
     case 'failure': return new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed'));
     case 'partial': return new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));

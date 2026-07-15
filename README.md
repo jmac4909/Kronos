@@ -29,7 +29,7 @@ Kronos solves a narrow enterprise-development problem: the evidence needed for a
 | **Work** | Search and filter Jira work, see current/empty/loading/partial/stale/error refresh state without losing the last good result, explicitly link the right local project and branch, then open a focused ticket workspace. Shared Jira keys never infer a repository. |
 | **Sessions** | Organize operator-owned Claude terminals by local project, attach multiple Jira contexts when useful, and never read terminal contents. |
 | **Projects** | Track each registered repository's current branch and clean/dirty status, then open bounded diff, MR, CI, and provider actions. |
-| **Attention** | Show the newest meaningful provider state by project, resurface still-open MRs after the next poll, and retain full history in the private audit. |
+| **Attention** | Show the newest meaningful provider state by project, distinguish GitLab MR, Jenkins, and SonarQube rows with separate theme-aware icons and colors, resurface still-open MRs after the next poll, and retain full history in the private audit. |
 | **Context composer** | Review fetched evidence, edit the focus, and place one shell-inert line in the chosen terminal with submission disabled. |
 | **Context Basket** | Select multiple Jira, MR, CI, and local Git artifacts, review provenance/freshness/completeness/conflicts together, then place one reference-only bundle without copying or submitting provider content. |
 | **Local search** | Use one bounded Quick Pick to find session titles, explicit Jira contexts, registered projects/branches, provider bindings, event summaries, and artifact labels without reading terminal content. |
