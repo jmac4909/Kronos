@@ -86,6 +86,17 @@
       "humanGates": ["live-providers"]
     },
     {
+      "id": "maintainability-and-orchestration",
+      "goals": ["G14"],
+      "automated": [
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "scheduled Work refreshes coalesce behind one in-flight read" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "a newer explicit Work refresh supersedes a late stale result" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "a failed Work refresh releases ownership for the next request" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "disposing Work refresh orchestration aborts its active read" }
+      ],
+      "humanGates": []
+    },
+    {
       "id": "scale-and-accessibility",
       "goals": ["G17"],
       "automated": [

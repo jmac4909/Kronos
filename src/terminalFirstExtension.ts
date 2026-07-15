@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import type { KronosState, ProjectConfig, Ticket } from './state/types';
-import { TerminalFirstState } from './state/TerminalFirstState';
+import { TerminalFirstState, type TerminalFirstRefreshResult } from './state/TerminalFirstState';
 import { WorkTreeProvider } from './views/WorkTreeProvider';
 import { ManagedSessionTreeProvider } from './views/ManagedSessionTreeProvider';
 import { ProjectTreeProvider, type RegisteredProjectCommandTarget } from './views/ProjectTreeProvider';
@@ -130,6 +130,7 @@ import {
   type OperationsReadinessItem,
 } from './services/operationsReadiness';
 import { providerReadiness } from './services/providerReadiness';
+import { WorkRefreshCoordinator } from './services/workRefreshCoordinator';
 import {
   CONTEXT_COMPOSER_SCRIPT,
   buildContextComposerHtml,
@@ -255,6 +256,10 @@ class TerminalFirstRuntime implements vscode.Disposable {
     () => listWorkSessions(),
   );
   private readonly attentionTree = new AttentionTreeProvider();
+  private readonly workRefresh = new WorkRefreshCoordinator<TerminalFirstRefreshResult>(signal => vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'Kronos: Reading Jira work metadata...' },
+    async () => this.state.refreshTickets({ signal }),
+  ));
   private readonly output = vscode.window.createOutputChannel('Kronos Terminal Work Companion');
   private readonly disposables: vscode.Disposable[] = [];
   private readonly ticketPanels = new Map<string, TicketPanelRecord>();
@@ -270,7 +275,6 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private readonly monitor: ManagedProviderMonitor;
   private refreshTimer: NodeJS.Timeout | undefined;
   private providerTimer: NodeJS.Timeout | undefined;
-  private ticketRefreshController: AbortController | undefined;
   private providerEnvironmentLoad: ProviderEnvLoadResult | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
@@ -322,8 +326,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
   dispose(): void {
     if (this.refreshTimer) { clearInterval(this.refreshTimer); }
     if (this.providerTimer) { clearInterval(this.providerTimer); }
-    this.ticketRefreshController?.abort();
-    this.ticketRefreshController = undefined;
+    this.workRefresh.dispose();
     for (const panel of this.ticketPanels.values()) { panel.panel.dispose(); }
     this.ticketPanels.clear();
     this.claudeLaunchCooldownUntil.clear();
@@ -851,17 +854,10 @@ class TerminalFirstRuntime implements vscode.Disposable {
   }
 
   private async refreshTickets(showResult: boolean): Promise<void> {
-    if (this.ticketRefreshController) {
-      if (!showResult) { return; }
-      this.ticketRefreshController.abort();
-    }
-    const controller = new AbortController();
-    this.ticketRefreshController = controller;
     try {
-      const result = await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: 'Kronos: Reading Jira work metadata...' },
-        async () => this.state.refreshTickets({ signal: controller.signal }),
-      );
+      const refresh = await this.workRefresh.run(showResult);
+      if (refresh.kind !== 'complete') { return; }
+      const result = refresh.value;
       if (result.warnings.length > 0) {
         this.log('Jira Work refresh completed with bounded-read warnings.', result.warnings.join(' '));
       }
@@ -875,14 +871,9 @@ class TerminalFirstRuntime implements vscode.Disposable {
       }
       void this.pollProviders(false);
     } catch (error: unknown) {
-      if (controller.signal.aborted) { return; }
       const detail = boundedOperationFailure(error, 'Jira ticket refresh failed.').display;
       this.log('Jira ticket refresh failed.', detail);
       if (showResult) { void vscode.window.showWarningMessage(detail); }
-    } finally {
-      if (this.ticketRefreshController === controller) {
-        this.ticketRefreshController = undefined;
-      }
     }
   }
 

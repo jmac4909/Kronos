@@ -94,6 +94,7 @@ function checkReadmeMetrics(packageJson, readmeSource) {
     'scripts/run-jira-work-board-tests.js',
     'scripts/run-provider-contract-tests.js',
     'scripts/run-scale-accessibility-tests.js',
+    'scripts/run-work-orchestration-tests.js',
   ];
   const actual = new Map([
     ['Enterprise provider integrations', 4],
