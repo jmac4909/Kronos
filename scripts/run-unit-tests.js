@@ -1440,6 +1440,15 @@ test('one readiness snapshot feeds Setup and Doctor and gives every non-ready ro
     workCatalog: { available: true, tickets: 0, issues: 0 },
     jiraVisibility: { hideCompleted: true, additionalCompletedStatuses: 0 },
     providers,
+    providerDiagnostics: [{
+      provider: 'gitlab',
+      status: 'fail',
+      detail: 'The latest live read was refused because read permission is unavailable.',
+      action: 'openProviderEnvironment',
+      actionLabel: 'Repair Private Config',
+      problemCount: 1,
+      observedAt: '2026-07-14T12:00:00.000Z',
+    }],
     polling: { activeTargets: 0, detail: 'No active polling.' },
     sessions: { count: 0, issues: 0 },
   });
@@ -1448,7 +1457,55 @@ test('one readiness snapshot feeds Setup and Doctor and gives every non-ready ro
   assert.deepEqual(setupIds, doctorIds.filter(id => id !== 'jira-visibility'));
   assert.ok(snapshot.filter(item => item.status !== 'pass').every(item => item.action && item.actionLabel));
   assert.equal(snapshot.find(item => item.id === 'provider-jira').status, 'warn');
+  assert.equal(
+    snapshot.find(item => item.id === 'provider-gitlab').status,
+    'warn',
+    'missing static configuration remains authoritative over a stale live diagnostic',
+  );
   assert.equal(snapshot.find(item => item.id === 'automatic-polling').action, 'pollProvidersNow');
+
+  const configuredProviders = Object.values(providerReadiness.providerReadiness({
+    JIRA_BASE_URL: 'https://jira.example.test',
+    JIRA_EMAIL: 'operator@example.test',
+    JIRA_API_TOKEN: 'fixture-token-value',
+    GITLAB_URL: 'https://gitlab.example.test',
+    GITLAB_TOKEN: 'fixture-token-value',
+    JENKINS_URL: 'https://jenkins.example.test',
+    SONAR_HOST_URL: 'https://sonar.example.test',
+    SONAR_TOKEN: 'fixture-token-value',
+  }));
+  const liveFailureSnapshot = operationsReadiness.buildOperationsReadiness({
+    claude: { status: 'pass', detail: 'Claude is ready.' },
+    providerEnvironment: { present: true, invalid: 0, configuredProviders: 4, path: '/private/.env' },
+    discovery: { roots: 1, depth: 2, limit: 100, hasWorkspaceFolders: false },
+    projects: {
+      count: 1,
+      unavailable: 0,
+      detail: 'One project.',
+      configuredIntegrations: 1,
+      gitlabTargets: 1,
+      jenkinsTargets: 1,
+      sonarTargets: 1,
+    },
+    workCatalog: { available: true, tickets: 1, issues: 0 },
+    jiraVisibility: { hideCompleted: true, additionalCompletedStatuses: 0 },
+    providers: configuredProviders,
+    providerDiagnostics: [{
+      provider: 'gitlab',
+      status: 'fail',
+      detail: 'The latest live read was refused because read permission is unavailable.',
+      action: 'openProviderEnvironment',
+      actionLabel: 'Repair Private Config',
+      problemCount: 1,
+      observedAt: '2026-07-14T12:00:00.000Z',
+    }],
+    polling: { activeTargets: 3, detail: 'Three active polling targets.' },
+    sessions: { count: 1, issues: 0 },
+  });
+  const gitlab = liveFailureSnapshot.find(item => item.id === 'provider-gitlab');
+  assert.equal(gitlab.status, 'fail');
+  assert.equal(gitlab.action, 'openProviderEnvironment');
+  assert.match(gitlab.detail, /Current live result:.*read permission is unavailable/);
 });
 
 test('opening provider configuration creates one private comment-only template without replacing existing content', () => {

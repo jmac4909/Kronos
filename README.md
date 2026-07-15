@@ -103,9 +103,9 @@ The installed extension uses the VS Code API and Node built-ins only. It has **z
 | Audited terminal-write paths | 2 |
 | Manifest-covered commands | 40 |
 | Manifest-covered settings | 10 |
-| Reachable runtime modules checked for cycles/dead exports | 78 |
+| Reachable runtime modules checked for cycles/dead exports | 79 |
 | Third-party runtime dependencies | 0 |
-| Automated Node/DOM/board tests | 135 |
+| Automated Node/DOM/board tests | 136 |
 
 Automated gates also cover the runtime graph, security boundary, context governance, activation surface, provider transitions, private state, credential redaction, and packaged extension contents.
 

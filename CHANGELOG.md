@@ -20,6 +20,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Changed
 
+- Setup and Doctor now show current bounded Jira/provider live-read failures and partial components over static configuration readiness, with repair-versus-retry actions and stream-specific recovery.
 - Extracted Projects Git-status presentation into a pure tested owner covering unavailable, clean, staged, modified, untracked, conflicted, and over-limit evidence.
 - Routed project Git evidence warnings and every tree-provider refresh fallback through the shared bounded, credential-redacted failure vocabulary while retaining usable read-only status after a diff-only failure.
 - Added exhaustive Jira-board filter-composition coverage across all five filter subsets plus direct Enter/Space card-activation assertions.

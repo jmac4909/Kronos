@@ -1,4 +1,5 @@
 import type { ProviderReadiness } from './providerReadiness';
+import type { ProviderReadDiagnostic } from './providerReadDiagnostics';
 
 export type OperationsReadinessStatus = 'pass' | 'warn' | 'fail';
 export type OperationsReadinessSurface = 'setup' | 'doctor';
@@ -45,6 +46,7 @@ export interface OperationsReadinessInput {
   workCatalog: { available: boolean; tickets: number; issues: number; firstIssue?: string };
   jiraVisibility: { hideCompleted: boolean; additionalCompletedStatuses: number };
   providers: readonly ProviderReadiness[];
+  providerDiagnostics?: readonly ProviderReadDiagnostic[];
   polling: { activeTargets: number; detail: string };
   sessions: { count: number; issues: number; firstIssue?: string };
 }
@@ -122,7 +124,10 @@ export function buildOperationsReadiness(input: OperationsReadinessInput): Opera
       actionLabel: 'Visibility Settings',
       surfaces: ['doctor'],
     },
-    ...input.providers.map(provider => providerItem(provider)),
+    ...input.providers.map(provider => providerItem(
+      provider,
+      input.providerDiagnostics?.find(diagnostic => diagnostic.provider === provider.id),
+    )),
     {
       id: 'project-integrations',
       title: 'Project polling targets',
@@ -155,14 +160,22 @@ export function buildOperationsReadiness(input: OperationsReadinessInput): Opera
   ];
 }
 
-function providerItem(provider: ProviderReadiness): OperationsReadinessItem {
+function providerItem(
+  provider: ProviderReadiness,
+  diagnostic: ProviderReadDiagnostic | undefined,
+): OperationsReadinessItem {
+  const currentDiagnostic = provider.state === 'ready' ? diagnostic : undefined;
   return {
     id: `provider-${provider.id}`,
     title: provider.name,
-    detail: `${provider.detail} Next: ${provider.nextAction}`,
-    status: provider.state === 'ready' ? 'pass' : provider.state === 'missing' ? 'warn' : 'fail',
-    action: 'openProviderEnvironment',
-    actionLabel: provider.state === 'ready' ? 'Review Private Config' : 'Repair Private Config',
+    detail: currentDiagnostic
+      ? `${provider.detail} Current live result: ${currentDiagnostic.detail}${currentDiagnostic.observedAt ? ` Observed ${currentDiagnostic.observedAt}.` : ''}`
+      : `${provider.detail} Next: ${provider.nextAction}`,
+    status: currentDiagnostic?.status
+      || (provider.state === 'ready' ? 'pass' : provider.state === 'missing' ? 'warn' : 'fail'),
+    action: currentDiagnostic?.action || 'openProviderEnvironment',
+    actionLabel: currentDiagnostic?.actionLabel
+      || (provider.state === 'ready' ? 'Review Private Config' : 'Repair Private Config'),
     surfaces: ['setup', 'doctor'],
   };
 }

@@ -152,6 +152,7 @@ import {
   type OperationsReadinessItem,
 } from './services/operationsReadiness';
 import { providerReadiness } from './services/providerReadiness';
+import { currentProviderReadDiagnostics } from './services/providerReadDiagnostics';
 import { WorkRefreshCoordinator } from './services/workRefreshCoordinator';
 import {
   CONTEXT_COMPOSER_SCRIPT,
@@ -3085,6 +3086,10 @@ class TerminalFirstRuntime implements vscode.Disposable {
         additionalCompletedStatuses: this.completedJiraStatuses().length,
       },
       providers: [readiness.jira, readiness.gitlab, readiness.jenkins, readiness.sonar],
+      providerDiagnostics: currentProviderReadDiagnostics(
+        listMonitorEvents({ types: ['provider.transition'], limit: 2000 }),
+        this.state.jiraRefreshStatus,
+      ),
       polling: {
         activeTargets: activePolling.gitlab + activePolling.jenkins + activePolling.sonar,
         detail: activePolling.detail,

@@ -129,7 +129,8 @@
         { "file": "scripts/run-provider-health-visibility-tests.js", "test": "session provider health derives the next poll and legacy successful-poll fallback" },
         { "file": "scripts/run-provider-health-visibility-tests.js", "test": "project provider health aggregates latest evidence and earliest scheduled poll" },
         { "file": "scripts/run-provider-health-visibility-tests.js", "test": "monitoring results persist success, meaningful change, and quiet suppression separately" },
-        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "current normalized provider error clears only after a non-failing result" }
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "current normalized provider error clears only after a non-failing result" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "provider diagnostics retain current live failures and partial reads until their own recovery" }
       ],
       "humanGates": ["real-vscode", "live-providers"]
     },
