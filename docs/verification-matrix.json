@@ -75,7 +75,7 @@
       "goals": ["G07", "G12"],
       "automated": [
         { "file": "scripts/run-unit-tests.js", "test": "bounded operation failures use one redacted actionable vocabulary" },
-        { "file": "scripts/run-unit-tests.js", "test": "one readiness snapshot feeds Setup and Doctor and gives every non-ready row an action" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "one readiness snapshot feeds Setup and Doctor and gives every non-ready row an action" },
         { "file": "scripts/run-webview-dom-tests.js", "test": "Setup and Doctor actions post only their allowlisted operation command field" }
       ],
       "humanGates": ["live-providers"]

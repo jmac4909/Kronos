@@ -110,6 +110,7 @@ function checkReadmeMetrics(packageJson, readmeSource) {
     'scripts/run-jira-work-board-tests.js',
     'scripts/run-provider-contract-tests.js',
     'scripts/run-scale-accessibility-tests.js',
+    'scripts/run-provider-readiness-tests.js',
     'scripts/run-project-catalog-tests.js',
     'scripts/run-work-orchestration-tests.js',
     'scripts/run-provider-reconciliation-tests.js',

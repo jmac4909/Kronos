@@ -20,6 +20,7 @@ All notable changes to the Kronos preview are documented here.
 
 ### Changed
 
+- Extracted provider environment parsing/safety, shared readiness, and Setup/Doctor readiness projection from the monolithic unit harness into a dedicated `provider:readiness` suite retained by `npm test`.
 - Routed provider-environment, Work-catalog, work-session-record, and TerminalFirstState load/watch failures through the shared bounded redacted vocabulary before any Setup, Doctor, Work, or log surface consumes them.
 - Setup and Doctor now show current bounded Jira/provider live-read failures and partial components over static configuration readiness, with repair-versus-retry actions and stream-specific recovery.
 - Extracted Projects Git-status presentation into a pure tested owner covering unavailable, clean, staged, modified, untracked, conflicted, and over-limit evidence.
