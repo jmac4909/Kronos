@@ -809,21 +809,24 @@ class TerminalFirstRuntime implements vscode.Disposable {
       return;
     }
     const current = ticketLocalProject(this.state.state, ticket);
-    const choices: Array<vscode.QuickPickItem & { project?: LocalProjectSummary; unlink?: true }> = projects.map(project => ({
+    const projectChoices: Array<vscode.QuickPickItem & { project?: LocalProjectSummary; unlink?: true }> = projects
+      .sort((left, right) => Number(current?.name === right.name) - Number(current?.name === left.name)
+        || left.name.localeCompare(right.name))
+      .map(project => ({
       label: `${project.name}${current?.name === project.name ? ' $(check)' : ''}`,
       description: project.branch || (project.available ? 'Git branch unavailable' : 'folder unavailable'),
       detail: project.path,
       project,
     }));
-    if (current) {
-      choices.push({
+    const choices: Array<vscode.QuickPickItem & { project?: LocalProjectSummary; unlink?: true }> = current
+      ? [projectChoices[0], {
         label: '$(close) Unlink local project',
         description: 'Future ticket launches fall back to the open workspace',
         unlink: true,
-      });
-    }
+      }, ...projectChoices.slice(1)].filter((item): item is vscode.QuickPickItem & { project?: LocalProjectSummary; unlink?: true } => Boolean(item))
+      : projectChoices;
     const choice = await vscode.window.showQuickPick(choices, {
-      title: `Choose ${ticketKey} Launch Project`,
+      title: current ? `Change or Unlink ${ticketKey} Local Project` : `Add ${ticketKey} Local Project`,
       placeHolder: 'Claude will start in this folder; Kronos will not move existing terminals',
       matchOnDescription: true,
       matchOnDetail: true,

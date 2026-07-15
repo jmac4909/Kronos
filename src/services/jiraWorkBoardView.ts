@@ -351,8 +351,8 @@ function buildTicketCardHtml(ticket: BoardTicket): string {
   const attachmentChip = attachmentCount > 0
     ? chip(`${attachmentCount} attachment${attachmentCount === 1 ? '' : 's'}`, '')
     : '';
-  const projectActionLabel = launchProject ? `Project: ${launchProject}` : '+ Add Project';
-  return `<article class="jira-ticket-card" data-ticket-card data-ticket="${escapeAttr(ticket.key)}" data-status="${escapeAttr(ticket.statusToken)}" data-jira-project="${escapeAttr(ticket.jiraProjectToken)}" data-local-project="${escapeAttr(ticket.localProjectToken)}" data-labels="${escapeAttr(JSON.stringify(ticket.labelTokens))}" data-search="${escapeAttr(ticket.searchText)}" data-completed="${ticket.completed ? 'true' : 'false'}" data-ticket-type="${typeKind}">
+  const projectActionLabel = launchProject ? `Change / Unlink Project: ${launchProject}` : '+ Add Project';
+  return `<article class="jira-ticket-card" data-ticket-card data-ticket="${escapeAttr(ticket.key)}" data-status="${escapeAttr(ticket.statusToken)}" data-jira-project="${escapeAttr(ticket.jiraProjectToken)}" data-local-project="${escapeAttr(ticket.localProjectToken)}" data-labels="${escapeAttr(JSON.stringify(ticket.labelTokens))}" data-search="${escapeAttr(ticket.searchText)}" data-completed="${ticket.completed ? 'true' : 'false'}" data-ticket-type="${typeKind}" tabindex="0" aria-label="Open ${escapeAttr(ticket.key)}: ${escapeAttr(summary)}">
     <div class="jira-ticket-heading"><button type="button" class="jira-ticket-key jira-ticket-open" data-action="openTicketWorkspace" data-ticket="${escapeAttr(ticket.key)}" aria-label="Open ${escapeAttr(ticket.key)}: ${escapeAttr(summary)}">${escapeHtml(ticket.key)}</button><div class="jira-ticket-heading-actions">${actionButton('chooseTicketProject', projectActionLabel, ticket.key)}<span class="jira-ticket-priority">${escapeHtml(priority || type)}</span></div></div>
     <div class="jira-ticket-summary">${escapeHtml(summary)}</div>
     <div class="jira-ticket-meta">${projectChips}${labelChips}${overflowCount > 0 ? chip(`+${overflowCount} more`, '') : ''}${mrChip}${buildChip}${attachmentChip}</div>

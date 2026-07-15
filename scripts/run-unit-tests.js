@@ -2942,6 +2942,7 @@ test('ticket workspace exposes explicit Claude launch, project branch, terminal 
   for (const action of ['startClaudeForTicket', 'manageActiveTerminal', 'chooseTicketProject', 'insertJiraContext', 'insertGitLabContext', 'insertCiContext']) {
     assert.match(html, new RegExp(`data-action="${action}"`));
   }
+  assert.match(html, /Change \/ Unlink Project: fixture/);
   for (const forbidden of [
     'startWork',
     'dispatch',
@@ -3714,6 +3715,8 @@ test('extension activation registers the bounded surface and explicit launch com
 
     singlePickHandler = items => items.find(item => item.project?.name === 'fixture');
     await commandHandlers.get('kronos.chooseTicketProject')({ ticketKey: 'JIRA-123' });
+    assert.match(lastSinglePickItems[0].label, /^fixture.*\$\(check\)/);
+    assert.match(lastSinglePickItems[1].label, /Unlink local project/);
     assert.equal(stateStore.readStateFileWithIssues().state.tickets['JIRA-123'].linked_local_project, 'fixture');
     assert.equal(workSessions.getWorkSessionByTicket('JIRA-123'), null, 'choosing a project before launch must not create a session');
 

@@ -36,7 +36,7 @@ export function buildTicketWorkspaceHtml(input: TicketWorkspaceViewInput): strin
   const actionButtons = [
     ticketWorkspaceActionButton(
       'chooseTicketProject',
-      input.localProject ? `Project: ${input.localProject.name}` : 'Add Project / Branch',
+      input.localProject ? `Change / Unlink Project: ${input.localProject.name}` : 'Add Project / Branch',
       { ticket: ticketKey },
     ),
     ticketWorkspaceActionButton('startClaudeForTicket', 'Start Claude for Ticket', { ticket: ticketKey, primary: true }),

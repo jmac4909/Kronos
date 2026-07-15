@@ -153,6 +153,8 @@ test('board lists registered local project paths and current Git branches', () =
     assert.match(html, /data-action="chooseTicketProject"/);
     assert.match(html, /Jira: KRONOS/);
     assert.match(html, /Project: Kronos/);
+    assert.match(html, /Change \/ Unlink Project: Kronos/);
+    assert.match(html, /data-ticket-card[^>]+tabindex="0"[^>]+aria-label="Open KRONOS-1/);
   } finally {
     fs.rmSync(projectRoot, { recursive: true, force: true });
   }
