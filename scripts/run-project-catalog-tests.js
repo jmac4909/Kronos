@@ -14,6 +14,7 @@ const projectDiscovery = require('../out/services/projectDiscovery.js');
 const projectGitPresentation = require('../out/services/projectGitPresentation.js');
 const jiraWorkCatalog = require('../out/services/jiraWorkCatalog.js');
 const managedProviderMonitor = require('../out/services/managedProviderMonitor.js');
+const workSessions = require('../out/services/workSessionStore.js');
 
 test('explicit local project links preserve unrelated provider records and report branch without running Git', () => {
   const projectRoot = path.join(tempRoot, 'project-catalog-fixture');
@@ -121,14 +122,49 @@ test('Jira project keys never auto-link a repository; only an explicit ticket li
     assert.equal(result.state.tickets[ticketKey].linked_local_project, undefined);
     assert.deepEqual(projectCatalog.projectConfigurationForTicket(result.state, result.state.tickets[ticketKey]), {});
   }
-  const linked = projectCatalog.setTicketLocalProject(result.state, 'ABC-123', 'Api');
+  const linkedFirst = projectCatalog.setTicketLocalProject(result.state, 'ABC-123', 'Api');
+  const linked = projectCatalog.setTicketLocalProject(linkedFirst, 'ABC-124', 'Web');
   assert.equal(linked.tickets['ABC-123'].linked_local_project, 'Api');
-  assert.equal(linked.tickets['ABC-124'].linked_local_project, undefined);
+  assert.equal(linked.tickets['ABC-124'].linked_local_project, 'Web');
   assert.equal(projectCatalog.projectConfigurationForTicket(linked, linked.tickets['ABC-123']).gitlab_project_path, 'team/api');
-  assert.deepEqual(projectCatalog.projectConfigurationForTicket(linked, linked.tickets['ABC-124']), {});
+  assert.equal(projectCatalog.projectConfigurationForTicket(linked, linked.tickets['ABC-124']).gitlab_project_path, 'team/web');
   const refreshed = jiraWorkCatalog.catalogFromJiraWorkList(snapshot, linked, 'https://jira.example').state;
   assert.equal(refreshed.tickets['ABC-123'].linked_local_project, 'Api', 'an explicit operator link survives Jira refresh');
-  assert.equal(refreshed.tickets['ABC-124'].linked_local_project, undefined);
+  assert.equal(refreshed.tickets['ABC-124'].linked_local_project, 'Web', 'a second ticket in the same Jira namespace keeps its own link');
+});
+
+test('unlinked tickets stay unlinked across refresh, registration, reload, polling selection, and standalone sessions', () => {
+  const projectRoot = path.join(tempRoot, 'unlinked-identity-project');
+  fs.mkdirSync(projectRoot, { recursive: true });
+  const initial = stateStore.emptyWorkCatalog();
+  initial.tickets['ABC-200'] = fixtureTicket({ jira_project_key: 'ABC' });
+  const registered = projectCatalog.registerLocalProject(initial, 'Application', projectRoot);
+  assert.equal(registered.tickets['ABC-200'].linked_local_project, undefined);
+
+  const refreshed = jiraWorkCatalog.catalogFromJiraWorkList({
+    issues: [jiraIssueForProject('ABC-200', 'Remain explicitly unlinked', 'ABC')],
+    fetchedAt: '2026-07-14T12:00:00.000Z',
+    complete: true,
+  }, registered, 'https://jira.example').state;
+  assert.equal(refreshed.tickets['ABC-200'].linked_local_project, undefined);
+  assert.deepEqual(projectCatalog.projectConfigurationForTicket(refreshed, refreshed.tickets['ABC-200']), {});
+
+  const reloaded = stateStore.normalizeWorkCatalog(refreshed, '/fixture/unlinked-reload.json').state;
+  assert.equal(reloaded.tickets['ABC-200'].linked_local_project, undefined);
+  const ticketSession = { ticketKey: 'ABC-200', ticketKeys: ['ABC-200'], providerBindings: [] };
+  assert.equal(managedProviderMonitor.configuredGitLabPollingTarget(reloaded, ticketSession), null);
+  assert.deepEqual(managedProviderMonitor.configuredCiPollingTargets(reloaded, ticketSession), {});
+  assert.equal(managedProviderMonitor.configuredSonarBranch(reloaded, 'ABC-200'), null);
+
+  const sessionOptions = { kronosDir: path.join(tempRoot, 'unlinked-standalone-session') };
+  const standalone = workSessions.createStandaloneWorkSession({
+    title: 'Standalone Application work',
+    projectName: 'Application',
+    projectPath: projectRoot,
+  }, sessionOptions);
+  assert.deepEqual(standalone.ticketKeys, []);
+  assert.equal(Object.hasOwn(standalone, 'ticketKey'), false);
+  assert.equal(reloaded.tickets['ABC-200'].linked_local_project, undefined);
 });
 
 test('checked projects replace local registrations and safely unlink removed explicit project links', () => {

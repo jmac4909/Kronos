@@ -2151,6 +2151,9 @@ test('standalone work sessions persist without fake Jira identities and preserve
   assert.equal(withTicketContext.monitoring.enabled, true);
   assert.equal(workSessions.getWorkSessionForTicketContext('JIRA-789', options).id, standalone.id);
   assert.equal(Object.hasOwn(withTicketContext, 'ticketKey'), false);
+  const withSeveralTicketContexts = workSessions.addWorkSessionTicketContext(standalone.id, 'JIRA-790', options);
+  assert.deepEqual(withSeveralTicketContexts.ticketKeys, ['JIRA-789', 'JIRA-790']);
+  assert.equal(workSessions.getWorkSessionForTicketContext('JIRA-790', options).id, standalone.id);
   assert.deepEqual(workSessions.workSessionTicketMetadata(standalone), {});
   const reopenedStandalone = workSessions.reopenWorkSession(
     workSessions.closeWorkSession(standalone.id, options).id,
@@ -2196,9 +2199,22 @@ test('standalone work sessions persist without fake Jira identities and preserve
   );
 });
 
-test('provider bindings update one semantic subject instead of accumulating duplicate Sonar rows', () => {
+test('provider bindings update one semantic subject without overwriting unrelated resources', () => {
   const options = { kronosDir: path.join(tempRoot, 'provider-binding-dedupe') };
   const session = workSessions.createOrGetWorkSessionByTicket({ ticketKey: 'JIRA-808' }, options);
+  workSessions.addWorkSessionProviderBinding(session.id, {
+    provider: 'gitlab',
+    resource: 'merge-request',
+    subjectId: '77',
+    projectId: 'group/application',
+    url: 'https://gitlab.example/group/application/-/merge_requests/77',
+  }, options);
+  workSessions.addWorkSessionProviderBinding(session.id, {
+    provider: 'jenkins',
+    resource: 'build',
+    subjectId: '42',
+    url: 'https://jenkins.example/job/application/42',
+  }, options);
   workSessions.addWorkSessionProviderBinding(session.id, {
     provider: 'sonar',
     resource: 'quality-gate',
@@ -2217,6 +2233,15 @@ test('provider bindings update one semantic subject instead of accumulating dupl
     binding.provider === 'sonar' && binding.subjectId === 'app:main');
   assert.equal(sonarBindings.length, 1);
   assert.equal(sonarBindings[0].projectId, 'app');
+  assert.deepEqual(updated.providerBindings.map(binding => [
+    binding.provider,
+    binding.resource,
+    binding.subjectId,
+  ]), [
+    ['gitlab', 'merge-request', '77'],
+    ['jenkins', 'build', '42'],
+    ['sonar', 'quality-gate', 'app:main'],
+  ]);
 });
 
 test('Claude terminal launch is explicit, focused, validated, and operator-triggered', () => {

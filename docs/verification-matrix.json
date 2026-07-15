@@ -183,12 +183,92 @@
   ],
   "repositoryChecks": [
     { "id": "roadmap-requirement-inventory", "file": "scripts/check-roadmap-evidence.js", "marker": "parseRoadmapRequirements" },
+    { "id": "state-identity-ownership", "file": "docs/state-ownership.md", "marker": "| Ticket-to-project link |" },
     { "id": "feature-human-summary", "file": "scripts/check-quality-evidence.js", "marker": "Kronos quality evidence OK" },
     { "id": "derived-doc-metrics", "file": "scripts/check-quality-evidence.js", "marker": "checkReadmeMetrics" },
     { "id": "required-release-gates", "file": "scripts/check-roadmap-evidence.js", "marker": "checkRequiredReleaseGates" },
     { "id": "human-gates-required", "file": "scripts/check-roadmap-evidence.js", "marker": "gate.status !== 'required'" }
   ],
   "requirementEvidence": [
+    {
+      "requirements": ["G01-goal:57868cdf"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "Jira project keys never auto-link a repository; only an explicit ticket link does" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "unlinked tickets stay unlinked across refresh, registration, reload, polling selection, and standalone sessions" },
+        { "file": "scripts/run-unit-tests.js", "test": "provider bindings update one semantic subject without overwriting unrelated resources" }
+      ],
+      "checks": ["state-identity-ownership"]
+    },
+    {
+      "requirements": ["G01-case-01:c4326a51", "G01-case-02:5af42267"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "Jira project keys never auto-link a repository; only an explicit ticket link does" }
+      ]
+    },
+    {
+      "requirements": ["G01-case-03:0fafb358"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "unlinked tickets stay unlinked across refresh, registration, reload, polling selection, and standalone sessions" }
+      ]
+    },
+    {
+      "requirements": ["G01-case-04:a58cd4a2"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "Jira project keys never auto-link a repository; only an explicit ticket link does" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "checked projects replace local registrations and safely unlink removed explicit project links" }
+      ]
+    },
+    {
+      "requirements": ["G01-case-05:1eef0bdc"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "standalone work sessions persist without fake Jira identities and preserve legacy ticket records" }
+      ]
+    },
+    {
+      "requirements": ["G01-case-06:3d5a836c"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "provider bindings update one semantic subject without overwriting unrelated resources" }
+      ]
+    },
+    {
+      "requirements": ["G01-case-07:2d7fe7c3"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog strips legacy automation fields and persists privately" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog schema v2 ignores retired identities and clears unavailable local links" }
+      ]
+    },
+    {
+      "requirements": ["G01-evidence-01:843401a9"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog strips legacy automation fields and persists privately" }
+      ],
+      "checks": ["state-identity-ownership"]
+    },
+    {
+      "requirements": ["G01-evidence-02:14f40f44"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog strips legacy automation fields and persists privately" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog rejects unsupported future schemas without interpreting their identities" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog schema v2 ignores retired identities and clears unavailable local links" }
+      ],
+      "checks": ["state-identity-ownership"]
+    },
+    {
+      "requirements": ["G01-evidence-03:9a3a4ea5"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "Jira project keys never auto-link a repository; only an explicit ticket link does" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "unlinked tickets stay unlinked across refresh, registration, reload, polling selection, and standalone sessions" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "checked projects replace local registrations and safely unlink removed explicit project links" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog rejects unsupported future schemas without interpreting their identities" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog schema v2 ignores retired identities and clears unavailable local links" }
+      ]
+    },
+    {
+      "requirements": ["G01-evidence-04:0bad954d"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "unlinked tickets stay unlinked across refresh, registration, reload, polling selection, and standalone sessions" }
+      ]
+    },
     {
       "requirements": ["G16-goal:b55b5b6c"],
       "checks": ["roadmap-requirement-inventory", "feature-human-summary", "human-gates-required"]
