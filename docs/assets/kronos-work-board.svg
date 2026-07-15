@@ -75,7 +75,7 @@
     <circle cx="112" cy="480" r="4" fill="#f59e0b"/>
     <text x="126" y="484" class="small soft">MR !87 needs review</text>
     <circle cx="112" cy="510" r="4" fill="#4ade80"/>
-    <text x="126" y="514" class="small soft">Build #412 recovered</text>
+    <text x="126" y="514" class="small soft">Build #412 is passing again</text>
     <rect x="106" y="808" width="212" height="38" rx="7" class="button"/>
     <text x="212" y="832" text-anchor="middle" class="small soft">Setup &amp; Doctor</text>
 

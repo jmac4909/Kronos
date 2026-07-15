@@ -168,6 +168,7 @@ import {
 } from './services/operationsReadiness';
 import { providerReadiness } from './services/providerReadiness';
 import { currentProviderReadDiagnostics } from './services/providerReadDiagnostics';
+import { attentionEventHeadline } from './services/attentionPresentation';
 import { normalizeProviderPublicUrl } from './services/providerUrls';
 import { WorkRefreshCoordinator } from './services/workRefreshCoordinator';
 import {
@@ -2605,12 +2606,13 @@ class TerminalFirstRuntime implements vscode.Disposable {
   }
 
   private showProviderNotice(notice: ManagedProviderNotice): void {
+    const headline = attentionEventHeadline(notice.event);
     try {
       const notificationEvent: Parameters<typeof appendMonitorEvent>[0] = {
         sessionId: notice.session.id,
         type: 'notification.shown',
         source: 'kronos',
-        summary: notice.event.summary,
+        summary: headline,
         metadata: { transitionEventId: notice.event.id },
       };
       if (notice.event.subject) { notificationEvent.subject = notice.event.subject; }
@@ -2626,8 +2628,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
         : 'Clear from Attention',
     ];
     const prompt = notice.severity === 'warning'
-      ? vscode.window.showWarningMessage(notice.event.summary, ...actions)
-      : vscode.window.showInformationMessage(notice.event.summary, ...actions);
+      ? vscode.window.showWarningMessage(headline, ...actions)
+      : vscode.window.showInformationMessage(headline, ...actions);
     void prompt.then(async action => {
       if (action === 'Open Provider' && notice.providerUrl) { await this.openHttpUrl(notice.providerUrl); }
       if (action === 'Insert Fresh Context' && notice.contextCommand) {

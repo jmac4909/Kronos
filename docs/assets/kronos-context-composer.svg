@@ -65,7 +65,7 @@
     <rect x="106" y="427" width="212" height="34" rx="6" fill="#101a2b" stroke="#293a52"/>
     <text x="122" y="448" class="small muted">MR !87 · changes requested</text>
     <rect x="106" y="471" width="212" height="34" rx="6" fill="#101a2b" stroke="#293a52"/>
-    <text x="122" y="492" class="small muted">CI · build #412 recovered</text>
+    <text x="122" y="492" class="small muted">CI · build #412 is passing again</text>
     <rect x="106" y="808" width="212" height="38" rx="7" class="button"/>
     <text x="212" y="832" text-anchor="middle" class="small soft">Open Work Session Audit</text>
 

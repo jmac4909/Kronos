@@ -3588,7 +3588,7 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.equal(attentionItem.iconPath.id, 'shield');
     assert.equal(attentionItem.iconPath.color.id, 'charts.red');
     assert.match(attentionItem.description, /fixture • SonarQube • Quality gate feature\/one • failure • observed .* • changed /);
-    assert.match(attentionItem.tooltip, /Why attention: JIRA-321 Sonar branch fixture\./);
+    assert.match(attentionItem.tooltip, /Why attention: JIRA-321 SonarQube quality gate failed for feature\/one\./);
     singlePickHandler = items => items.find(item => item.label === 'feature/two');
     await commandHandlers.get('kronos.openProvider')(attentionItem);
     assert.deepEqual(lastSinglePickItems.map(item => item.label), ['feature/two', 'feature/one']);

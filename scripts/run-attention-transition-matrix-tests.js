@@ -306,9 +306,134 @@ test('Attention rows expose project, provider, subject, observed time, changed t
   assert.equal(presented.subject, 'MR !77');
   assert.equal(presented.observedAt, session.monitoring.lastAttemptAt);
   assert.equal(presented.changedAt, event.at);
-  assert.equal(presented.why, event.summary);
+  assert.equal(presented.why, 'MATRIX-1 MR !77 has requested changes.');
   for (const visible of ['Application', 'GitLab', 'MR !77', 'warning', 'observed', 'changed']) {
     assert.match(presented.description, new RegExp(visible.replace(/[!]/g, '\\$&'), 'i'));
+  }
+});
+
+test('Attention headlines explain delivery impact instead of internal provider transitions', () => {
+  const recoveredRead = transitionEvent(
+    'headline-read-recovered',
+    '2026-07-15T16:02:00.000Z',
+    'provider_read_recovered',
+    'monitoring/complete',
+    {
+      subject: { kind: 'merge-request', id: '77', project: 'Application', ticketKey: 'MATRIX-1' },
+      metadata: { transitionKind: 'provider_read_recovered', mergeRequestIid: 77, readState: 'complete' },
+    },
+  );
+  assert.equal(
+    attention.attentionEventHeadline(recoveredRead),
+    'MATRIX-1 MR !77 review and pipeline data is current again.',
+  );
+  assert.equal(
+    attention.attentionEventHeadline(resourceTransition(
+      'headline-pipeline',
+      '2026-07-15T16:03:00.000Z',
+      'gitlab',
+      'pipeline',
+      '412',
+      'pipeline_recovered',
+      { pipelineId: 412 },
+    )),
+    'MATRIX-1 Pipeline 412 is passing again.',
+  );
+  assert.equal(
+    attention.attentionEventHeadline(resourceTransition(
+      'headline-sonar',
+      '2026-07-15T16:04:00.000Z',
+      'sonar',
+      'quality-gate',
+      'app:main',
+      'sonar_issues_decreased',
+      { projectKey: 'app', branch: 'main', unresolvedIssueCount: 2, issueDelta: -4 },
+    )),
+    'MATRIX-1 SonarQube reports 2 unresolved issues for main (down 4).',
+  );
+  assert.equal(
+    attention.attentionEventHeadline(transitionEvent(
+      'headline-partial',
+      '2026-07-15T16:05:00.000Z',
+      'provider_read_partial',
+      'monitoring/partial',
+      {
+        subject: { kind: 'merge-request', id: '77', project: 'Application', ticketKey: 'MATRIX-1' },
+        metadata: {
+          transitionKind: 'provider_read_partial',
+          mergeRequestIid: 77,
+          readState: 'partial',
+          readComponents: 'approvals,discussions',
+        },
+      },
+    )),
+    'MATRIX-1 MR !77 review and pipeline data is incomplete: approvals, review discussions. Available results remain visible.',
+  );
+
+  const allUserFacingKinds = [
+    'monitoring_blocked', 'monitoring_recovered',
+    'provider_read_failed', 'provider_read_partial', 'provider_read_recovered',
+    'initial_mr_observed', 'initial_mr_attention', 'open_mr_reminder',
+    'merge_request_merged', 'merge_request_closed', 'merge_request_reopened', 'merge_request_state_changed',
+    'changes_requested', 'changes_request_cleared', 'approval_satisfied', 'approval_required',
+    'approval_state_changed', 'reviewers_changed', 'unresolved_discussions_observed',
+    'unresolved_discussions_increased', 'unresolved_discussions_decreased', 'unresolved_discussions_changed',
+    'review_activity_added', 'review_activity_changed',
+    'new_pipeline', 'pipeline_failed', 'pipeline_canceled', 'pipeline_recovered', 'pipeline_succeeded',
+    'blocking_jobs_failed', 'blocking_jobs_recovered', 'tests_failed', 'tests_recovered',
+    'jenkins_new_build', 'jenkins_failed', 'jenkins_recovered', 'jenkins_succeeded',
+    'jenkins_tests_failed', 'jenkins_tests_recovered', 'jenkins_stages_failed', 'jenkins_stages_recovered',
+    'sonar_gate_failed', 'sonar_gate_recovered', 'sonar_issues_increased', 'sonar_issues_decreased',
+    'initial_healthy', 'initial_unhealthy',
+  ];
+  for (const kind of allUserFacingKinds) {
+    const isJenkins = kind.startsWith('jenkins_');
+    const isSonar = kind.startsWith('sonar_') || kind.startsWith('initial_');
+    const isPipeline = ['new_pipeline', 'pipeline_failed', 'pipeline_canceled', 'pipeline_recovered', 'pipeline_succeeded',
+      'blocking_jobs_failed', 'blocking_jobs_recovered', 'tests_failed', 'tests_recovered'].includes(kind);
+    const isMonitoring = kind.startsWith('monitoring_');
+    const source = isJenkins ? 'jenkins' : isSonar ? 'sonar' : isMonitoring ? 'kronos' : 'gitlab';
+    const subject = isJenkins
+      ? { kind: 'build', id: '412', project: 'Application', ticketKey: 'MATRIX-1' }
+      : isSonar
+        ? { kind: 'quality-gate', id: 'app:main', project: 'Application', ticketKey: 'MATRIX-1' }
+        : isMonitoring
+          ? { kind: 'monitoring-blocker', id: 'provider-configuration', project: 'Application', ticketKey: 'MATRIX-1' }
+          : isPipeline
+            ? { kind: 'pipeline', id: '412', project: 'Application', ticketKey: 'MATRIX-1' }
+            : { kind: 'merge-request', id: '77', project: 'Application', ticketKey: 'MATRIX-1' };
+    const headline = attention.attentionEventHeadline(transitionEvent(
+      `headline-${kind}`,
+      '2026-07-15T16:06:00.000Z',
+      kind,
+      kind.includes('failed') ? 'failed' : 'success',
+      {
+        source,
+        subject,
+        metadata: {
+          transitionKind: kind,
+          mergeRequestIid: 77,
+          pipelineId: 412,
+          buildNumber: 412,
+          branch: 'main',
+          failedJobCount: 2,
+          failedTestCount: 3,
+          failedStageCount: 1,
+          unresolvedIssueCount: 4,
+          unresolvedDiscussionCount: 2,
+          approvalCount: 1,
+          approvalsLeft: 1,
+          reviewerCount: 2,
+          reviewActivityCount: 3,
+          issueDelta: kind.endsWith('decreased') ? -2 : 2,
+          readReason: 'timeout',
+          readComponents: 'approvals,discussions',
+          changesRequested: true,
+        },
+      },
+    ));
+    assert.match(headline, /MATRIX-1/);
+    assert.doesNotMatch(headline, /provider reads?|provider recovered|fixture|_/i, `${kind} leaked internal vocabulary: ${headline}`);
   }
 });
 

@@ -189,7 +189,8 @@ export class AttentionEventTreeItem extends vscode.TreeItem implements Attention
   readonly providerChoices: AttentionProviderChoice[];
 
   constructor(readonly entry: AttentionEntry) {
-    super(entry.event.summary, vscode.TreeItemCollapsibleState.None);
+    const presentation = attentionEventPresentation(entry.event, entry.session);
+    super(presentation.why, vscode.TreeItemCollapsibleState.None);
     this.eventId = entry.event.id;
     this.sessionId = entry.event.sessionId;
     this.workSessionId = entry.event.sessionId;
@@ -211,7 +212,7 @@ export class AttentionEventTreeItem extends vscode.TreeItem implements Attention
 
     this.id = `attention-event:${entry.event.id}`;
     this.contextValue = attentionActionContext(this.source, this.ticketKey, this.providerUrl);
-    this.description = attentionEventPresentation(entry.event, entry.session).description;
+    this.description = presentation.description;
     this.tooltip = eventTooltip(entry);
     this.iconPath = eventIcon(entry.event);
     this.command = this.providerUrl

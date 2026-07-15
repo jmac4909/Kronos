@@ -122,6 +122,7 @@ export function attentionEventPresentation(
   const severity = attentionSeverity(event);
   const observedAt = session?.monitoring.lastAttemptAt || event.at;
   const changedAt = event.at;
+  const headline = attentionEventHeadline(event);
   return {
     project,
     provider,
@@ -129,7 +130,7 @@ export function attentionEventPresentation(
     severity,
     observedAt,
     changedAt,
-    why: event.summary,
+    why: headline,
     description: [
       project,
       provider,
@@ -139,6 +140,292 @@ export function attentionEventPresentation(
       `changed ${displayAttentionTimestamp(changedAt)}`,
     ].join(' • '),
   };
+}
+
+/** Converts internal transition vocabulary into the delivery impact an operator cares about. */
+export function attentionEventHeadline(event: MonitorEvent): string {
+  const transition = metadataString(event, 'transitionKind').toLowerCase();
+  const ticket = safeAttentionText(event.subject?.ticketKey, 128);
+  const prefix = ticket ? `${ticket} ` : '';
+  const subject = attentionSubjectLabel(event);
+  const pipeline = metadataIdentifier(event, 'pipelineId', event.subject?.kind === 'pipeline' ? event.subject.id : undefined);
+  const build = metadataIdentifier(event, 'buildNumber', event.subject?.kind === 'build' ? event.subject.id : undefined);
+  const branch = safeAttentionText(event.metadata?.['branch'], 500) || 'the monitored branch';
+  const failedJobs = metadataCount(event, 'failedJobCount');
+  const failedTests = metadataCount(event, 'failedTestCount');
+  const failedStages = metadataCount(event, 'failedStageCount');
+  const unresolvedIssues = metadataCount(event, 'unresolvedIssueCount');
+  const issueDelta = metadataSignedCount(event, 'issueDelta');
+  const mr = metadataIdentifier(
+    event,
+    'mergeRequestIid',
+    event.subject?.kind === 'merge-request' ? event.subject.id : undefined,
+  );
+  const mrLabel = mr ? `MR !${mr}` : subject;
+  const pipelineLabel = pipeline ? `pipeline ${pipeline}` : 'the pipeline';
+  const buildLabel = build ? `Jenkins build #${build}` : 'the Jenkins build';
+
+  switch (transition) {
+    case 'monitoring_blocked':
+      return `${prefix}Monitoring is off. Configure GitLab, Jenkins, or SonarQube for this project to track delivery changes.`;
+    case 'monitoring_recovered':
+      return `${prefix}Monitoring is ready. New merge-request, build, and quality changes will appear here.`;
+    case 'provider_read_failed':
+      return `${providerDataScope(event, prefix, mr)} could not be refreshed (${readFailureMessage(event)}). Last known results remain visible.`;
+    case 'provider_read_partial':
+      return `${providerDataScope(event, prefix, mr)} is incomplete: ${readComponentMessage(event)}. Available results remain visible.`;
+    case 'provider_read_recovered':
+      return `${providerDataScope(event, prefix, mr)} is current again.`;
+
+    case 'initial_mr_observed':
+      return mergeRequestOpenHeadline(prefix, mrLabel, event.after?.state);
+    case 'initial_mr_attention':
+      return `${prefix}${mrLabel} needs review${mergeRequestAttentionReasons(event)}.`;
+    case 'open_mr_reminder':
+      return `${prefix}${mrLabel} is still open${mergeRequestAttentionReasons(event)}.`;
+    case 'merge_request_merged':
+      return `${prefix}${mrLabel} was merged.`;
+    case 'merge_request_closed':
+      return `${prefix}${mrLabel} was closed without merging.`;
+    case 'merge_request_reopened':
+      return `${prefix}${mrLabel} was reopened.`;
+    case 'merge_request_state_changed':
+      return `${prefix}${mrLabel} changed to ${humanState(event.after?.state)}.`;
+    case 'changes_requested':
+      return `${prefix}${mrLabel} has requested changes.`;
+    case 'changes_request_cleared':
+      return `${prefix}${mrLabel} no longer has requested changes.`;
+    case 'approval_satisfied':
+      return `${prefix}${mrLabel} now has the required approvals.`;
+    case 'approval_required':
+      return `${prefix}${mrLabel} needs ${pluralCount(metadataCount(event, 'approvalsLeft'), 'more approval')}.`;
+    case 'approval_state_changed':
+      return `${prefix}${mrLabel} approval progress changed: ${pluralCount(metadataCount(event, 'approvalCount'), 'approval')}, ${remainingCount(metadataCount(event, 'approvalsLeft'))}.`;
+    case 'reviewers_changed':
+      return `${prefix}${mrLabel} reviewer assignment changed: ${pluralCount(metadataCount(event, 'reviewerCount'), 'reviewer')}.`;
+    case 'unresolved_discussions_observed':
+    case 'unresolved_discussions_increased':
+      return `${prefix}${mrLabel} has ${pluralCount(metadataCount(event, 'unresolvedDiscussionCount'), 'unresolved discussion')}.`;
+    case 'unresolved_discussions_decreased':
+      return `${prefix}${mrLabel} review discussions were resolved; ${pluralCount(metadataCount(event, 'unresolvedDiscussionCount'), 'unresolved discussion')} remain.`;
+    case 'unresolved_discussions_changed':
+      return `${prefix}${mrLabel} review discussions changed; ${pluralCount(metadataCount(event, 'unresolvedDiscussionCount'), 'unresolved discussion')} remain.`;
+    case 'review_activity_added':
+      return `${prefix}${mrLabel} has new review activity (${pluralCount(metadataCount(event, 'reviewActivityCount'), 'comment')} total).`;
+    case 'review_activity_changed':
+      return `${prefix}${mrLabel} review activity changed (${pluralCount(metadataCount(event, 'reviewActivityCount'), 'comment')} total).`;
+
+    case 'new_pipeline':
+      return `${prefix}New ${pipelineLabel} is ${humanState(event.after?.state)}.`;
+    case 'pipeline_failed':
+      return `${prefix}${capitalize(pipelineLabel)} failed${deliveryFailureDetails(failedJobs, failedTests)}.`;
+    case 'pipeline_canceled':
+      return `${prefix}${capitalize(pipelineLabel)} was canceled.`;
+    case 'pipeline_recovered':
+      return `${prefix}${capitalize(pipelineLabel)} is passing again.`;
+    case 'pipeline_succeeded':
+      return `${prefix}${capitalize(pipelineLabel)} passed.`;
+    case 'blocking_jobs_failed':
+      return `${prefix}${pluralCount(failedJobs, 'blocking job')} failed in ${pipelineLabel}.`;
+    case 'blocking_jobs_recovered':
+      return `${prefix}${pluralCount(failedJobs, 'blocking job')} in ${pipelineLabel} ${countVerb(failedJobs)} passing again.`;
+    case 'tests_failed':
+      return `${prefix}${pluralCount(failedTests, 'test')} failed in ${pipelineLabel}.`;
+    case 'tests_recovered':
+      return `${prefix}Tests in ${pipelineLabel} are passing again.`;
+
+    case 'jenkins_new_build':
+      return `${prefix}New ${buildLabel} is ${humanState(event.after?.state)}.`;
+    case 'jenkins_failed':
+      return `${prefix}${capitalize(buildLabel)} failed${deliveryFailureDetails(failedStages, failedTests, 'stage')}.`;
+    case 'jenkins_recovered':
+    case 'build_recovered':
+      return `${prefix}${capitalize(buildLabel)} is passing again.`;
+    case 'jenkins_succeeded':
+      return `${prefix}${capitalize(buildLabel)} passed.`;
+    case 'jenkins_tests_failed':
+      return `${prefix}${pluralCount(failedTests, 'test')} failed in ${buildLabel}.`;
+    case 'jenkins_tests_recovered':
+      return `${prefix}Tests in ${buildLabel} are passing again.`;
+    case 'jenkins_stages_failed':
+      return `${prefix}${pluralCount(failedStages, 'stage')} failed in ${buildLabel}.`;
+    case 'jenkins_stages_recovered':
+      return `${prefix}${pluralCount(failedStages, 'stage')} in ${buildLabel} ${countVerb(failedStages)} passing again.`;
+
+    case 'sonar_gate_failed':
+      return `${prefix}SonarQube quality gate failed for ${branch}.`;
+    case 'sonar_gate_recovered':
+      return `${prefix}SonarQube quality gate is passing again for ${branch}.`;
+    case 'sonar_issues_increased':
+      return `${prefix}SonarQube reports ${pluralCount(unresolvedIssues, 'unresolved issue')} for ${branch}${signedDelta(issueDelta)}.`;
+    case 'sonar_issues_decreased':
+      return `${prefix}SonarQube reports ${pluralCount(unresolvedIssues, 'unresolved issue')} for ${branch}${signedDelta(issueDelta)}.`;
+
+    case 'initial_healthy':
+      return initialHealthHeadline(event, prefix, true, branch, buildLabel);
+    case 'initial_unhealthy':
+      return initialHealthHeadline(event, prefix, false, branch, buildLabel, failedJobs, failedTests, failedStages);
+  }
+
+  if (transition.includes('recovered')) {
+    return `${prefix}${attentionProviderLabel(event.source)} results are healthy again.`;
+  }
+  const summary = safeAttentionText(event.summary, 1_000);
+  if (/provider reads? recovered/i.test(summary)) {
+    return `${prefix}${attentionProviderLabel(event.source)} results are current again.`;
+  }
+  return summary || `${prefix}${attentionProviderLabel(event.source)} delivery status changed.`;
+}
+
+function providerDataScope(event: MonitorEvent, prefix: string, mergeRequestIid?: string): string {
+  if (event.source === 'gitlab') {
+    return mergeRequestIid
+      ? `${prefix}MR !${mergeRequestIid} review and pipeline data`
+      : `${prefix}GitLab merge-request and pipeline data`;
+  }
+  if (event.source === 'jenkins') { return `${prefix}Jenkins build results`; }
+  if (event.source === 'sonar') { return `${prefix}SonarQube quality results`; }
+  return `${prefix}Delivery monitoring data`;
+}
+
+function readComponentMessage(event: MonitorEvent): string {
+  const labels: Record<string, string> = {
+    approvals: 'approvals',
+    discussions: 'review discussions',
+    jobs: 'job results',
+    notes: 'review comments',
+    pipelines: 'pipeline status',
+    stages: 'stage results',
+    tests: 'test results',
+  };
+  const components = metadataString(event, 'readComponents')
+    .split(',')
+    .map(value => value.trim().toLowerCase())
+    .filter(value => value && value !== 'none')
+    .map(value => labels[value] || value.replace(/[_-]+/g, ' '));
+  return [...new Set(components)].join(', ') || 'some expected details are unavailable';
+}
+
+function readFailureMessage(event: MonitorEvent): string {
+  const reason = metadataString(event, 'readReason').trim().toLowerCase();
+  const labels: Record<string, string> = {
+    authentication: 'authentication failed',
+    credentials: 'credentials need attention',
+    dns: 'host could not be resolved',
+    forbidden: 'access was denied',
+    network: 'network request failed',
+    not_found: 'configured resource was not found',
+    permission: 'access was denied',
+    rate_limit: 'request limit was reached',
+    timeout: 'request timed out',
+    tls: 'secure connection failed',
+    unavailable: 'service is unavailable',
+  };
+  return labels[reason] || safeAttentionText(reason.replace(/[_-]+/g, ' '), 160) || 'service is unavailable';
+}
+
+function mergeRequestOpenHeadline(prefix: string, mrLabel: string, state: string | undefined): string {
+  const normalized = safeAttentionText(state, 200).toLowerCase();
+  if (normalized.includes('opened') && normalized.includes('mergeable')) {
+    return `${prefix}${mrLabel} is open and mergeable.`;
+  }
+  if (normalized.includes('opened')) { return `${prefix}${mrLabel} is open.`; }
+  return `${prefix}${mrLabel} is ${humanState(state)}.`;
+}
+
+function mergeRequestAttentionReasons(event: MonitorEvent): string {
+  const reasons: string[] = [];
+  if (event.metadata?.['changesRequested'] === true) { reasons.push('changes were requested'); }
+  const discussions = metadataCount(event, 'unresolvedDiscussionCount');
+  const approvals = metadataCount(event, 'approvalsLeft');
+  if (discussions !== undefined && discussions > 0) { reasons.push(pluralCount(discussions, 'unresolved discussion')); }
+  if (approvals !== undefined && approvals > 0) { reasons.push(pluralCount(approvals, 'approval remaining')); }
+  return reasons.length > 0 ? `: ${reasons.join('; ')}` : '';
+}
+
+function initialHealthHeadline(
+  event: MonitorEvent,
+  prefix: string,
+  healthy: boolean,
+  branch: string,
+  buildLabel: string,
+  failedJobs?: number,
+  failedTests?: number,
+  failedStages?: number,
+): string {
+  if (event.source === 'sonar') {
+    const issues = metadataCount(event, 'unresolvedIssueCount');
+    return `${prefix}SonarQube quality gate is ${healthy ? 'passing' : 'failing'} for ${branch}${issues === undefined ? '' : ` with ${pluralCount(issues, 'unresolved issue')}`}.`;
+  }
+  if (event.source === 'jenkins') {
+    return `${prefix}${capitalize(buildLabel)} is ${healthy ? 'passing' : `failing${deliveryFailureDetails(failedStages, failedTests, 'stage')}`}.`;
+  }
+  if (event.source === 'gitlab') {
+    const pipeline = metadataIdentifier(event, 'pipelineId', event.subject?.id);
+    const label = pipeline ? `Pipeline ${pipeline}` : 'The pipeline';
+    return `${prefix}${label} is ${healthy ? 'passing' : `failing${deliveryFailureDetails(failedJobs, failedTests)}`}.`;
+  }
+  return `${prefix}Delivery monitoring is ${healthy ? 'healthy' : 'unhealthy'}.`;
+}
+
+function deliveryFailureDetails(
+  primaryCount: number | undefined,
+  failedTests: number | undefined,
+  primaryNoun = 'blocking job',
+): string {
+  const details: string[] = [];
+  if (primaryCount !== undefined && primaryCount > 0) { details.push(pluralCount(primaryCount, primaryNoun)); }
+  if (failedTests !== undefined && failedTests > 0) { details.push(pluralCount(failedTests, 'test')); }
+  return details.length > 0 ? `: ${details.join(' and ')}` : '';
+}
+
+function pluralCount(value: number | undefined, noun: string): string {
+  if (value === undefined) { return noun; }
+  return `${value} ${noun}${value === 1 ? '' : 's'}`;
+}
+
+function remainingCount(value: number | undefined): string {
+  return value === undefined ? 'remaining requirement unknown' : `${value} remaining`;
+}
+
+function countVerb(value: number | undefined): 'is' | 'are' {
+  return value === 1 ? 'is' : 'are';
+}
+
+function signedDelta(value: number | undefined): string {
+  if (value === undefined || value === 0) { return ''; }
+  return value > 0 ? ` (up ${value})` : ` (down ${Math.abs(value)})`;
+}
+
+function humanState(value: unknown): string {
+  return safeAttentionText(value, 200).replace(/[_/.-]+/g, ' ').toLowerCase() || 'updated';
+}
+
+function capitalize(value: string): string {
+  return value ? `${value[0]?.toUpperCase() || ''}${value.slice(1)}` : value;
+}
+
+function metadataIdentifier(event: MonitorEvent, key: string, fallback: unknown): string | undefined {
+  const value = event.metadata?.[key];
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) { return String(value); }
+  const candidate = safeAttentionText(value, 128) || safeAttentionText(fallback, 128);
+  return candidate || undefined;
+}
+
+function metadataCount(event: MonitorEvent, key: string): number | undefined {
+  const value = event.metadata?.[key];
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+function metadataSignedCount(event: MonitorEvent, key: string): number | undefined {
+  const value = event.metadata?.[key];
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
+function safeAttentionText(value: unknown, maxLength: number): string {
+  return typeof value === 'string'
+    ? value.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength)
+    : '';
 }
 
 export function attentionSeverity(event: MonitorEvent): AttentionSeverity {
