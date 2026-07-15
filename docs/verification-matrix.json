@@ -130,6 +130,8 @@
         { "file": "scripts/run-failure-contract-tests.js", "test": "failed monitoring remains visible while last-known-good timestamps stay retained" },
         { "file": "scripts/run-failure-contract-tests.js", "test": "operator surfaces use staged outcomes and the shared bounded failure vocabulary" },
         { "file": "scripts/run-provider-readiness-tests.js", "test": "one readiness snapshot feeds Setup and Doctor and gives every non-ready row an action" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "guided readiness distinguishes first-run, partial, fully ready, and live permission states" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project integration values round-trip, clear, and default to the observed Git branch" },
         { "file": "scripts/run-webview-dom-tests.js", "test": "Setup and Doctor actions post only their allowlisted operation command field" }
       ],
       "humanGates": ["live-providers"]
@@ -1167,6 +1169,84 @@
         { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" }
       ],
       "humanGates": ["live-providers"]
+    },
+    {
+      "requirements": ["G12-goal:a9bc048c"],
+      "automated": [
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "guided readiness distinguishes first-run, partial, fully ready, and live permission states" },
+        { "file": "scripts/run-unit-tests.js", "test": "Setup and Doctor render bounded operation dashboards with allowlisted actions" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G12-case-01:7712c10b"],
+      "automated": [
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "provider readiness is shared, secret-free, and distinguishes missing from invalid configuration" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "guided readiness distinguishes first-run, partial, fully ready, and live permission states" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-02:f6c9a502"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-03:6fec6be6"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project integration values round-trip, clear, and default to the observed Git branch" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-04:75e2839f"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project integration values round-trip, clear, and default to the observed Git branch" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-05:dfb4b2a1"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Setup and Doctor render bounded operation dashboards with allowlisted actions" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "guided readiness distinguishes first-run, partial, fully ready, and live permission states" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "provider diagnostics retain current live failures and partial reads until their own recovery" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-06:afdc858a"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-07:ed542607"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Setup and Doctor render bounded operation dashboards with allowlisted actions" }
+      ],
+      "humanGates": ["windows-native"]
+    },
+    {
+      "requirements": ["G12-evidence-01:bbf8399c"],
+      "automated": [
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "one readiness snapshot feeds Setup and Doctor and gives every non-ready row an action" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G12-evidence-02:f7cf3634"],
+      "automated": [
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "provider readiness is shared, secret-free, and distinguishes missing from invalid configuration" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "opening provider configuration creates one private comment-only template without replacing existing content" }
+      ]
+    },
+    {
+      "requirements": ["G12-evidence-03:9efe4443"],
+      "automated": [
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "one readiness snapshot feeds Setup and Doctor and gives every non-ready row an action" },
+        { "file": "scripts/run-unit-tests.js", "test": "Setup and Doctor render bounded operation dashboards with allowlisted actions" }
+      ]
     },
     {
       "requirements": ["G16-goal:b55b5b6c"],

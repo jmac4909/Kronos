@@ -164,6 +164,70 @@ test('one readiness snapshot feeds Setup and Doctor and gives every non-ready ro
   assert.match(gitlab.detail, /Current live result:.*read permission is unavailable/);
 });
 
+test('guided readiness distinguishes first-run, partial, fully ready, and live permission states', () => {
+  const firstRun = operationsReadiness.buildOperationsReadiness(operationsInput({
+    providers: Object.values(providerReadiness.providerReadiness({})),
+  }));
+  for (const id of ['provider-environment', 'project-discovery', 'local-projects', 'work-catalog',
+    'provider-jira', 'provider-gitlab', 'provider-jenkins', 'provider-sonar', 'project-integrations', 'automatic-polling']) {
+    assert.notEqual(firstRun.find(item => item.id === id).status, 'pass', `${id} must explain first-run setup`);
+  }
+  assert.ok(firstRun.filter(item => item.status !== 'pass').every(item => item.action && item.actionLabel));
+
+  const readyProviders = Object.values(providerReadiness.providerReadiness({
+    JIRA_BASE_URL: 'https://jira.example.test',
+    JIRA_EMAIL: 'operator@example.test',
+    JIRA_API_TOKEN: 'fixture-token-value',
+    GITLAB_URL: 'https://gitlab.example.test',
+    GITLAB_TOKEN: 'fixture-token-value',
+    JENKINS_URL: 'https://jenkins.example.test',
+    SONAR_HOST_URL: 'https://sonar.example.test',
+    SONAR_TOKEN: 'fixture-token-value',
+  }));
+  const partial = operationsReadiness.buildOperationsReadiness(operationsInput({
+    providerEnvironment: { present: true, invalid: 0, configuredProviders: 1, path: '/private/.env' },
+    discovery: { roots: 1, depth: 2, limit: 100, hasWorkspaceFolders: false },
+    projects: {
+      count: 1, unavailable: 0, detail: 'One project.', configuredIntegrations: 0,
+      gitlabTargets: 0, jenkinsTargets: 0, sonarTargets: 0,
+    },
+    workCatalog: { available: true, tickets: 1, issues: 0 },
+    providers: [readyProviders[0], ...Object.values(providerReadiness.providerReadiness({})).slice(1)],
+  }));
+  assert.ok(partial.some(item => item.status === 'pass'));
+  assert.ok(partial.some(item => item.status !== 'pass'));
+
+  const fullyReady = operationsReadiness.buildOperationsReadiness(operationsInput({
+    providerEnvironment: { present: true, invalid: 0, configuredProviders: 4, path: '/private/.env' },
+    discovery: { roots: 1, depth: 2, limit: 100, hasWorkspaceFolders: false },
+    projects: {
+      count: 1, unavailable: 0, detail: 'One project.', configuredIntegrations: 1,
+      gitlabTargets: 1, jenkinsTargets: 1, sonarTargets: 1,
+    },
+    workCatalog: { available: true, tickets: 1, issues: 0 },
+    providers: readyProviders,
+    polling: { activeTargets: 3, detail: 'Three active targets.' },
+  }));
+  assert.ok(fullyReady.every(item => item.status === 'pass'));
+
+  const permissionFailure = operationsReadiness.buildOperationsReadiness(operationsInput({
+    providerEnvironment: { present: true, invalid: 0, configuredProviders: 4, path: '/private/.env' },
+    providers: readyProviders,
+    providerDiagnostics: [{
+      provider: 'gitlab',
+      status: 'fail',
+      detail: 'Permission unavailable for the configured read endpoint.',
+      action: 'openProviderEnvironment',
+      actionLabel: 'Repair Private Config',
+      problemCount: 1,
+    }],
+  }));
+  const gitlab = permissionFailure.find(item => item.id === 'provider-gitlab');
+  assert.equal(gitlab.status, 'fail');
+  assert.match(gitlab.detail, /Permission unavailable/);
+  assert.equal(gitlab.action, 'openProviderEnvironment');
+});
+
 test('opening provider configuration creates one private comment-only template without replacing existing content', () => {
   const filePath = path.join(tempRoot, 'provider-env-template', '.env');
   const created = providerEnv.ensureProviderEnvTemplate(filePath);
@@ -179,6 +243,24 @@ test('opening provider configuration creates one private comment-only template w
   assert.deepEqual(providerEnv.ensureProviderEnvTemplate(filePath), { path: filePath, created: false });
   assert.equal(fs.readFileSync(filePath, 'utf8'), 'KEEP_ME=true\n');
 });
+
+function operationsInput(overrides = {}) {
+  return {
+    claude: { status: 'pass', detail: 'Claude is ready.' },
+    providerEnvironment: { present: false, invalid: 0, configuredProviders: 0, path: '/private/.env' },
+    discovery: { roots: 0, depth: 2, limit: 100, hasWorkspaceFolders: false },
+    projects: {
+      count: 0, unavailable: 0, detail: 'No projects.', configuredIntegrations: 0,
+      gitlabTargets: 0, jenkinsTargets: 0, sonarTargets: 0,
+    },
+    workCatalog: { available: true, tickets: 0, issues: 0 },
+    jiraVisibility: { hideCompleted: true, additionalCompletedStatuses: 0 },
+    providers: Object.values(providerReadiness.providerReadiness({})),
+    polling: { activeTargets: 0, detail: 'No active polling.' },
+    sessions: { count: 0, issues: 0 },
+    ...overrides,
+  };
+}
 
 test('provider environment reads are bounded and retain the exact allowlist', () => {
   const fixtureRoot = path.join(tempRoot, 'provider-env-safety');

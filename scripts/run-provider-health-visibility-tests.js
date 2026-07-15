@@ -141,6 +141,7 @@ test('provider diagnostics retain current live failures and partial reads until 
     event({ id: 'gitlab-auth-current', at: '2026-07-14T12:06:00.000Z', source: 'gitlab', sessionId: 'session-two', subjectId: '88', state: 'failed', reason: 'authentication' }),
     event({ id: 'jenkins-partial', at: '2026-07-14T12:07:00.000Z', source: 'jenkins', state: 'partial', reason: 'unavailable', components: 'stages,tests' }),
     event({ id: 'sonar-complete', at: '2026-07-14T12:08:00.000Z', source: 'sonar', state: 'complete', reason: 'complete' }),
+    event({ id: 'sonar-timeout-current', at: '2026-07-14T12:09:00.000Z', source: 'sonar', sessionId: 'session-two', state: 'failed', reason: 'timeout' }),
   ];
   const diagnostics = currentProviderReadDiagnostics(events, {
     phase: 'error',
@@ -154,15 +155,18 @@ test('provider diagnostics retain current live failures and partial reads until 
     ['jira', 'fail', 'openJiraBoard'],
     ['gitlab', 'fail', 'openProviderEnvironment'],
     ['jenkins', 'warn', 'pollProvidersNow'],
+    ['sonar', 'fail', 'pollProvidersNow'],
   ]);
   assert.match(diagnostics.find(item => item.provider === 'gitlab').detail, /authentication unavailable/);
   assert.doesNotMatch(JSON.stringify(diagnostics), /must-not-surface|session-one|session-two/);
   assert.match(diagnostics.find(item => item.provider === 'jenkins').detail, /stages, tests/);
+  assert.match(diagnostics.find(item => item.provider === 'sonar').detail, /timed out.*reachability/i);
 
   const recovered = currentProviderReadDiagnostics([
     ...events,
     event({ id: 'gitlab-auth-recovered', at: '2026-07-14T12:10:00.000Z', source: 'gitlab', sessionId: 'session-two', subjectId: '88', state: 'complete', reason: 'complete' }),
     event({ id: 'jenkins-recovered', at: '2026-07-14T12:11:00.000Z', source: 'jenkins', state: 'complete', reason: 'complete' }),
+    event({ id: 'sonar-timeout-recovered', at: '2026-07-14T12:12:00.000Z', source: 'sonar', sessionId: 'session-two', state: 'complete', reason: 'complete' }),
   ], { phase: 'complete', retainedFromPrevious: 0, warningCount: 0 });
   assert.deepEqual(recovered, []);
 });

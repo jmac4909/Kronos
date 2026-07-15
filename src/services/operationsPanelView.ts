@@ -13,9 +13,15 @@ export interface SetupStep {
 
 export interface SetupPanelInput {
   steps: SetupStep[];
-  providerEnvPath: string;
+  runtime: OperationsRuntimeGuide;
   nonce: string;
   actionScriptUri: string;
+}
+
+export interface OperationsRuntimeGuide {
+  platformLabel: string;
+  privateStatePath: string;
+  providerEnvPath: string;
 }
 
 export interface DoctorCheck {
@@ -28,6 +34,7 @@ export interface DoctorCheck {
 
 export interface DoctorPanelInput {
   checks: DoctorCheck[];
+  runtime: OperationsRuntimeGuide;
   nonce: string;
   actionScriptUri: string;
 }
@@ -79,7 +86,7 @@ ${operationsPanelCss()}
   <div class="kronos-action-row operations-actions">
     ${operationsActionButton('openDoctor', 'Run Doctor', true)}
     ${operationsActionButton('openJiraBoard', 'Open Jira Board')}
-    ${operationsActionButton('openSettings', 'All Settings')}
+    ${operationsActionButton('openSettings', 'Advanced VS Code Settings')}
     ${operationsActionButton('refreshPanel', 'Refresh')}
   </div>
   <section class="operations-hero ${escapeClass(tone)}">
@@ -91,7 +98,7 @@ ${operationsPanelCss()}
   <details class="provider-guide">
     <summary>Private provider environment guide</summary>
     <div class="provider-guide-body">
-      <p>Kronos reads provider configuration from <code>${escapeHtml(input.providerEnvPath)}</code>. Existing extension-host environment values take precedence. Credential values are never shown here.</p>
+      <p>Kronos reads provider configuration from <code>${escapeHtml(input.runtime.providerEnvPath)}</code>. Existing extension-host environment values take precedence. Credential values are never shown here.</p>
       <ul>
         <li>Jira: <code>JIRA_BASE_URL</code>, <code>JIRA_EMAIL</code>, <code>JIRA_API_TOKEN</code>, optional <code>JIRA_JQL</code></li>
         <li>GitLab: <code>GITLAB_API_BASE_URL</code> or <code>GITLAB_BASE_URL</code>, plus <code>GITLAB_TOKEN</code></li>
@@ -101,6 +108,7 @@ ${operationsPanelCss()}
       <p>After changing the private environment file, reload the VS Code window and run Doctor again.</p>
     </div>
   </details>
+  ${operationsRuntimeGuide(input.runtime)}
 </main>
 ${operationsActionScript(input.nonce, input.actionScriptUri, 'Kronos Setup')}
 </body></html>`;
@@ -165,8 +173,8 @@ ${operationsPanelCss()}
   </header>
   <div class="kronos-action-row operations-actions">
     ${operationsActionButton('refreshPanel', 'Run Checks Again', true)}
-    ${operationsActionButton('openSetup', 'Setup')}
-    ${operationsActionButton('openSettings', 'Settings')}
+    ${operationsActionButton('openSetup', 'Guided Setup')}
+    ${operationsActionButton('openSettings', 'Advanced Settings')}
     ${operationsActionButton('openJiraBoard', 'Jira Board')}
   </div>
   <section class="doctor-summary" aria-label="Doctor check totals">
@@ -175,6 +183,7 @@ ${operationsPanelCss()}
     <div class="doctor-stat fail"><strong>${summary.fail}</strong><span>Blocked</span></div>
   </section>
   <section class="doctor-list">${rows}</section>
+  ${operationsRuntimeGuide(input.runtime)}
   <p class="privacy-note">Doctor never launches Claude, runs a repair, executes a project command, or displays credential values.</p>
 </main>
 ${operationsActionScript(input.nonce, input.actionScriptUri, 'Kronos Doctor')}
@@ -196,7 +205,23 @@ function operationsPanelCss(): string {
   .status-mark.pass { background: var(--k-ok); box-shadow: 0 0 0 3px var(--k-ok-bg); }
   .status-mark.warn { background: var(--k-warn); box-shadow: 0 0 0 3px var(--k-warn-bg); }
   .status-mark.fail { background: var(--k-danger); box-shadow: 0 0 0 3px var(--k-danger-bg); }
+  .runtime-guide { margin-top: 16px; border: 1px solid var(--k-border); border-radius: var(--k-radius); background: var(--k-surface-soft); }
+  .runtime-guide summary { padding: 13px 15px; cursor: pointer; font-weight: 650; }
+  .runtime-guide-body { padding: 0 15px 15px; color: var(--k-muted); font-size: 12px; line-height: 1.5; }
+  .runtime-guide-body p { margin: 8px 0 0; }
+  .runtime-guide-body code { color: var(--k-fg); word-break: break-all; }
   @media (max-width: 760px) { .operations-header .kronos-pill { margin-top: 12px; } }`;
+}
+
+function operationsRuntimeGuide(input: OperationsRuntimeGuide): string {
+  return `<details class="runtime-guide">
+    <summary>Runtime paths and reload behavior</summary>
+    <div class="runtime-guide-body">
+      <p>Extension host: ${escapeHtml(input.platformLabel)}. Private state root: <code>${escapeHtml(input.privateStatePath)}</code>. Provider environment file: <code>${escapeHtml(input.providerEnvPath)}</code>.</p>
+      <p><code>KRONOS_DIR</code> selects the private state root and <code>KRONOS_ENV_FILE</code> selects the provider file. Set either before starting VS Code. On Windows PowerShell, set <code>$env:KRONOS_DIR = 'C:\\path\\to\\kronos-state'</code> before starting <code>code</code>; on macOS/Linux, export the variable before starting <code>code</code>.</p>
+      <p>After changing either path or editing provider values, use <strong>Developer: Reload Window</strong> for a deterministic extension-host reload. Refresh can load previously absent supported values, but it never replaces values already supplied to the extension-host environment.</p>
+    </div>
+  </details>`;
 }
 
 function statusRank(status: OperationsStatus): number {

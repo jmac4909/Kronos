@@ -16,6 +16,7 @@ const projectInventoryPresentation = require('../out/services/projectInventoryPr
 const jiraWorkCatalog = require('../out/services/jiraWorkCatalog.js');
 const providerBindingReconciliation = require('../out/services/providerBindingReconciliation.js');
 const workSessions = require('../out/services/workSessionStore.js');
+const { buildProjectIntegrationPanelHtml } = require('../out/services/projectIntegrationView.js');
 
 test('explicit local project links preserve unrelated provider records and report branch without running Git', () => {
   const projectRoot = path.join(tempRoot, 'project-catalog-fixture');
@@ -319,6 +320,50 @@ test('project integration setup validates provider identifiers and explicit proj
     name: 'Application',
     gitlabProject: 'not a project path',
   }]), /numeric ID or group\/project/i);
+});
+
+test('project integration values round-trip, clear, and default to the observed Git branch', () => {
+  const projectRoot = path.join(tempRoot, 'reviewable-project-integration');
+  fs.mkdirSync(projectRoot, { recursive: true });
+  const initial = stateStore.emptyWorkCatalog();
+  initial.projects.Application = { path: projectRoot, config: { repo_name: 'Application' } };
+  const configured = projectCatalog.setLocalProjectIntegrations(initial, [{
+    name: 'Application',
+    gitlabProject: 'group/application',
+    jenkinsUrl: 'https://jenkins.example/job/application/',
+    sonarProjectKey: 'team:application',
+    defaultBranch: 'release/current',
+  }]);
+  assert.deepEqual(configured.projects.Application.config, {
+    repo_name: 'Application',
+    gitlab_project_path: 'group/application',
+    jenkins_url: 'https://jenkins.example/job/application',
+    sonar_project_key: 'team:application',
+    default_branch: 'release/current',
+  });
+
+  const cleared = projectCatalog.setLocalProjectIntegrations(configured, [{ name: 'Application' }]);
+  assert.deepEqual(cleared.projects.Application.config, { repo_name: 'Application' });
+
+  const html = buildProjectIntegrationPanelHtml({
+    projects: [{
+      name: 'Application',
+      path: projectRoot,
+      branch: 'feature/observed-branch',
+      gitlabProject: 'group/application',
+      jenkinsUrl: 'https://jenkins.example/job/application',
+      sonarProjectKey: 'team:application',
+    }],
+    providerReadiness: [],
+    nonce: 'project-integration-nonce',
+    scriptUri: 'vscode-webview://fixture/kronos-project-integration.js',
+  });
+  assert.match(html, /value="group\/application"/);
+  assert.match(html, /value="https:\/\/jenkins\.example\/job\/application"/);
+  assert.match(html, /value="team:application"/);
+  assert.match(html, /value="feature\/observed-branch"/);
+  assert.match(html, /Blank fields clear that optional integration/);
+  assert.doesNotMatch(html, /Connect registered folders/);
 });
 
 test('Git worktree pointers are bounded and symbolic Git metadata is ignored', t => {

@@ -2816,6 +2816,11 @@ test('ticket workspace messages retain only the allowed command and ticket', () 
 });
 
 test('Setup and Doctor render bounded operation dashboards with allowlisted actions', () => {
+  const runtime = {
+    platformLabel: 'Windows',
+    privateStatePath: 'C:\\fixture\\<kronos>',
+    providerEnvPath: 'C:\\fixture\\<kronos>\\.env',
+  };
   const setup = buildSetupPanelHtml({
     steps: [{
       title: 'Claude <terminal>',
@@ -2824,7 +2829,7 @@ test('Setup and Doctor render bounded operation dashboards with allowlisted acti
       action: 'openClaudeSettings',
       actionLabel: 'Claude Settings',
     }],
-    providerEnvPath: '/private/<kronos>/.env',
+    runtime,
     nonce: 'setup-nonce',
     actionScriptUri: 'vscode-webview://fixture/kronos-action-panel.js',
   });
@@ -2832,7 +2837,11 @@ test('Setup and Doctor render bounded operation dashboards with allowlisted acti
   assert.match(setup, /data-action="openDoctor"/);
   assert.match(setup, /data-action="openClaudeSettings"/);
   assert.match(setup, /Claude &lt;terminal&gt;/);
-  assert.match(setup, /\/private\/&lt;kronos&gt;\/\.env/);
+  assert.match(setup, /C:\\fixture\\&lt;kronos&gt;\\\.env/);
+  assert.match(setup, /Runtime paths and reload behavior/);
+  assert.match(setup, /Developer: Reload Window/);
+  assert.match(setup, /\$env:KRONOS_DIR/);
+  assert.match(setup, /Advanced VS Code Settings/);
   assert.doesNotMatch(setup, /Claude <terminal>/);
 
   const doctor = buildDoctorPanelHtml({
@@ -2853,6 +2862,7 @@ test('Setup and Doctor render bounded operation dashboards with allowlisted acti
         actionLabel: 'Poll Now',
       },
     ],
+    runtime,
     nonce: 'doctor-nonce',
     actionScriptUri: 'vscode-webview://fixture/kronos-action-panel.js',
   });
@@ -2864,6 +2874,9 @@ test('Setup and Doctor render bounded operation dashboards with allowlisted acti
   assert.ok(doctor.indexOf('Review check') < doctor.indexOf('Ready check'));
   assert.match(doctor, /data-action="openProviderEnvironment"/);
   assert.match(doctor, /data-action="pollProvidersNow"/);
+  assert.match(doctor, /C:\\fixture\\&lt;kronos&gt;/);
+  assert.match(doctor, /Guided Setup/);
+  assert.match(doctor, /Advanced Settings/);
 
   assert.deepEqual(
     normalizeOperationsActionMessage({ command: 'openDoctor', ticket: 'JIRA-123', runId: 'legacy' }, new Set(['openDoctor'])),
@@ -3295,9 +3308,13 @@ test('extension activation registers the bounded surface and explicit launch com
     fs.writeFileSync(path.join(tempRoot, '.git', 'HEAD'), 'ref: refs/heads/feature/runtime-project\n');
     require(modulePath).activate(context);
     assert.deepEqual(registeredViews, ['kronosWork', 'kronosSessions', 'kronosProjects', 'kronosAttention']);
-    const expectedCommands = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-      .contributes.commands.map(command => command.command);
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    const expectedCommands = manifest.contributes.commands.map(command => command.command);
     assert.deepEqual(registeredCommands, expectedCommands);
+    assert.equal(
+      manifest.contributes.commands.find(command => command.command === 'kronos.settings').title,
+      'Kronos: Guided Settings',
+    );
     const sessionItems = await registeredTreeProviders.get('kronosSessions').getChildren();
     assert.equal(sessionItems.some(item => item.label === 'Projects'), false, 'Sessions must not contain a nested Projects section');
     const projectItems = await registeredTreeProviders.get('kronosProjects').getChildren();
@@ -3547,8 +3564,10 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.deepEqual(doctorPanel.revealCalls, [vscode.ViewColumn.One]);
     await setupPanel.receive({ command: 'openClaudeSettings' });
     assert.deepEqual(executedCommands.at(-1), ['workbench.action.openSettings', '@ext:jmacke01.kronos claude']);
+    const setupRevealCount = setupPanel.revealCalls.length;
     await commandHandlers.get('kronos.settings')();
-    assert.deepEqual(executedCommands.at(-1), ['workbench.action.openSettings', 'Kronos Terminal Work Companion']);
+    assert.equal(createdWebviewPanels.filter(panel => panel.viewType === 'kronosSetup').length, 1);
+    assert.equal(setupPanel.revealCalls.length, setupRevealCount + 1, 'toolbar Settings routes back to the one guided Setup surface');
 
     singlePickHandler = items => items.find(item => item.project?.name === 'fixture');
     await commandHandlers.get('kronos.chooseTicketProject')({ ticketKey: 'JIRA-123' });

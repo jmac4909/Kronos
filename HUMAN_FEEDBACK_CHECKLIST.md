@@ -26,9 +26,9 @@ Stop the review immediately if any boundary is crossed.
 3. Reload VS Code.
 4. Open the Kronos activity icon.
 5. Confirm exactly four views are visible: **Work**, **Sessions**, **Projects**, and **Attention**, with no nested Projects section inside Sessions.
-6. Run **Kronos: Setup** and confirm its dedicated dashboard clearly groups Claude launch, discovery folders, registered projects, Jira, monitoring providers, and private state without exposing secrets. Exercise its Doctor, Jira Board, Settings, folder, and project buttons.
+6. Run **Kronos: Setup** and confirm its dedicated dashboard clearly groups Claude launch, discovery folders, registered projects, Jira, monitoring providers, and private state without exposing secrets. Confirm its runtime guide shows the correct native private-state and provider-environment paths plus precise reload behavior. Exercise its Doctor, Jira Board, advanced Settings, folder, and project buttons.
 7. Run **Kronos: Doctor** and confirm its dedicated dashboard shows ready/review/blocked totals, places actionable problems first, refreshes in place, and reports Jira/provider/Claude readiness without displaying credential values.
-8. Open **Kronos: Settings** and identify the Claude command, terminal-name, cwd behavior, and polling options. Keep the command at `claude` or a trusted `claude-*` wrapper with only approved interactive flags for the launch tests; provider credentials remain in the private environment-file path shown by Setup.
+8. Open **Kronos: Guided Settings** and confirm it returns to the existing Setup dashboard rather than opening a competing configuration flow. From Setup choose **Advanced VS Code Settings**, identify the Claude command, terminal-name, cwd behavior, and polling options, then return to Setup. Keep the command at `claude` or a trusted `claude-*` wrapper with only approved interactive flags for the launch tests; provider credentials remain in the private environment-file path shown by Setup.
 
 For a safe synthetic local state, use:
 

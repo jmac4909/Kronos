@@ -77,7 +77,7 @@ ${kronosWebviewBaseCss()}
   <header class="kronos-header integration-header">
     <div>
       <h1 class="kronos-title">Project Integration Setup</h1>
-      <div class="kronos-subtitle">Connect registered folders to the identifiers Kronos needs for read-only MR, pipeline, Jenkins, and SonarQube polling.</div>
+      <div class="kronos-subtitle">Map registered folders to the identifiers Kronos needs for read-only MR, pipeline, Jenkins, and SonarQube polling.</div>
     </div>
     <span class="kronos-pill info">Local config only</span>
   </header>

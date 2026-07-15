@@ -282,7 +282,7 @@
       },
       {
         "command": "kronos.settings",
-        "title": "Kronos: Settings",
+        "title": "Kronos: Guided Settings",
         "icon": "$(settings-gear)"
       }
     ],

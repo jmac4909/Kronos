@@ -13,6 +13,7 @@ import {
   type ProviderEnvLoadResult,
 } from './services/providerEnv';
 import { boundedOperationFailure } from './services/errorUtils';
+import { KRONOS_DIR } from './services/stateStore';
 import {
   failedOperationStageOutcome,
   finalizeInsertedContext,
@@ -152,6 +153,7 @@ import {
   buildDoctorPanelHtml,
   buildSetupPanelHtml,
   type DoctorCheck,
+  type OperationsRuntimeGuide,
   type SetupStep,
 } from './services/operationsPanelView';
 import {
@@ -439,9 +441,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     this.command('kronos.openProvider', async argument => this.openProvider(argument));
     this.command('kronos.setup', async () => this.openSetup());
     this.command('kronos.doctor', async () => this.openDoctor());
-    this.command('kronos.settings', async () => {
-      await vscode.commands.executeCommand('workbench.action.openSettings', 'Kronos Terminal Work Companion');
-    });
+    this.command('kronos.settings', async () => this.openSetup());
   }
 
   private command(id: string, handler: (...args: unknown[]) => unknown): void {
@@ -3174,7 +3174,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     ).toString();
     record.panel.webview.html = withWebviewCsp(buildSetupPanelHtml({
       steps: this.setupSteps(readiness),
-      providerEnvPath: defaultProviderEnvPath(),
+      runtime: this.operationsRuntimeGuide(),
       nonce: record.nonce,
       actionScriptUri,
     }), webviewScriptCspOptions(record.panel.webview.cspSource, record.nonce));
@@ -3200,6 +3200,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     ).toString();
     record.panel.webview.html = withWebviewCsp(buildDoctorPanelHtml({
       checks: this.doctorChecks(readiness),
+      runtime: this.operationsRuntimeGuide(),
       nonce: record.nonce,
       actionScriptUri,
     }), webviewScriptCspOptions(record.panel.webview.cspSource, record.nonce));
@@ -3215,6 +3216,17 @@ class TerminalFirstRuntime implements vscode.Disposable {
         action: item.action,
         actionLabel: item.actionLabel,
       }));
+  }
+
+  private operationsRuntimeGuide(): OperationsRuntimeGuide {
+    const platformLabel = process.platform === 'win32'
+      ? 'Windows'
+      : process.platform === 'darwin' ? 'macOS' : process.platform === 'linux' ? 'Linux' : process.platform;
+    return {
+      platformLabel,
+      privateStatePath: KRONOS_DIR,
+      providerEnvPath: defaultProviderEnvPath(),
+    };
   }
 
   private operationsReadiness(): OperationsReadinessItem[] {
