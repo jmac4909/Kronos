@@ -191,7 +191,7 @@ ${webviewRuntimeScriptTag(input.nonce, webviewRuntimeScriptUri(input.scriptUri))
   <section class="jira-board-filters" aria-label="Jira board filters">
     <div class="jira-board-filter search">
       <label for="jira-board-search">Search</label>
-      <input id="jira-board-search" type="search" placeholder="Key, summary, Jira project, local project, label…" autocomplete="off">
+      <input id="jira-board-search" type="search" placeholder="Key, summary, branch, build, attachment…" autocomplete="off">
     </div>
     ${selectFilter('jira-board-status', 'Status', statuses)}
     ${selectFilter('jira-board-jira-project', 'Jira project', jiraProjects)}
@@ -269,10 +269,20 @@ function normalizeBoardTicket(
       jiraProject,
       localProject,
       localProjectDisplayName,
+      safeSingleLine(ticket.updated, 100),
       ...labels,
+      ...(ticket.attachments || []).flatMap(attachment => [
+        safeSingleLine(attachment.filename, 500),
+        safeSingleLine(attachment.mimeType, 200),
+      ]),
+      ticket.mr ? String(ticket.mr.iid) : '',
       safeSingleLine(ticket.mr?.title, 1_000),
       safeSingleLine(ticket.mr?.state, 100),
       safeSingleLine(ticket.mr?.review_status, 100),
+      safeSingleLine(ticket.mr?.author, 300),
+      safeSingleLine(ticket.mr?.source_branch, 500),
+      safeSingleLine(ticket.mr?.target_branch, 500),
+      ticket.build ? String(ticket.build.number) : '',
       safeSingleLine(ticket.build?.status, 100),
     ].map(filterToken).filter(Boolean).join(' '),
   };

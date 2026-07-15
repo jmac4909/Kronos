@@ -105,6 +105,19 @@ test('board terminology and dense-card rendering keep Jira namespaces separate f
         labels: denseLabels,
         jira_project_key: 'PLATFORM',
         linked_local_project: 'Kronos',
+        updated: '2026-07-15T09:30:00.000Z',
+        attachments: [{ filename: 'provider-analysis.msg', size: 512, mimeType: 'application/vnd.ms-outlook' }],
+        mr: {
+          iid: 72,
+          title: 'Bound provider refresh',
+          state: 'opened',
+          review_status: 'changes_requested',
+          url: 'https://gitlab.example/mr/72',
+          author: 'Cache Maintainer',
+          source_branch: 'feature/cache-refresh',
+          target_branch: 'release/2026-07',
+        },
+        build: { number: 901, status: 'UNSTABLE', url: 'https://jenkins.example/job/cache/901/' },
         custom_field_empty: null,
       }),
       'KRONOS-81': ticket('', { summary: '', priority: '', type: '', labels: undefined }),
@@ -118,6 +131,9 @@ test('board terminology and dense-card rendering keep Jira namespaces separate f
   assert.match(html, />\+26 more<\/span>/);
   assert.match(html, /Jira: PLATFORM/);
   assert.match(html, /Project: Kronos/);
+  assert.match(html, /data-search="[^"]*2026-07-15t09:30:00.000z/);
+  assert.match(html, /data-search="[^"]*provider-analysis.msg[^"]*application\/vnd.ms-outlook/);
+  assert.match(html, /data-search="[^"]*72[^"]*cache maintainer[^"]*feature\/cache-refresh[^"]*release\/2026-07[^"]*901[^"]*unstable/);
   assert.match(html, /Untitled ticket/);
   assert.match(html, /data-status="unknown"/);
   assert.doesNotMatch(html, /custom_field_empty/);

@@ -52,7 +52,7 @@ It supports:
 
 - refreshing Jira work metadata;
 - showing current, empty, loading, partial, stale, error, and filter-no-match states distinctly in both the Work tree and Jira board, while retaining the last usable tickets during an in-flight, partial, or failed refresh;
-- searching tickets and filtering by status, Jira namespace, explicitly linked local project, and label;
+- searching ticket keys, summaries, descriptions, types, priorities, statuses, Jira namespaces, explicit local projects and nicknames, labels, update timestamps, attachment names/types, MR identity/author/branches/state, and build number/status; independently filtering by status, Jira namespace, explicitly linked local project, and label;
 - hiding or showing completed work by the configured default, explicitly overriding it, and clearing filters reversibly;
 - opening one canonical ticket workspace;
 - explicitly discovering local projects from open workspace folders and configured roots, within configured depth/result limits, then registering only selected folders;

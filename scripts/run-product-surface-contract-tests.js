@@ -170,12 +170,15 @@ test('rich Jira filtering searches every useful field and composes independent n
     jira_status_category: 'indeterminate',
     jira_project_key: 'ABC',
     linked_local_project: 'cache-service',
+    updated: '2026-07-15T09:30:00.000Z',
     labels: ['terminal-first', 'customer-impact'],
+    attachments: [{ filename: 'customer-cache-analysis.msg', size: 512, mimeType: 'application/vnd.ms-outlook' }],
     mr: {
       iid: 72,
       title: 'Bound provider cache refresh',
       state: 'opened',
       review_status: 'changes_requested',
+      author: 'Cache Maintainer',
       source_branch: 'feature/cache-refresh',
       target_branch: 'release/2026-07',
     },
@@ -184,6 +187,7 @@ test('rich Jira filtering searches every useful field and composes independent n
   for (const query of [
     'ABC-123', 'customer cache', 'immutable audit', 'story', 'critical', 'in progress',
     'indeterminate', 'jira', 'abc', 'cache-service', 'customer-impact', 'provider cache',
+    '2026-07-15', 'customer-cache-analysis', 'vnd.ms-outlook', '72', 'cache maintainer',
     'opened', 'changes_requested', 'feature/cache', 'release/2026', 'unstable', '901',
   ]) {
     assert.equal(
