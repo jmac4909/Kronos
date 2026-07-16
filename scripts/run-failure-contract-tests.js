@@ -5,7 +5,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const root = path.resolve(__dirname, '..');
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-failure-contract-'));
+const tempRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-failure-contract-')));
 process.env.KRONOS_DIR = path.join(tempRoot, 'runtime');
 
 const errorUtils = require('../out/services/errorUtils.js');

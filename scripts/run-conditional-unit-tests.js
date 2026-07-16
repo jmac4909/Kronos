@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-conditional-unit-'));
+const tempRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-conditional-unit-')));
 process.env.KRONOS_DIR = path.join(tempRoot, 'runtime');
 
 test.after(() => fs.rmSync(tempRoot, { recursive: true, force: true }));

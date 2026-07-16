@@ -226,7 +226,7 @@ test('board renders distinct current, empty, loading, partial, stale, and error 
 });
 
 test('board lists registered local project paths and current Git branches', () => {
-  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-board-project-'));
+  const projectRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-board-project-')));
   try {
     fs.mkdirSync(path.join(projectRoot, '.git'));
     fs.writeFileSync(path.join(projectRoot, '.git', 'HEAD'), 'ref: refs/heads/feature/board-projects\n');

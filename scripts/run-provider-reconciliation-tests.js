@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const kronosDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-provider-reconciliation-'));
+const kronosDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-provider-reconciliation-')));
 process.env.KRONOS_DIR = kronosDir;
 
 const { appendTransitionOnce, deterministicEventId } = require('../out/services/providerTransitionRecorder.js');

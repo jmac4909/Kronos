@@ -6,7 +6,7 @@ const { fork } = require('node:child_process');
 const test = require('node:test');
 
 const root = path.resolve(__dirname, '..');
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-persistence-recovery-'));
+const tempRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-persistence-recovery-')));
 process.env.KRONOS_DIR = path.join(tempRoot, 'runtime');
 
 const managedMonitorLease = require('../out/services/managedMonitorLease.js');

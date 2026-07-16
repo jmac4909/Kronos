@@ -8,7 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const kronosDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-handoff-profiles-'));
+const kronosDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-handoff-profiles-')));
 process.env.KRONOS_DIR = kronosDir;
 
 const {

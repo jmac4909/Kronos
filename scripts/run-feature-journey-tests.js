@@ -52,7 +52,7 @@ function workState(overrides = {}) {
 }
 
 function createGitProject(t, branch = 'feature/payment-reconciliation') {
-  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-feature-journey-project-'));
+  const projectPath = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-feature-journey-project-')));
   fs.mkdirSync(path.join(projectPath, '.git'));
   fs.writeFileSync(path.join(projectPath, '.git', 'HEAD'), `ref: refs/heads/${branch}\n`);
   t.after(() => fs.rmSync(projectPath, { recursive: true, force: true }));
@@ -61,7 +61,7 @@ function createGitProject(t, branch = 'feature/payment-reconciliation') {
 
 test('explicit project journey keeps one stable identity across Work, Projects, Sessions, and Attention', t => {
   const projectPath = createGitProject(t);
-  const kronosDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-feature-journey-state-'));
+  const kronosDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-feature-journey-state-')));
   t.after(() => fs.rmSync(kronosDir, { recursive: true, force: true }));
 
   let state = projectCatalog.registerLocalProject(workState(), 'payments-api', projectPath);
@@ -144,7 +144,7 @@ test('explicit project journey keeps one stable identity across Work, Projects, 
 
 test('project session stays ticket-free until context is explicit, then becomes monitoring eligible without changing kind', t => {
   const projectPath = createGitProject(t, 'feature/session-lifecycle');
-  const kronosDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-session-journey-state-'));
+  const kronosDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'kronos-session-journey-state-')));
   t.after(() => fs.rmSync(kronosDir, { recursive: true, force: true }));
   const options = { kronosDir, now: new Date('2026-07-15T13:00:00.000Z') };
 
