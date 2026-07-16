@@ -836,10 +836,17 @@ test('GitLab discovery selects a unique current-branch MR before ticket search',
   assert.equal(result.match.iid, 42);
   assert.equal(fixture.requests.length, 1);
   assert.equal(new URL(fixture.requests[0].url).searchParams.get('state'), 'opened');
-  await assert.rejects(
-    fixture.client.discoverOpenMergeRequest({ projectIdOrPath: 'team/app' }),
-    /current project branch or Jira ticket key/i,
-  );
+
+  const projectOnly = gitLabDiscoveryClient(() => [
+    { iid: 43, title: 'Registered project work', description: '', source_branch: 'feature/project-only' },
+  ]);
+  const projectResult = await projectOnly.client.discoverOpenMergeRequest({ projectIdOrPath: 'team/app' });
+  assert.equal(projectResult.strategy, 'project-open');
+  assert.equal(projectResult.match.iid, 43);
+  assert.equal(projectOnly.requests.length, 1);
+  const projectRequest = new URL(projectOnly.requests[0].url);
+  assert.equal(projectRequest.searchParams.get('source_branch'), null);
+  assert.equal(projectRequest.searchParams.get('search'), null);
 });
 
 test('GitLab discovery falls back to ticket key and refuses ambiguous matches', async () => {
@@ -1203,6 +1210,130 @@ test('registered project configuration polls GitLab Jenkins and Sonar without a 
     restoreEnv('GITLAB_BASE_URL', originals.gitlabBase);
     restoreEnv('JENKINS_URL', originals.jenkinsUrl);
     restoreEnv('SONAR_HOST_URL', originals.sonarUrl);
+  }
+});
+
+test('registered project polling follows branch MRs and replaces a merged MR without Jira or a terminal Session', async () => {
+  const projectRoot = path.join(tempRoot, 'project-branch-mr-monitoring');
+  const gitDirectory = path.join(projectRoot, '.git');
+  fs.mkdirSync(gitDirectory, { recursive: true });
+  fs.writeFileSync(path.join(gitDirectory, 'HEAD'), 'ref: refs/heads/feature/project-one\n');
+  const state = stateStore.emptyWorkCatalog();
+  state.projects.Branching = {
+    path: projectRoot,
+    config: { gitlab_project_path: 'team/branching' },
+  };
+  const originalDiscover = gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest;
+  const originalMonitor = gitLabRestModule.gitlabRestClient.mergeRequestMonitor;
+  const discoveryInputs = [];
+  const monitoredIids = [];
+  const mergeRequests = new Map([
+    ['feature/project-one', 171],
+    ['feature/project-two', 172],
+  ]);
+  const mergeRequestStates = new Map([
+    [171, 'opened'],
+    [172, 'opened'],
+    [173, 'opened'],
+  ]);
+  gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest = async input => {
+    discoveryInputs.push({ ...input });
+    const iid = mergeRequests.get(input.sourceBranch);
+    return iid ? {
+      match: {
+        iid,
+        title: `Project-owned MR ${iid}`,
+        sourceBranch: input.sourceBranch,
+        targetBranch: 'main',
+        webUrl: `https://gitlab.example/team/branching/-/merge_requests/${iid}`,
+      },
+      strategy: 'source-branch',
+      candidateCount: 1,
+      ambiguous: false,
+    } : {
+      strategy: 'project-open',
+      candidateCount: 0,
+      ambiguous: false,
+    };
+  };
+  gitLabRestModule.gitlabRestClient.mergeRequestMonitor = async target => {
+    monitoredIids.push(target.iid);
+    const sourceBranch = [...mergeRequests.entries()].find(([, iid]) => iid === target.iid)?.[0];
+    const mergeRequestState = mergeRequestStates.get(target.iid) || 'opened';
+    return {
+      mr: {
+        iid: target.iid,
+        state: mergeRequestState,
+        title: `Project-owned MR ${target.iid}`,
+        source_branch: sourceBranch,
+        target_branch: 'main',
+        web_url: `https://gitlab.example/team/branching/-/merge_requests/${target.iid}`,
+        detailed_merge_status: mergeRequestState === 'opened' ? 'mergeable' : 'not_open',
+        reviewers: [],
+        updated_at: `2026-07-15T15:${target.iid === 171 ? '01' : '02'}:00.000Z`,
+      },
+      notes: [],
+      discussions: [],
+      approvals: { approved: true, approvals_required: 0, approvals_left: 0, approved_by: [] },
+      pipelines: [],
+      jobs: [],
+      fetchedAt: `2026-07-15T15:${target.iid === 171 ? '01' : '02'}:00.000Z`,
+      responseBytes: 0,
+      completeness: {
+        notesComplete: true,
+        discussionsComplete: true,
+        approvalsComplete: true,
+        pipelinesComplete: true,
+        jobsComplete: true,
+        testsComplete: true,
+        warnings: [],
+      },
+    };
+  };
+  try {
+    assert.deepEqual(state.tickets, {});
+    assert.equal(workSessions.listWorkSessions().some(session => session.projectName === 'Branching'), false);
+    const monitor = new managedProviderMonitor.ManagedProviderMonitor({ state: () => state });
+    const first = await monitor.poll();
+    assert.equal(first.transitions, 1);
+    fs.writeFileSync(path.join(gitDirectory, 'HEAD'), 'ref: refs/heads/feature/project-two\n');
+    const second = await monitor.poll();
+    assert.equal(second.transitions, 1, 'the new branch MR creates its own first-observation Attention item');
+    assert.equal((await monitor.poll()).transitions, 0, 'the new project MR remains quiet when unchanged');
+    let owner = projectMonitoringStore.readProjectMonitoringRecord('Branching');
+    assert.ok(owner);
+    assert.equal(providerBindingReconciliation.latestGitLabMergeRequestBinding(owner).subjectId, '172');
+    fs.writeFileSync(path.join(gitDirectory, 'HEAD'), 'ref: refs/heads/feature/project-one\n');
+    assert.equal((await monitor.poll()).transitions, 0, 'returning to an already observed open MR does not duplicate Attention');
+    assert.equal((await monitor.poll()).transitions, 0, 'the promoted earlier MR remains the current branch target');
+    mergeRequestStates.set(171, 'merged');
+    assert.equal((await monitor.poll()).transitions, 1, 'the currently bound MR becoming merged is observed');
+    mergeRequests.set('feature/project-one', 173);
+    assert.equal((await monitor.poll()).transitions, 1, 'the poll after a merge discovers the replacement MR on the same branch');
+    assert.deepEqual(discoveryInputs, [
+      { projectIdOrPath: 'team/branching', sourceBranch: 'feature/project-one' },
+      { projectIdOrPath: 'team/branching', sourceBranch: 'feature/project-two' },
+      { projectIdOrPath: 'team/branching', sourceBranch: 'feature/project-one' },
+      { projectIdOrPath: 'team/branching', sourceBranch: 'feature/project-one' },
+    ]);
+    assert.deepEqual(monitoredIids, [171, 172, 172, 171, 171, 171, 173]);
+
+    owner = projectMonitoringStore.readProjectMonitoringRecord('Branching');
+    assert.ok(owner);
+    assert.deepEqual(owner.ticketKeys, []);
+    assert.equal(providerBindingReconciliation.latestGitLabMergeRequestBinding(owner).subjectId, '173');
+    const initialEvents = monitorEventStore.listMonitorEvents({
+      sessionId: owner.id,
+      source: 'gitlab',
+      types: ['provider.transition'],
+      limit: 2000,
+    }).filter(event => event.metadata?.transitionKind === 'initial_mr_observed');
+    assert.deepEqual(initialEvents.map(event => event.subject.id).sort(), ['171', '172', '173']);
+    assert.equal(initialEvents.every(event => event.subject.project === 'Branching'), true);
+    assert.equal(initialEvents.every(event => event.subject.ticketKey === undefined), true);
+  } finally {
+    gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest = originalDiscover;
+    gitLabRestModule.gitlabRestClient.mergeRequestMonitor = originalMonitor;
   }
 });
 

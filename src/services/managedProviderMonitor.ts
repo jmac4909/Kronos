@@ -328,16 +328,29 @@ export class ManagedProviderMonitor {
     const binding = latestGitLabMergeRequestBinding(session);
     const state = this.options.state();
     const ticket = session.ticketKey ? state?.tickets[session.ticketKey] : undefined;
+    const previousMr = safeReadGitLabMergeRequestBaseline(session, this.options.log);
+    const config = projectConfigurationForMonitoringSession(state, session);
+    const configuredProject = configuredGitLabProjectIdentity(config);
+    const sourceBranch = mergeRequestDiscoverySourceBranch(
+      ticket,
+      session.projectPath ? readProjectGitBranch(session.projectPath)?.branch : undefined,
+    );
     let target = configuredGitLabPollingTarget(state, session);
     let discoveryDetail: string | undefined;
-    if (!target) {
-      const config = projectConfigurationForMonitoringSession(state, session);
-      const configuredProject = configuredGitLabProjectIdentity(config);
+    const targetBaseline = target && previousMr?.iid === target.iid ? previousMr : undefined;
+    const registeredProjectBranchChanged = Boolean(
+      isProjectMonitoringRecord(session)
+        && sourceBranch
+        && targetBaseline?.sourceBranch
+        && targetBaseline.sourceBranch !== sourceBranch,
+    );
+    const registeredProjectTargetFinished = Boolean(
+      isProjectMonitoringRecord(session)
+        && targetBaseline
+        && mergeRequestDigestIsTerminal(targetBaseline),
+    );
+    if (!target || registeredProjectBranchChanged || registeredProjectTargetFinished) {
       if (configuredProject) {
-        const sourceBranch = mergeRequestDiscoverySourceBranch(
-          ticket,
-          session.projectPath ? readProjectGitBranch(session.projectPath)?.branch : undefined,
-        );
         try {
           const discovery = await gitlabRestClient.discoverOpenMergeRequest({
             projectIdOrPath: configuredProject,
@@ -350,17 +363,23 @@ export class ManagedProviderMonitor {
               projectIdOrPath: configuredProject,
               ...(discovery.match.webUrl ? { providerUrl: discovery.match.webUrl } : {}),
             };
-            discoveryDetail = `Matched automatically by ${discovery.strategy === 'source-branch' ? 'current branch' : 'ticket key'}.`;
+            discoveryDetail = `Matched automatically by ${discovery.strategy === 'source-branch'
+              ? 'current branch'
+              : discovery.strategy === 'ticket-key' ? 'ticket key' : 'the registered project open-MR list'}.`;
           } else {
             const detail = discovery.ambiguous
               ? `Found ${discovery.candidateCount} possible open merge requests; Kronos will not guess.`
-              : 'No unique open merge request matched the current branch or ticket key yet.';
+              : 'No unique open merge request matched the current branch, registered project, or ticket key yet.';
             this.log(`GitLab monitoring is waiting for ${monitoringOwnerLabel(session)}.`, detail);
-            return { ...emptyResult(), skipped: 1 };
+            if (!target || registeredProjectTargetFinished) {
+              return { ...emptyResult(), skipped: 1 };
+            }
           }
         } catch (error: unknown) {
           this.log(`GitLab MR discovery failed for ${monitoringOwnerLabel(session)}.`, boundedOperationFailure(error, 'GitLab MR discovery failed.').display);
-          return { ...emptyResult(), failures: 1 };
+          if (!target || registeredProjectTargetFinished) {
+            return { ...emptyResult(), failures: 1 };
+          }
         }
       }
     }
@@ -381,7 +400,7 @@ export class ManagedProviderMonitor {
         subjectId: String(iid),
         projectId: projectIdOrPath,
         ...(providerUrl ? { url: providerUrl } : {}),
-      });
+      }, Boolean(discoveryDetail));
       if (discoveryDetail) {
         this.log(
           `GitLab monitoring found MR !${iid} for ${monitoringOwnerLabel(session)}.`,
@@ -471,16 +490,16 @@ export class ManagedProviderMonitor {
           projectId: projectIdOrPath,
           ...((observedMr.url || providerUrl) ? { url: observedMr.url || providerUrl } : {}),
         });
-        const previousMr = safeReadGitLabMergeRequestBaseline(session, this.options.log);
-        const mrDigest = previousMr
-          ? mergeGitLabMergeRequestDigest(previousMr, observedMr) || observedMr
+        const comparablePreviousMr = previousMr?.iid === observedMr.iid ? previousMr : undefined;
+        const mrDigest = comparablePreviousMr
+          ? mergeGitLabMergeRequestDigest(comparablePreviousMr, observedMr) || observedMr
           : observedMr;
         const mrSnapshotPath = gitLabMergeRequestMonitorSnapshotPath(session.id);
         if (!retainLease()) {
           for (const item of notices) { this.options.notify?.(item); }
           return leaseLost({ ...result, transitions: notices.length, failures: stateFailures });
         }
-        if (!previousMr) {
+        if (!comparablePreviousMr) {
           const initial = initialGitLabMergeRequestNotice(
             session,
             mrDigest,
@@ -499,7 +518,7 @@ export class ManagedProviderMonitor {
             mergeRequestMetadata(mrDigest, 'baseline'),
           );
         } else {
-          for (const transition of compareGitLabMergeRequestDigests(previousMr, mrDigest)) {
+          for (const transition of compareGitLabMergeRequestDigests(comparablePreviousMr, mrDigest)) {
             const notice = appendGitLabMergeRequestTransitionOnce(
               session,
               transition,
@@ -893,12 +912,13 @@ function sonarProjectKeyHeuristic(
 function reconcileProviderBinding(
   session: ProviderMonitoringOwner,
   input: AddWorkSessionProviderBindingInput,
+  refreshExisting = false,
 ): ProviderMonitoringOwner {
   const current = newestProviderBinding(session, input.provider, input.resource, input.subjectId);
   const projectMatches = input.projectId === undefined || current?.projectId === input.projectId;
   const urlMatches = input.url === undefined || current?.url === input.url;
   const idMatches = input.id === undefined || current?.id === input.id;
-  if (current && projectMatches && urlMatches && idMatches) { return session; }
+  if (current && projectMatches && urlMatches && idMatches && !refreshExisting) { return session; }
   const update = {
     ...input,
     ...(!input.id && current ? { id: current.id } : {}),
@@ -1481,6 +1501,10 @@ function mergeRequestEventState(digest: GitLabMergeRequestDigest): string {
   return digest.detailedMergeStatus === 'unknown'
     ? digest.state
     : `${digest.state}/${digest.detailedMergeStatus}`;
+}
+
+function mergeRequestDigestIsTerminal(digest: GitLabMergeRequestDigest): boolean {
+  return digest.state === 'merged' || digest.state === 'closed';
 }
 
 function mergeRequestTransitionIsWarning(kind: GitLabMergeRequestTransitionKind): boolean {

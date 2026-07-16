@@ -398,17 +398,11 @@ export function nextWorkSessionProviderBindings(
   const sameSubject = (candidate: WorkSessionProviderBinding) => candidate.provider === provider
     && candidate.resource === resource
     && candidate.subjectId === subjectId;
-  const next = bindings.map(candidate => ({ ...candidate }));
-  const existingIndex = next.findIndex(candidate => candidate.id === id || sameSubject(candidate));
-  if (existingIndex >= 0) {
-    next[existingIndex] = binding;
-  } else {
-    next.push(binding);
-  }
-  return next
-    .filter((candidate, index) =>
-      !sameSubject(candidate) || index === existingIndex || (existingIndex < 0 && candidate.id === id))
-    .slice(-MAX_PROVIDER_BINDINGS);
+  const next = bindings
+    .filter(candidate => candidate.id !== id && !sameSubject(candidate))
+    .map(candidate => ({ ...candidate }));
+  next.push(binding);
+  return next.slice(-MAX_PROVIDER_BINDINGS);
 }
 
 /** One health projection keeps project-owned and Session-owned poll results identical. */

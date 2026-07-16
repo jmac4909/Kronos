@@ -66,7 +66,7 @@ export interface GitLabDiscoveredMergeRequest {
 
 export interface GitLabMergeRequestDiscoveryResult {
   match?: GitLabDiscoveredMergeRequest;
-  strategy?: 'source-branch' | 'ticket-key';
+  strategy?: 'source-branch' | 'ticket-key' | 'project-open';
   candidateCount: number;
   ambiguous: boolean;
 }
@@ -158,8 +158,9 @@ export class GitLabRestClient {
 
   /**
    * Finds one open MR without mutating GitLab. A unique current-branch match
-   * wins; the Jira key in title/description is the bounded fallback. Kronos
-   * deliberately refuses to guess when multiple candidates remain.
+   * wins; a Jira key in title/description is the bounded ticket fallback. A
+   * registered project without Jira may use its sole open MR. Kronos refuses
+   * to guess whenever multiple candidates remain.
    */
   async discoverOpenMergeRequest(
     input: GitLabMergeRequestDiscoveryInput,
@@ -169,10 +170,6 @@ export class GitLabRestClient {
     const ticketKey = normalizeDiscoveryTicketKey(input.ticketKey);
     const sourceBranch = optionalTrimmedStringFromUnknown(input.sourceBranch);
     if (!projectIdOrPath) { throw new GitLabRestError('GitLab MR discovery needs a project ID or path.'); }
-    if (!ticketKey && !sourceBranch) {
-      throw new GitLabRestError('GitLab MR discovery needs a current project branch or Jira ticket key.');
-    }
-
     if (sourceBranch) {
       const branchCandidates = normalizeDiscoveryCandidates((await this.requestJson(
         `/projects/${encodeURIComponent(projectIdOrPath)}/merge_requests`,
@@ -184,17 +181,25 @@ export class GitLabRestClient {
       if (branchMatch.match || branchMatch.ambiguous) {
         return { ...branchMatch, strategy: 'source-branch' };
       }
-      if (!ticketKey) { return { ...branchMatch, strategy: 'source-branch' }; }
     }
 
-    if (!ticketKey) { return { candidateCount: 0, ambiguous: false, strategy: 'source-branch' }; }
-    const ticketCandidates = normalizeDiscoveryCandidates((await this.requestJson(
+    if (ticketKey) {
+      const ticketCandidates = normalizeDiscoveryCandidates((await this.requestJson(
+        `/projects/${encodeURIComponent(projectIdOrPath)}/merge_requests`,
+        `GitLab open MRs for ${ticketKey}`,
+        { state: 'opened', search: ticketKey, in: 'title,description', order_by: 'updated_at', sort: 'desc', page: 1, per_page: 20 },
+        options,
+      )).value).filter(candidate => candidate.searchText.includes(ticketKey));
+      return { ...uniqueDiscoveryMatch(ticketCandidates, ticketKey), strategy: 'ticket-key' };
+    }
+
+    const projectCandidates = normalizeDiscoveryCandidates((await this.requestJson(
       `/projects/${encodeURIComponent(projectIdOrPath)}/merge_requests`,
-      `GitLab open MRs for ${ticketKey}`,
-      { state: 'opened', search: ticketKey, in: 'title,description', order_by: 'updated_at', sort: 'desc', page: 1, per_page: 20 },
+      'GitLab open MRs for registered project',
+      { state: 'opened', order_by: 'updated_at', sort: 'desc', page: 1, per_page: 20 },
       options,
-    )).value).filter(candidate => candidate.searchText.includes(ticketKey));
-    return { ...uniqueDiscoveryMatch(ticketCandidates, ticketKey), strategy: 'ticket-key' };
+    )).value);
+    return { ...uniqueDiscoveryMatch(projectCandidates, undefined), strategy: 'project-open' };
   }
 
   async mergeRequestStatus(target: GitLabMergeRequestTarget, options: GitLabRestRequestOptions = {}): Promise<unknown> {
