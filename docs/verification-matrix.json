@@ -273,6 +273,7 @@
         { "file": "scripts/run-context-basket-tests.js", "test": "exact artifacts deduplicate while changed content for one source is marked conflicting" },
         { "file": "scripts/run-context-basket-tests.js", "test": "removing a basket selection never deletes its private source artifact" },
         { "file": "scripts/run-context-basket-tests.js", "test": "basket bundles retain references and hashes without copying source payloads" },
+        { "file": "scripts/run-context-basket-tests.js", "test": "basket bundle creation revalidates selected source content and metadata" },
         { "file": "scripts/run-webview-dom-tests.js", "test": "context basket preserves focus across explicit refresh and non-submitting insert actions" }
       ],
       "humanGates": ["operator-terminal", "real-vscode"]

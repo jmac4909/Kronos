@@ -4,9 +4,9 @@ const { spawnSync } = require('node:child_process');
 const { testSuiteFiles } = require('./test-suite-files.js');
 
 const root = path.resolve(__dirname, '..');
-const COVERAGE_THRESHOLDS = Object.freeze({ lines: 84.1, branches: 75.7, functions: 88.25 });
+const COVERAGE_THRESHOLDS = Object.freeze({ lines: 84.25, branches: 75.8, functions: 88.4 });
 const CRITICAL_FILE_THRESHOLDS = Object.freeze({
-  'contextBasketStore.js': Object.freeze({ lines: 89, branches: 75, functions: 93 }),
+  'contextBasketStore.js': Object.freeze({ lines: 90, branches: 78, functions: 93 }),
   'dateValues.js': Object.freeze({ lines: 100, branches: 100, functions: 100 }),
   'gitlabPipelineMonitorStore.js': Object.freeze({ lines: 92, branches: 69, functions: 76 }),
   'jiraTicketContext.js': Object.freeze({ lines: 85, branches: 85, functions: 94 }),
@@ -19,7 +19,7 @@ const CRITICAL_FILE_THRESHOLDS = Object.freeze({
   'projectMonitoringStore.js': Object.freeze({ lines: 93, branches: 91, functions: 81 }),
   'workSessionStore.js': Object.freeze({ lines: 90, branches: 85, functions: 96 }),
   'handoffBundleStore.js': Object.freeze({ lines: 95, branches: 76, functions: 88 }),
-  'terminalFirstExtension.js': Object.freeze({ lines: 73, branches: 57, functions: 87 }),
+  'terminalFirstExtension.js': Object.freeze({ lines: 74, branches: 57, functions: 87.5 }),
   'projectCatalog.js': Object.freeze({ lines: 92, branches: 81, functions: 93 }),
   'providerReadHealth.js': Object.freeze({ lines: 94, branches: 88, functions: 78 }),
   'TerminalFirstState.js': Object.freeze({ lines: 91, branches: 74, functions: 83 }),

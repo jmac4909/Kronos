@@ -154,7 +154,7 @@ export function writeContextBasketBundle(
   options: { kronosDir?: string; now?: Date } = {},
 ): ContextBasketBundle {
   const root = path.resolve(options.kronosDir || KRONOS_DIR);
-  const boundedItems = items.slice(0, MAX_ITEMS).map(item => normalizeItem(item, root));
+  const boundedItems = items.slice(0, MAX_ITEMS).map(item => verifiedBundleItem(item, root));
   if (boundedItems.length === 0) { throw new Error('Context basket is empty.'); }
   const conflicts = contextBasketConflictIds(boundedItems);
   const safeFocus = multiline(focus, 4_000);
@@ -265,6 +265,23 @@ function normalizeItem(value: unknown, root: string): ContextBasketItem {
   return item;
 }
 
+function verifiedBundleItem(value: ContextBasketItem, root: string): ContextBasketItem {
+  const item = normalizeItem(value, root);
+  const artifact = readPrivateBufferFileIfPresent(item.promptPath, {
+    label: 'Kronos context basket source artifact',
+    maxBytes: MAX_ARTIFACT_BYTES,
+  });
+  if (!artifact) { throw new Error(`Context basket source artifact is unavailable: ${item.promptPath}`); }
+  const contentSha256 = crypto.createHash('sha256').update(artifact).digest('hex');
+  if (item.contentSha256 && item.contentSha256 !== contentSha256) {
+    throw new Error(`Context basket source artifact changed after selection: ${item.promptPath}`);
+  }
+  if (item.sizeBytes !== artifact.length) {
+    throw new Error(`Context basket source artifact size changed after selection: ${item.promptPath}`);
+  }
+  return { ...item, contentSha256 };
+}
+
 function requiredArtifactPath(value: unknown, root: string): string {
   const resolved = path.resolve(requiredLine(value, 4_000));
   const relative = path.relative(root, resolved);
@@ -286,7 +303,11 @@ function optionalTicketKey(value: unknown): string | undefined {
 }
 
 function optionalSha(value: unknown): string | undefined {
-  return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) ? value : undefined;
+  if (value === undefined || value === null || value === '') { return undefined; }
+  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) {
+    throw new Error('Context basket source artifact SHA-256 is invalid.');
+  }
+  return value;
 }
 
 function timestamp(value: unknown): string {

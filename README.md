@@ -12,7 +12,7 @@
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178C6">
   <img alt="VS Code 1.85 or newer" src="https://img.shields.io/badge/VS%20Code-%5E1.85-23A8F2">
   <img alt="Zero third-party runtime dependencies" src="https://img.shields.io/badge/runtime%20dependencies-0-22C55E">
-  <img alt="270 automated local tests" src="https://img.shields.io/badge/test%20suite-270%20local-22C55E">
+  <img alt="271 automated local tests" src="https://img.shields.io/badge/test%20suite-271%20local-22C55E">
   <img alt="Preview status" src="https://img.shields.io/badge/status-preview-F59E0B">
 </p>
 
@@ -32,7 +32,7 @@ Kronos solves a narrow enterprise-development problem: the evidence needed for a
 | **Attention** | Show one newest meaningful row per provider result by project, fold read health into its MR/build/quality result, distinguish GitLab MR, Jenkins, and SonarQube with separate icons, use shared green/yellow/red state colors, offer fresh MR/CI context for ticket-linked or project-only rows, resurface still-open MRs after the next poll, and retain full history in the private audit. |
 | **Context composer** | Review fetched evidence, edit the focus, and place one shell-inert line in the chosen terminal with submission disabled. |
 | **Team Prompt Library** | Load versioned data-only prompts from configured local manifests or raw HTTPS Git URLs, search and edit the selected instruction, fill allowlisted session/project/Jira variables, then save one private reviewed snapshot and place its reference without submission. |
-| **Context Basket** | Select multiple Jira, MR, CI, and local Git artifacts, review provenance/freshness/completeness/conflicts together, then place one reference-only bundle without copying or submitting provider content. |
+| **Context Basket** | Select multiple Jira, MR, CI, and local Git artifacts, review provenance/freshness/completeness/conflicts together, then place one reference-only bundle after every source path, size, and hash is revalidated without copying or submitting provider content. |
 | **Local search** | Use one bounded Quick Pick to find session titles, explicit Jira contexts, registered projects/branches, provider bindings, event summaries, and artifact labels without reading terminal content. |
 | **Handoffs and branch profiles** | Export selected context/audit references and hashes to a private local Markdown/JSON pair, and explicitly route Jenkins/SonarQube reads for known branches without switching Git or posting anywhere. |
 
@@ -111,8 +111,8 @@ The installed extension uses the VS Code API and Node built-ins only. It has **z
 | Manifest-covered settings | 13 |
 | Reachable runtime modules checked for cycles/dead exports | 88 |
 | Third-party runtime dependencies | 0 |
-| Automated Node/DOM/board tests | 270 |
-| Built-in runtime coverage | 84.19% lines / 75.81% branches / 88.47% functions |
+| Automated Node/DOM/board tests | 271 |
+| Built-in runtime coverage | 84.32% lines / 75.83% branches / 88.49% functions |
 
 Automated gates also cover the runtime graph, security boundary, context governance, activation surface, provider transitions, private state, credential redaction, and packaged extension contents.
 

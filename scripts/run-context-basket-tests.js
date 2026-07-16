@@ -40,6 +40,10 @@ test('context basket stores bounded provenance beside private artifact reference
     promptPath: artifact,
     contentSha256: '0'.repeat(64),
   })), /does not match its supplied SHA-256 hash/);
+  assert.throws(() => addContextBasketItem(input({
+    promptPath: artifact,
+    contentSha256: 'not-a-sha',
+  })), /SHA-256 is invalid/);
   const stored = fs.readFileSync(contextBasketPath(), 'utf8');
   const tampered = JSON.parse(stored);
   tampered.items[0].promptPath = path.join(os.tmpdir(), 'outside-kronos', 'prompt.md');
@@ -109,6 +113,34 @@ test('basket bundles retain references and hashes without copying source payload
   assert.match(body, /Artifact: `.*bundle-first.*`/);
   assert.doesNotMatch(body, /SECRET-SOURCE-PAYLOAD/);
   assert.equal(isSafeTerminalContextReference(buildContextBasketReference(bundle)), true);
+});
+
+test('basket bundle creation revalidates selected source content and metadata', () => {
+  const artifact = sourceArtifact('bundle-integrity', 'AAAA');
+  const added = addContextBasketItem(input({ promptPath: artifact }));
+  assert.doesNotThrow(() => writeContextBasketBundle([added], 'Use only verified evidence.'));
+
+  fs.writeFileSync(artifact, 'BBBB', { mode: 0o600 });
+  assert.throws(
+    () => writeContextBasketBundle([added], 'Reject changed evidence.'),
+    /source artifact changed after selection/,
+  );
+
+  fs.writeFileSync(artifact, 'AAAA', { mode: 0o600 });
+  assert.throws(
+    () => writeContextBasketBundle([{ ...added, sizeBytes: added.sizeBytes + 1 }], 'Reject stale metadata.'),
+    /source artifact size changed after selection/,
+  );
+  assert.throws(
+    () => writeContextBasketBundle([{ ...added, contentSha256: 'not-a-sha' }], 'Reject malformed metadata.'),
+    /SHA-256 is invalid/,
+  );
+
+  fs.unlinkSync(artifact);
+  assert.throws(
+    () => writeContextBasketBundle([added], 'Reject missing evidence.'),
+    /source artifact is unavailable/,
+  );
 });
 
 test('basket messages and HTML expose only bounded explicit actions', () => {

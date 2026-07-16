@@ -31,6 +31,7 @@ const gitlabMergeRequestContext = require('../out/services/gitlabMergeRequestCon
 const gitlabContextStore = require('../out/services/gitlabContextStore.js');
 const ciContextStore = require('../out/services/ciContextStore.js');
 const projectGitContextStore = require('../out/services/projectGitContextStore.js');
+const contextBasketStore = require('../out/services/contextBasketStore.js');
 const insertion = require('../out/services/terminalContextInsertion.js');
 const { createOperatorTerminalRegistry } = require('../out/services/operatorTerminalRegistry.js');
 const claudeTerminalLauncher = require('../out/services/claudeTerminalLauncher.js');
@@ -4505,6 +4506,18 @@ test('extension activation registers the bounded surface and explicit launch com
       await setupPanel.receive({ command: 'refreshPanel' });
     }
 
+    const terminalsBeforeUntrustedLaunch = createdTerminals.length;
+    const sessionsBeforeUntrustedLaunch = workSessions.listWorkSessions().length;
+    vscode.workspace.isTrusted = false;
+    try {
+      await commandHandlers.get('kronos.newClaudeSession')();
+      assert.equal(createdTerminals.length, terminalsBeforeUntrustedLaunch, 'an untrusted workspace must not create a terminal');
+      assert.equal(workSessions.listWorkSessions().length, sessionsBeforeUntrustedLaunch, 'an untrusted workspace must not create a Session');
+      assert.match(lastWarningMessage, /does not launch Claude in an untrusted workspace/);
+    } finally {
+      vscode.workspace.isTrusted = true;
+    }
+
     const originalWorkspaceName = vscode.workspace.name;
     const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
     const originalDateNow = Date.now;
@@ -5080,6 +5093,32 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.match(basketMarkdown, /Kind: gitlab/);
     assert.match(basketMarkdown, /Kind: ci/);
     assert.doesNotMatch(basketMarkdown, /Provider command fixture MR|Fetched details and comments/);
+
+    const basketItemsBeforeRefresh = contextBasketStore.listContextBasketItems();
+    const projectCiBasketItem = basketItemsBeforeRefresh.find(item =>
+      item.kind === 'ci' && item.refresh.projectName === 'fixture');
+    assert.ok(projectCiBasketItem, 'project CI evidence must retain its ticket-free refresh target');
+    const panelsBeforeBasketRefresh = createdWebviewPanels.length;
+    const terminalActionsBeforeBasketRefresh = createdTerminals[0].actions.length;
+    await basketPanel.receive({
+      command: 'refresh',
+      entryId: projectCiBasketItem.id,
+      focus: 'Refresh the project CI source explicitly.',
+    });
+    const refreshedCiComposer = createdWebviewPanels.slice(panelsBeforeBasketRefresh)
+      .find(panel => panel.viewType === 'kronosContextComposer');
+    assert.ok(refreshedCiComposer, 'refreshing a project CI basket row reopens the normal editable composer');
+    assert.equal(
+      contextBasketStore.listContextBasketItems().length,
+      basketItemsBeforeRefresh.length,
+      'refreshing does not replace the selected source until Add to Basket is explicit',
+    );
+    assert.equal(
+      createdTerminals[0].actions.length,
+      terminalActionsBeforeBasketRefresh,
+      'refreshing a basket source does not write to the managed terminal',
+    );
+    await refreshedCiComposer.receive({ command: 'cancel' });
 
     const shownBeforeEvidenceSearch = shownTextDocuments.length;
     singlePickHandler = items => items.find(item => item.entry?.action?.kind === 'artifact'
