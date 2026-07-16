@@ -4536,7 +4536,7 @@ test('extension activation registers the bounded surface and explicit launch com
     await commandHandlers.get('kronos.openProjectGitStatus')({ projectName: 'fixture', projectPath: tempRoot });
     assert.equal(gitRepositoryOpenCalls, 0, 'known repositories are not reopened by the status action');
     assert.match(openedTextDocuments.at(-1).content, /Branch: feature\/runtime-project/);
-    assert.match(openedTextDocuments.at(-1).content, /working modified: src\/changed\.ts/);
+    assert.ok(openedTextDocuments.at(-1).content.includes(`working modified: ${path.join('src', 'changed.ts')}`));
     assert.match(openedTextDocuments.at(-1).content, /-old\n\+new/);
     assert.equal(shownTextDocuments.at(-1).options.preview, true);
 
