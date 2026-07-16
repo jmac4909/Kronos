@@ -4,6 +4,7 @@ const test = require('node:test');
 
 const root = path.resolve(__dirname, '..');
 const release = require('./release-surface.js');
+const { normalizeRepositoryText } = require('./repository-text.js');
 const { publishedStateFailures } = require('./verify-published-branch.js');
 
 test('actual VSIX release surface is exact and runtime-dependency-free', () => {
@@ -32,6 +33,10 @@ test('release surface validator fails closed on sensitive and development-only p
 
 test('release documents and package metadata remain linked to current evidence', () => {
   assert.deepEqual(release.releaseDocumentationFailures(root), []);
+  assert.equal(
+    normalizeRepositoryText('Goal statement\r\n- Windows evidence\r\n'),
+    normalizeRepositoryText('Goal statement\n- Windows evidence\n'),
+  );
 });
 
 test('public surface scan precedes both tests and release packaging', () => {

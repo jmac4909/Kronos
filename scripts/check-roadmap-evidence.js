@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { normalizeRepositoryText } = require('./repository-text.js');
 
 const root = path.resolve(__dirname, '..');
 const matrixPath = path.join(root, 'docs', 'verification-matrix.json');
@@ -221,7 +222,7 @@ function readJson(filePath, label) {
 }
 
 function readText(filePath, label) {
-  try { return fs.readFileSync(filePath, 'utf8'); }
+  try { return normalizeRepositoryText(fs.readFileSync(filePath, 'utf8')); }
   catch (error) { fail(`Could not read ${label}: ${error.message}`); return ''; }
 }
 
