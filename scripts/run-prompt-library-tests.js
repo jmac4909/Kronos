@@ -51,6 +51,30 @@ test('prompt manifest parsing is bounded, data-only, redacted, and source-versio
     () => promptLibrary.parsePromptLibraryManifest('{}', { kind: 'local', location: '/tmp/prompts.json' }),
     /schemaVersion 1/i,
   );
+  assert.throws(
+    () => promptLibrary.parsePromptLibraryManifest('{', { kind: 'local', location: '/tmp/prompts.json' }),
+    /not valid JSON/i,
+  );
+  assert.throws(
+    () => promptLibrary.parsePromptLibraryManifest('x'.repeat(1024 * 1024 + 1), { kind: 'local', location: '/tmp/prompts.json' }),
+    /byte limit/i,
+  );
+  const malformedEntries = promptLibrary.parsePromptLibraryManifest(JSON.stringify({
+    schemaVersion: 1,
+    name: 'TOKEN=fixture-library-secret',
+    prompts: [
+      null,
+      { id: 'missing-title', body: 'ignored' },
+      { id: 'odd-metadata', title: 'Odd metadata', body: 'Review.', tags: 'review', suggestedContext: 'jira' },
+      ...Array.from({ length: 99 }, (_, index) => ({ id: `bounded-${index}`, title: `Bounded ${index}`, body: 'Review.' })),
+    ],
+  }), { kind: 'local', location: '/tmp/prompts.json' });
+  assert.equal(malformedEntries.prompts.length, 98);
+  assert.doesNotMatch(malformedEntries.name, /fixture-library-secret/);
+  assert.ok(malformedEntries.warnings.some(warning => /not an object/i.test(warning)));
+  assert.ok(malformedEntries.warnings.some(warning => /missing-title title is missing/i.test(warning)));
+  assert.ok(malformedEntries.warnings.some(warning => /were ignored because they were not an array/i.test(warning)));
+  assert.ok(malformedEntries.warnings.some(warning => /more than 100 prompts/i.test(warning)));
 });
 
 test('prompt templates fill only allowlisted session variables and preserve unknown fields for review', () => {
@@ -145,6 +169,38 @@ test('local and remote Git manifests merge with origin-pinned GitLab auth and la
     promptLibrary.promptLibraryRequestHeaders('https://other.example/prompts.json', options.env, true)['PRIVATE-TOKEN'],
     undefined,
   );
+  assert.equal(promptLibrary.normalizePromptLibraryRemoteUrl(''), undefined);
+  assert.equal(promptLibrary.normalizePromptLibraryRemoteUrl('not a URL'), undefined);
+  assert.equal(promptLibrary.normalizePromptLibraryRemoteUrl('ftp://git.example/prompts.json'), undefined);
+  assert.equal(promptLibrary.normalizePromptLibraryRemoteUrl('https://user:pass@git.example/prompts.json'), undefined);
+  assert.equal(promptLibrary.normalizePromptLibraryRemoteUrl('https://git.example/prompts.json#main'), undefined);
+  assert.equal(promptLibrary.normalizePromptLibraryRemoteUrl('http://git.example/prompts.json'), undefined);
+  assert.match(promptLibrary.normalizePromptLibraryRemoteUrl('http://127.0.0.2/prompts.json'), /^http:/);
+  assert.equal(
+    promptLibrary.promptLibraryRequestHeaders(remoteUrl, { GITLAB_TOKEN: 'fixture-token-value' }, false)['PRIVATE-TOKEN'],
+    undefined,
+  );
+
+  const emptyDirectory = path.join(tempRoot, 'empty-prompt-library');
+  const malformedPath = path.join(tempRoot, 'malformed.kronos-prompts.json');
+  fs.mkdirSync(emptyDirectory, { recursive: true });
+  fs.writeFileSync(malformedPath, '{');
+  let failedRequest;
+  const failures = await promptLibrary.loadPromptLibraries({
+    localPaths: [path.join(tempRoot, 'missing-prompts.json'), emptyDirectory, malformedPath],
+    remoteUrls: ['https://git.example/unavailable-prompts.json'],
+    kronosDir: path.join(tempRoot, 'failure-runtime'),
+    timeoutMs: 1,
+    transport: async request => {
+      failedRequest = request;
+      return { statusCode: 503, body: '' };
+    },
+  });
+  assert.equal(failures.prompts.length, 0);
+  assert.equal(failures.sources.length, 4);
+  assert.equal(failedRequest.timeoutMs, 1_000);
+  assert.ok(failures.warnings.some(warning => /contains no kronos-prompts/i.test(warning)));
+  assert.ok(failures.warnings.some(warning => /HTTP 503/i.test(warning)));
 });
 
 test('reviewed prompt snapshots are immutable, credential-redacted, and inserted without submission', () => {
@@ -181,6 +237,17 @@ test('reviewed prompt snapshots are immutable, credential-redacted, and inserted
   assert.throws(
     () => insertion.buildPromptLibraryTerminalReference(artifact.id, path.join(tempRoot, 'wrong', 'prompt.md')),
     /expected prompt artifact/i,
+  );
+  assert.throws(
+    () => promptArtifacts.writePromptLibraryArtifact({ ...input, editedBody: '' }, { kronosDir: path.join(tempRoot, 'artifacts') }),
+    /must be 1-20000 characters/i,
+  );
+  assert.throws(
+    () => promptArtifacts.writePromptLibraryArtifact({
+      ...input,
+      prompt: { ...prompt, revisionSha256: 'not-a-hash' },
+    }, { kronosDir: path.join(tempRoot, 'artifacts') }),
+    /revision hash is invalid/i,
   );
 });
 
