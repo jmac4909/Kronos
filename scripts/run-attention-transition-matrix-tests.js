@@ -729,7 +729,7 @@ test('Attention headlines explain delivery impact instead of internal provider t
   }
 });
 
-test('Attention action contexts expose only validated URLs and explicit ticket-source actions', () => {
+test('Attention action contexts expose validated ticket and registered-project evidence actions', () => {
   const session = workSession();
   const gitlab = resourceTransition('gitlab-action', '2026-07-15T16:03:00.000Z', 'gitlab', 'merge-request', '77', 'initial_mr_observed');
   const ticketKey = attention.attentionTicketKey(gitlab, session);
@@ -747,6 +747,16 @@ test('Attention action contexts expose only validated URLs and explicit ticket-s
   assert.equal(attention.attentionTicketKey(gitlab, unlinkedStandalone), undefined);
   assert.equal(attention.attentionTicketKey({ ...gitlab, subject: { ...gitlab.subject, ticketKey: 'OTHER-2' } }, session), undefined);
   assert.equal(attention.attentionActionContext('gitlab', undefined, undefined), 'attention_repair');
+  assert.equal(attention.attentionActionContext('gitlab', undefined, undefined, 'app'), 'attention_repair_project_gitlab');
+  assert.equal(
+    attention.attentionActionContext('jenkins', undefined, 'https://jenkins.example/job/app/2/', 'app'),
+    'attention_provider_project_ci',
+  );
+  assert.equal(
+    attention.attentionActionContext('gitlab', 'JIRA-123', 'https://gitlab.example/group/app/-/merge_requests/7', 'app'),
+    'attention_provider_project_ticket_gitlab',
+    'project provider context wins while the validated ticket remains a secondary action',
+  );
 });
 
 test('Attention Jenkins builds and SonarQube branches are validated and latest-first', () => {
@@ -783,6 +793,9 @@ test('Attention action language is read-only or local and explains clear versus 
   assert.ok(menus.some(menu => menu.command === 'kronos.openProvider' && menu.when === 'viewItem =~ /^attention_provider/'));
   assert.ok(menus.some(menu => menu.command === 'kronos.insertGitLabContext' && menu.when.endsWith('_ticket_gitlab$/')));
   assert.ok(menus.some(menu => menu.command === 'kronos.insertCiContext' && menu.when.endsWith('_ticket_ci$/')));
+  assert.ok(menus.some(menu => menu.command === 'kronos.openTicketWorkspace' && menu.when.includes('(project_)?ticket')));
+  assert.ok(menus.some(menu => menu.command === 'kronos.insertProjectGitLabContext' && menu.when.includes('project(_ticket)?_gitlab')));
+  assert.ok(menus.some(menu => menu.command === 'kronos.insertProjectCiContext' && menu.when.includes('project(_ticket)?_ci')));
   assert.equal(menus.some(menu => /connect provider|approve|retry build|run build|create merge request/i.test(commands.get(menu.command) || '')), false);
 });
 

@@ -32,8 +32,9 @@ test('one provider binding reconciliation owner feeds Work, Sessions, Projects, 
   }
   const extension = fs.readFileSync(path.join(root, 'src/terminalFirstExtension.ts'), 'utf8');
   assert.doesNotMatch(extension, /currentMatchesTicket|mergeRequestNeedsEnrichment/);
-  assert.match(extension, /const projectMonitor = this\.readProjectMonitor\(project\.projectName\)/);
-  assert.match(extension, /latestGitLabMergeRequestUrlAcrossSessions\(\[/);
+  assert.match(extension, /discoverRegisteredProjectGitLabTarget\(project\)/);
+  assert.match(extension, /gitlabRestClient\.discoverOpenMergeRequest\(\{/);
+  assert.doesNotMatch(extension, /latestGitLabMergeRequestUrlAcrossSessions/);
 });
 
 test('bound MR identity wins stale catalog and only a matching monitor digest enriches it after reload', () => {
@@ -243,7 +244,7 @@ test('multi-project reconciliation stays inside the explicitly linked project se
   );
   assert.match(
     fs.readFileSync(path.join(root, 'src/terminalFirstExtension.ts'), 'utf8'),
-    /\.filter\(session => session\.projectName === project\.projectName\)/,
+    /\.filter\(session => matchesLocalProject\(session, \{ name: project\.projectName, path: project\.projectPath \}\)\)/,
   );
 });
 

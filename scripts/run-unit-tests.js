@@ -1153,7 +1153,11 @@ test('registered project configuration polls GitLab Jenkins and Sonar without a 
   });
   try {
     assert.equal(workSessions.listWorkSessions().some(session => session.projectName === 'Seamless'), false);
-    const monitor = new managedProviderMonitor.ManagedProviderMonitor({ state: () => state });
+    const notices = [];
+    const monitor = new managedProviderMonitor.ManagedProviderMonitor({
+      state: () => state,
+      notify: notice => notices.push(notice),
+    });
     const first = await monitor.poll();
     assert.deepEqual(
       { polled: first.polled, failures: first.failures, unconfigured: first.unconfigured },
@@ -1188,6 +1192,15 @@ test('registered project configuration polls GitLab Jenkins and Sonar without a 
     });
     assert.ok(events.length > 0);
     assert.equal(first.transitions, 3, 'GitLab, healthy Jenkins, and healthy SonarQube each establish one current result');
+    assert.deepEqual(
+      notices.map(notice => [notice.contextCommand, notice.contextArgument]),
+      [
+        ['kronos.insertProjectGitLabContext', { projectName: 'Seamless', projectPath: projectRoot }],
+        ['kronos.insertProjectCiContext', { projectName: 'Seamless', projectPath: projectRoot }],
+        ['kronos.insertProjectCiContext', { projectName: 'Seamless', projectPath: projectRoot }],
+      ],
+      'project-owned Attention notices offer fresh project context without fabricating a ticket',
+    );
     assert.equal(events.every(event => event.subject?.ticketKey === undefined), true);
     assert.equal(events.every(event => event.subject?.project === 'Seamless'), true);
     const healthyJenkins = events.find(event => event.source === 'jenkins'
@@ -2038,6 +2051,32 @@ test('provider observations update the durable Work catalog without losing Jira 
   assert.equal(next.tickets['JIRA-123'].mr.iid, 77);
   assert.equal(next.tickets['JIRA-123'].build.number, 18);
   assert.equal(projectCatalog.projectTicketProviderState(next, 'JIRA-123', {}), next);
+});
+
+test('registered project identity reconciles old Session labels and terminal subdirectories', () => {
+  const projectRoot = path.join(tempRoot, 'project-identity-root');
+  const nestedProjectRoot = path.join(projectRoot, 'nested-project');
+  const terminalDirectory = path.join(nestedProjectRoot, 'src', 'feature');
+  fs.mkdirSync(terminalDirectory, { recursive: true });
+  const state = stateStore.emptyWorkCatalog();
+  state.projects.Parent = { path: projectRoot, config: {} };
+  state.projects.CanonicalNested = { path: nestedProjectRoot, config: {} };
+  const project = projectCatalog.registeredLocalProjectForDirectory(state, terminalDirectory);
+  assert.equal(project.name, 'CanonicalNested', 'the most-specific registered folder owns a nested terminal cwd');
+  assert.equal(project.path, nestedProjectRoot);
+  assert.equal(projectCatalog.matchesLocalProject({
+    projectName: 'Old Workspace Label',
+    projectPath: path.join(nestedProjectRoot, '.'),
+  }, project), true, 'canonical path identity repairs an older display-name association');
+  assert.equal(projectCatalog.matchesLocalProject({
+    projectName: 'Different',
+    projectPath: projectRoot,
+  }, project), false, 'a different registered folder is not treated as the same project');
+  assert.equal(
+    projectCatalog.localProjectReferenceKey({ projectPath: path.join(nestedProjectRoot, '.') }),
+    projectCatalog.localProjectReferenceKey({ projectPath: nestedProjectRoot }),
+    'legacy polling groups equivalent path spellings under one owner',
+  );
 });
 
 test('legacy ~/.claude/kronos state migrates once without helper scripts', t => {
@@ -4134,6 +4173,12 @@ test('extension activation registers the bounded surface and explicit launch com
     const registeredProjectAttention = attentionProvider.getChildren()
       .find(item => item.label === 'fixture');
     assert.ok(registeredProjectAttention, 'the registered project owns its correlated MR stream');
+    const projectMrAttentionItem = attentionProvider.getChildren(registeredProjectAttention)
+      .find(item => item.source === 'gitlab' && item.entry.event.metadata?.mergeRequestIid === 77);
+    assert.ok(projectMrAttentionItem);
+    assert.equal(projectMrAttentionItem.contextValue, 'attention_provider_project_ticket_gitlab');
+    assert.equal(projectMrAttentionItem.projectName, 'fixture');
+    assert.equal(projectMrAttentionItem.projectPath, tempRoot, 'context-menu commands receive the canonical project target');
     assert.deepEqual(
       attentionProvider.getChildren(registeredProjectAttention)
         .filter(item => item.source === 'gitlab' && item.entry.event.metadata?.mergeRequestIid === 77)
@@ -4214,7 +4259,7 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.equal(groupedProjectItems.length, 2, 'provider transitions from separate sessions share one project group');
     const attentionItem = groupedProjectItems.find(item => item.eventId === 'attention-branch-picker-event');
     assert.deepEqual(attentionItem.providerChoices.map(choice => choice.label), ['feature/two', 'feature/one']);
-    assert.equal(attentionItem.contextValue, 'attention_provider_ticket_ci');
+    assert.equal(attentionItem.contextValue, 'attention_provider_project_ticket_ci');
     assert.equal(attentionItem.iconPath.id, 'shield');
     assert.equal(attentionItem.iconPath.color.id, 'charts.red');
     assert.match(attentionItem.description, /fixture • SonarQube • Quality gate feature\/one • failure • observed .* • changed /);
@@ -4229,7 +4274,7 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.equal(selectedSonarProject.config.default_branch, 'main', 'Sonar branch selection does not change the GitLab target branch');
     const missingUrlItem = groupedProjectItems.find(item => item.eventId === 'attention-same-project-event');
     assert.equal(missingUrlItem.providerUrl, undefined);
-    assert.equal(missingUrlItem.contextValue, 'attention_repair_ticket_gitlab');
+    assert.equal(missingUrlItem.contextValue, 'attention_repair_project_ticket_gitlab');
     assert.equal(missingUrlItem.iconPath.id, 'git-pull-request');
     assert.equal(missingUrlItem.iconPath.color.id, 'charts.green');
     assert.match(missingUrlItem.description, /GitLab.*information/);
@@ -4246,6 +4291,8 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.match(setupPanel.webview.html, /Kronos Setup/);
     assert.match(setupPanel.webview.html, /Choose Folders/);
     assert.match(setupPanel.webview.html, /Private provider environment guide/);
+    assert.match(setupPanel.webview.html, /1 registered project polling owner and 0 legacy ticket fallbacks/);
+    assert.doesNotMatch(setupPanel.webview.html, /polling starts after.*explicit Jira context/i);
     await commandHandlers.get('kronos.setup')();
     assert.equal(createdWebviewPanels.filter(panel => panel.viewType === 'kronosSetup').length, 1);
     assert.deepEqual(setupPanel.revealCalls, [vscode.ViewColumn.One]);
@@ -4486,6 +4533,30 @@ test('extension activation registers the bounded surface and explicit launch com
     workSessions.removeWorkSession(projectStandalone.id);
     vscode.window.terminals = vscode.window.terminals.filter(terminal => terminal !== projectTerminalRecord.terminal);
     createdTerminals.pop();
+    vscode.window.activeTerminal = createdTerminals[0].terminal;
+
+    const nestedTerminalDirectory = path.join(tempRoot, 'src', 'managed-terminal');
+    fs.mkdirSync(nestedTerminalDirectory, { recursive: true });
+    const managedProjectTerminal = {
+      name: 'Existing project terminal',
+      processId: Promise.resolve(2800),
+      shellIntegration: { cwd: { fsPath: nestedTerminalDirectory } },
+      show() {},
+      sendText() {},
+    };
+    vscode.window.terminals.push(managedProjectTerminal);
+    vscode.window.activeTerminal = managedProjectTerminal;
+    inputBoxResult = 'Managed from a subdirectory';
+    await commandHandlers.get('kronos.manageActiveTerminal')();
+    const managedProjectSession = workSessions.listWorkSessions().find(session =>
+      session.kind === 'standalone' && session.title === 'Managed from a subdirectory');
+    assert.ok(managedProjectSession);
+    assert.equal(managedProjectSession.projectName, 'fixture', 'the registered catalog identity beats a workspace label');
+    assert.equal(managedProjectSession.projectPath, tempRoot, 'a nested terminal cwd resolves to its registered project root');
+    assert.equal(managedProjectSession.terminals.at(-1).cwd, nestedTerminalDirectory, 'the attachment retains the actual terminal cwd');
+    closeTerminalHandler(managedProjectTerminal);
+    workSessions.removeWorkSession(managedProjectSession.id);
+    vscode.window.terminals = vscode.window.terminals.filter(terminal => terminal !== managedProjectTerminal);
     vscode.window.activeTerminal = createdTerminals[0].terminal;
 
     await commandHandlers.get('kronos.startClaudeForTicket')({ ticketKey: 'JIRA-123' });
@@ -4737,6 +4808,26 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.equal(reconnectedActions.at(-1)[2], false, 'Git context insertion must not submit the terminal line');
     assert.match(reconnectedActions.at(-1)[1], /^\[GIT-fixture\]/);
 
+    let discoveredProjectMrIid;
+    gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest = async input => discoveredProjectMrIid
+      ? {
+        strategy: 'source-branch',
+        match: {
+          iid: discoveredProjectMrIid,
+          title: `Live project MR ${discoveredProjectMrIid}`,
+          sourceBranch: input.sourceBranch,
+          targetBranch: 'main',
+          webUrl: `https://gitlab.example/group/fixture/-/merge_requests/${discoveredProjectMrIid}`,
+        },
+        ambiguous: false,
+        candidateCount: 1,
+      }
+      : {
+        strategy: 'source-branch',
+        match: undefined,
+        ambiguous: false,
+        candidateCount: 0,
+      };
     const previousGitLabBaseUrl = process.env.GITLAB_BASE_URL;
     process.env.GITLAB_BASE_URL = 'https://gitlab.example';
     try {
@@ -4757,8 +4848,13 @@ test('extension activation registers the bounded surface and explicit launch com
       projectId: 'group/fixture',
       url: 'https://gitlab.example/group/fixture/-/merge_requests/88',
     });
+    discoveredProjectMrIid = 89;
     await commandHandlers.get('kronos.openProjectMergeRequest')({ projectName: 'fixture', projectPath: tempRoot });
-    assert.equal(openedExternalUrls.at(-1), 'https://gitlab.example/group/fixture/-/merge_requests/88');
+    assert.equal(
+      openedExternalUrls.at(-1),
+      'https://gitlab.example/group/fixture/-/merge_requests/89',
+      'the browser action must prefer live branch discovery over a stale saved MR binding',
+    );
 
     const gitLabSnapshot = {
       mr: {
@@ -4842,12 +4938,6 @@ test('extension activation registers the bounded surface and explicit launch com
     };
     gitLabRestModule.gitlabRestClient.mergeRequestContext = async () => gitLabSnapshot;
     gitLabRestModule.gitlabRestClient.mergeRequestMonitor = async () => gitLabSnapshot;
-    gitLabRestModule.gitlabRestClient.discoverOpenMergeRequest = async () => ({
-      strategy: 'source-branch',
-      match: undefined,
-      ambiguous: false,
-      candidateCount: 0,
-    });
     jenkinsRestModule.jenkinsRestClient.buildContext = async () => jenkinsContext;
     sonarRestModule.sonarRestClient.branchContext = async () => sonarContext;
     workSessions.addWorkSessionProviderBinding(ticketSession.id, {
@@ -4878,6 +4968,13 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.match(reconnectedActions.at(-1)[1], /^\[MR-88\]/);
 
     vscode.window.activeTerminal = createdTerminals[0].terminal;
+    workSessions.setWorkSessionProject(standalone.id, {
+      projectName: 'Old Workspace Label',
+      projectPath: tempRoot,
+    });
+    gitLabSnapshot.mr.iid = 89;
+    gitLabSnapshot.mr.title = 'Live replacement project MR';
+    gitLabSnapshot.mr.web_url = 'https://gitlab.example/group/fixture/-/merge_requests/89';
     providerPanelStart = createdWebviewPanels.length;
     await commandHandlers.get('kronos.insertProjectGitLabContext')({ projectName: 'fixture', projectPath: tempRoot });
     providerComposer = createdWebviewPanels.slice(providerPanelStart)
@@ -4887,7 +4984,16 @@ test('extension activation registers the bounded surface and explicit launch com
     await providerComposer.receive({ command: 'insertDraft', focus: 'Review project MR evidence.' });
     assert.equal(createdTerminals[0].actions.length, providerWrites + 1);
     assert.equal(createdTerminals[0].actions.at(-1)[2], false);
-    assert.match(createdTerminals[0].actions.at(-1)[1], /^\[MR-88\]/);
+    assert.match(
+      createdTerminals[0].actions.at(-1)[1],
+      /^\[MR-89\]/,
+      'project MR insertion must refresh live discovery instead of inserting the older saved binding',
+    );
+    assert.equal(
+      workSessions.readWorkSession(standalone.id).projectName,
+      'fixture',
+      'a project action repairs an older Session label when its canonical folder matches',
+    );
     assert.deepEqual(workSessions.readWorkSession(standalone.id).ticketKeys, []);
 
     vscode.window.activeTerminal = reconnectedTerminal;
@@ -4928,7 +5034,7 @@ test('extension activation registers the bounded surface and explicit launch com
       'a ticket Session is not the provider polling owner for a configured project',
     );
     const projectedWorkCatalog = stateStore.readStateFileWithIssues().state;
-    assert.equal(projectedWorkCatalog.tickets['JIRA-123'].mr.iid, 88);
+    assert.equal(projectedWorkCatalog.tickets['JIRA-123'].mr.iid, 89);
     assert.equal(projectedWorkCatalog.tickets['JIRA-123'].mr.review_status, 'approved');
     assert.equal(projectedWorkCatalog.tickets['JIRA-123'].build.number, 32);
     assert.equal(projectedWorkCatalog.tickets['JIRA-123'].build.status, 'SUCCESS');

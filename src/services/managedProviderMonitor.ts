@@ -77,6 +77,8 @@ import { optionalTrimmedStringFromUnknown } from './records';
 import { boundedOperationFailure } from './errorUtils';
 import {
   listLocalProjects,
+  localProjectReferenceKey,
+  matchesLocalProject,
   readProjectGitBranch,
 } from './projectCatalog';
 import {
@@ -146,7 +148,14 @@ export interface ManagedProviderNotice {
   session: WorkSessionRecord;
   severity: 'warning' | 'information';
   providerUrl?: string;
-  contextCommand?: 'kronos.insertGitLabContext' | 'kronos.insertCiContext';
+  contextCommand?:
+    | 'kronos.insertGitLabContext'
+    | 'kronos.insertCiContext'
+    | 'kronos.insertProjectGitLabContext'
+    | 'kronos.insertProjectCiContext';
+  contextArgument?:
+    | { ticketKey: string }
+    | { projectName: string; projectPath: string };
 }
 
 export interface ManagedProviderMonitorOptions {
@@ -230,7 +239,7 @@ export class ManagedProviderMonitor {
             path: project.path,
             displayName: project.displayName,
             seedBindings: sessions
-              .filter(session => session.projectName === project.name)
+              .filter(session => matchesLocalProject(session, project))
               .flatMap(session => session.providerBindings),
           }));
         } catch (error: unknown) {
@@ -241,14 +250,12 @@ export class ManagedProviderMonitor {
           );
         }
       }
-      const canonicalProjectKeys = new Set(configuredProjects.flatMap(project => [project.name, project.path]));
       const monitoredProjects = new Set<string>();
       const legacyOwners = sessions.map(monitorableWorkSession)
         .filter((candidate): candidate is ProviderMonitoringOwner => Boolean(candidate))
-        .filter(candidate => ![candidate.projectName, candidate.projectPath]
-          .some(value => Boolean(value && canonicalProjectKeys.has(value))))
+        .filter(candidate => !configuredProjects.some(project => matchesLocalProject(candidate, project)))
         .filter(candidate => {
-          const projectKey = candidate.projectPath || candidate.projectName;
+          const projectKey = localProjectReferenceKey(candidate);
           if (!projectKey || !monitoredProjects.has(projectKey)) {
             if (projectKey) { monitoredProjects.add(projectKey); }
             return true;
@@ -1698,11 +1705,19 @@ function notice(
   session: ProviderMonitoringOwner,
   severity: ManagedProviderNotice['severity'],
   providerUrl: string | undefined,
-  contextCommand: ManagedProviderNotice['contextCommand'],
+  contextCommand: 'kronos.insertGitLabContext' | 'kronos.insertCiContext' | undefined,
 ): ManagedProviderNotice {
   const value: ManagedProviderNotice = { event, session, severity };
   if (providerUrl) { value.providerUrl = providerUrl; }
-  if (contextCommand && session.ticketKey) { value.contextCommand = contextCommand; }
+  if (contextCommand && session.ticketKey) {
+    value.contextCommand = contextCommand;
+    value.contextArgument = { ticketKey: session.ticketKey };
+  } else if (contextCommand && isProjectMonitoringRecord(session) && session.projectName && session.projectPath) {
+    value.contextCommand = contextCommand === 'kronos.insertGitLabContext'
+      ? 'kronos.insertProjectGitLabContext'
+      : 'kronos.insertProjectCiContext';
+    value.contextArgument = { projectName: session.projectName, projectPath: session.projectPath };
+  }
   return value;
 }
 

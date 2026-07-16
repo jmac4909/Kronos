@@ -85,7 +85,7 @@
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention collapses newer pipeline, build, test, gate, and issue occurrences without deleting audit history" },
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention presentation covers information, warning, failure, recovery, partial, and blocked severities" },
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention rows expose project, provider, subject, observed time, changed time, and why" },
-        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose only validated URLs and explicit ticket-source actions" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose validated ticket and registered-project evidence actions" },
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention Jenkins builds and SonarQube branches are validated and latest-first" },
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action language is read-only or local and explains clear versus audit history" },
         { "file": "scripts/run-unit-tests.js", "test": "local monitoring blockers transition once, recover once, and retain audit history" },
@@ -1206,7 +1206,7 @@
       "requirements": ["G11-goal:e9735b07"],
       "automated": [
         { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention rows expose project, provider, subject, observed time, changed time, and why" },
-        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose only validated URLs and explicit ticket-source actions" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose validated ticket and registered-project evidence actions" },
         { "file": "scripts/run-unit-tests.js", "test": "local monitoring blockers transition once, recover once, and retain audit history" }
       ],
       "humanGates": ["real-vscode", "live-providers"]
@@ -1228,7 +1228,7 @@
     {
       "requirements": ["G11-case-03:30392c59"],
       "automated": [
-        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose only validated URLs and explicit ticket-source actions" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose validated ticket and registered-project evidence actions" },
         { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "reconciled provider URLs are credential-free and rejected outside the configured origin" },
         { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
       ]
@@ -1243,7 +1243,7 @@
     {
       "requirements": ["G11-case-05:0afcdc63"],
       "automated": [
-        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose only validated URLs and explicit ticket-source actions" }
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose validated ticket and registered-project evidence actions" }
       ]
     },
     {

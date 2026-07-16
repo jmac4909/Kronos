@@ -315,7 +315,7 @@ test('Attention rows exhaust primary actions, provider choices, tooltips, and ge
     providerUrl: target.providerUrl,
     providerChoices: choices,
   });
-  assert.equal(row.contextValue, 'attention_provider_ticket_gitlab');
+  assert.equal(row.contextValue, 'attention_provider_project_ticket_gitlab');
   assert.deepEqual(row.command.arguments[0].providerChoices, choices);
   assert.equal(row.command.arguments[0].projectName, 'Application');
   assert.equal(row.command.arguments[0].projectPath, '/workspace/application');

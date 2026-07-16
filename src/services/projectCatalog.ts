@@ -53,6 +53,48 @@ export interface LocalProjectRegistrationCandidate {
   path: string;
 }
 
+export interface LocalProjectIdentityReference {
+  projectName?: string;
+  projectPath?: string;
+}
+
+/**
+ * Treats the stable catalog name as authoritative while accepting a canonical
+ * folder match for Sessions created before that identity was known.
+ */
+export function matchesLocalProject(
+  reference: LocalProjectIdentityReference,
+  project: Pick<LocalProjectSummary, 'name' | 'path'>,
+): boolean {
+  return reference.projectName === project.name
+    || Boolean(reference.projectPath && pathKey(reference.projectPath) === pathKey(project.path));
+}
+
+/** Canonical comparison key for a registered project folder. */
+export function localProjectPathKey(value: string): string {
+  return pathKey(value);
+}
+
+/** Stable grouping key for project-owned or legacy Session state. */
+export function localProjectReferenceKey(reference: LocalProjectIdentityReference): string | undefined {
+  if (reference.projectPath) { return `path:${pathKey(reference.projectPath)}`; }
+  return reference.projectName ? `name:${reference.projectName}` : undefined;
+}
+
+/** Returns the most-specific registered project containing a terminal cwd. */
+export function registeredLocalProjectForDirectory(
+  state: KronosState | null | undefined,
+  directoryValue: string,
+): LocalProjectSummary | undefined {
+  const directory = pathKey(directoryValue);
+  return listLocalProjects(state)
+    .filter(project => {
+      const relative = path.relative(pathKey(project.path), directory);
+      return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    })
+    .sort((left, right) => pathKey(right.path).length - pathKey(left.path).length)[0];
+}
+
 export function setLocalProjectSonarTarget(
   state: KronosState,
   projectNameValue: string,

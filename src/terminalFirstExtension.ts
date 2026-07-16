@@ -166,9 +166,13 @@ import { isRecord } from './services/records';
 import {
   formatProjectBranchProfiles,
   listLocalProjects,
+  localProjectPathKey,
+  localProjectReferenceKey,
+  matchesLocalProject,
   planLocalProjectRegistrations,
   projectConfigurationForTicket,
   readProjectGitBranch,
+  registeredLocalProjectForDirectory,
   ticketLocalProject,
   type LocalProjectSummary,
 } from './services/projectCatalog';
@@ -187,7 +191,6 @@ import {
 import { providerReadiness } from './services/providerReadiness';
 import { currentProviderReadDiagnostics } from './services/providerReadDiagnostics';
 import { attentionEventHeadline } from './services/attentionPresentation';
-import { normalizeProviderPublicUrl } from './services/providerUrls';
 import { WorkRefreshCoordinator } from './services/workRefreshCoordinator';
 import {
   CONTEXT_COMPOSER_SCRIPT,
@@ -218,7 +221,6 @@ import {
   configuredGitLabProjectIdentity,
   configuredSonarBranch,
   configuredSonarBranchName,
-  latestGitLabMergeRequestUrlAcrossSessions,
   mergeRequestDiscoverySourceBranch,
   reconcileKnownGitLabMergeRequestTarget,
   withEffectiveTicketMergeRequest,
@@ -331,6 +333,13 @@ interface GitLabInsertionTarget {
   projectIdOrPath: string;
   url?: string;
 }
+
+type RegisteredProjectGitLabDiscovery =
+  | { kind: 'matched'; target: GitLabInsertionTarget; sourceBranch?: string }
+  | { kind: 'not-found'; sourceBranch?: string }
+  | { kind: 'ambiguous'; candidateCount: number; sourceBranch?: string }
+  | { kind: 'unconfigured' }
+  | { kind: 'failed'; detail: string; sourceBranch?: string };
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(new TerminalFirstRuntime(context));
@@ -1303,7 +1312,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
         validateInput: value => value.trim() ? undefined : 'Enter a session name.',
       });
       if (!title?.trim()) { return; }
-      const project = this.standaloneProjectDetails();
+      const project = this.standaloneProjectDetails(this.terminalWorkingDirectory(terminal));
       const session = createStandaloneWorkSession({ title: title.trim(), ...project });
       await this.attachTerminal(session, terminal);
       this.refreshTerminalFirstViews();
@@ -1531,10 +1540,26 @@ class TerminalFirstRuntime implements vscode.Disposable {
     const workspace = vscode.workspace.workspaceFolders?.[0];
     const details: { projectName?: string; projectPath?: string } = {};
     const workspacePath = workspace?.uri.fsPath;
-    if (workspace?.name && (!cwd || cwd === workspacePath)) { details.projectName = workspace.name; }
     const projectPath = cwd || workspacePath;
+    const registeredProject = projectPath
+      ? registeredLocalProjectForDirectory(this.state.state, projectPath)
+      : undefined;
+    if (registeredProject) {
+      return { projectName: registeredProject.name, projectPath: registeredProject.path };
+    }
+    if (workspace?.name && (!cwd || localProjectPathKey(cwd) === localProjectPathKey(workspacePath || ''))) {
+      details.projectName = workspace.name;
+    }
     if (projectPath) { details.projectPath = projectPath; }
     return details;
+  }
+
+  private terminalWorkingDirectory(terminal: vscode.Terminal): string | undefined {
+    // shellIntegration was added after the declared VS Code 1.85 minimum.
+    // Read it opportunistically on newer editors without making it a required API.
+    return (terminal as vscode.Terminal & {
+      readonly shellIntegration?: { readonly cwd?: vscode.Uri };
+    }).shellIntegration?.cwd?.fsPath;
   }
 
   private async attachTerminal(session: WorkSessionRecord, terminal: vscode.Terminal): Promise<WorkSessionRecord> {
@@ -1553,12 +1578,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     const input: Parameters<typeof attachWorkSessionTerminal>[1] = { name: terminal.name };
     if (previous?.sessionId === session.id) { input.bindingId = previous.bindingId; }
     if (processId !== undefined) { input.processId = processId; }
-    // shellIntegration was added after the declared VS Code 1.85 minimum.
-    // Read it opportunistically on newer editors without making it a required API.
-    const shellIntegration = (terminal as vscode.Terminal & {
-      readonly shellIntegration?: { readonly cwd?: vscode.Uri };
-    }).shellIntegration;
-    const cwd = shellIntegration?.cwd?.fsPath;
+    const cwd = this.terminalWorkingDirectory(terminal);
     if (cwd) { input.cwd = cwd; }
     const updated = attachWorkSessionTerminal(session.id, input);
     const persisted = input.bindingId
@@ -2767,13 +2787,14 @@ class TerminalFirstRuntime implements vscode.Disposable {
       selection = await this.chooseProjectInsertionTerminal(project, 'Jenkins / SonarQube evidence');
       if (!selection) { return; }
       const projectName = project.projectName;
+      const projectPath = project.projectPath;
       const storedProject = this.state.state?.projects[projectName];
       monitoringOwner = ensureProjectMonitoringRecord({
         name: projectName,
-        path: project.projectPath,
+        path: projectPath,
         ...(storedProject?.display_name ? { displayName: storedProject.display_name } : {}),
         seedBindings: listWorkSessions()
-          .filter(session => session.projectName === projectName)
+          .filter(session => matchesLocalProject(session, { name: projectName, path: projectPath }))
           .flatMap(session => session.providerBindings),
       });
     } else {
@@ -3091,7 +3112,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
     }
     const actions = [
       ...(notice.providerUrl ? ['Open Provider'] : []),
-      ...(notice.contextCommand ? ['Insert Fresh Context'] : []),
+      ...(notice.contextCommand && notice.contextArgument ? ['Insert Fresh Context'] : []),
       notice.event.source === 'gitlab' && notice.event.subject?.kind === 'merge-request'
         ? 'Clear Until Next Poll'
         : 'Clear from Attention',
@@ -3101,8 +3122,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
       : vscode.window.showInformationMessage(headline, ...actions);
     void prompt.then(async action => {
       if (action === 'Open Provider' && notice.providerUrl) { await this.openHttpUrl(notice.providerUrl); }
-      if (action === 'Insert Fresh Context' && notice.contextCommand) {
-        await vscode.commands.executeCommand(notice.contextCommand, { ticketKey: notice.session.ticketKey });
+      if (action === 'Insert Fresh Context' && notice.contextCommand && notice.contextArgument) {
+        await vscode.commands.executeCommand(notice.contextCommand, notice.contextArgument);
       }
       if (action === 'Clear Until Next Poll' || action === 'Clear from Attention') {
         acknowledgeMonitorEvent(notice.event.id, notice.session.id);
@@ -3420,22 +3441,45 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private async openProjectMergeRequest(argument: unknown): Promise<void> {
     const project = this.resolveRegisteredProject(argument);
     if (!project) { return; }
-    const projectSessions = listWorkSessions({ kind: 'ticket', status: 'active' })
-      .filter(session => session.projectName === project.projectName);
-    const projectMonitor = this.readProjectMonitor(project.projectName);
-    const knownUrl = latestGitLabMergeRequestUrlAcrossSessions([
-      ...(projectMonitor ? [projectMonitor] : []),
-      ...projectSessions,
-    ]);
-    const linkedTickets = Object.entries(this.state.state?.tickets || {})
-      .filter(([, ticket]) => ticket.linked_local_project === project.projectName)
-      .sort(([, left], [, right]) => String(right.updated || '').localeCompare(String(left.updated || '')));
-    const ticketMrUrl = normalizeProviderPublicUrl(linkedTickets
-      .map(([ticketKey, ticket]) => this.effectiveTicket(ticketKey, ticket).mr)
-      .find(mr => mr?.state === 'opened' && mr.url)?.url, 'gitlab');
-    if (knownUrl || ticketMrUrl) {
-      await this.openHttpUrl(knownUrl || ticketMrUrl || '');
+    const discovery = await this.discoverRegisteredProjectGitLabTarget(project);
+    if (discovery.kind === 'matched') {
+      if (discovery.target.url) {
+        await this.openHttpUrl(discovery.target.url);
+        return;
+      }
+      const projectPath = this.state.state?.projects[project.projectName]?.config?.gitlab_project_path;
+      const apiUrl = normalizeGitLabApiBaseUrl(
+        process.env['GITLAB_API_BASE_URL']
+          || process.env['GITLAB_BASE_URL']
+          || process.env['GITLAB_URL']
+          || process.env['GITLAB_HOST'],
+      );
+      if (projectPath && apiUrl) {
+        const webBase = apiUrl.replace(/\/api\/v4\/?$/, '');
+        const encodedProjectPath = projectPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+        await this.openHttpUrl(`${webBase}/${encodedProjectPath}/-/merge_requests/${discovery.target.iid}`);
+      } else {
+        void vscode.window.showWarningMessage(
+          `MR !${discovery.target.iid} was found, but GitLab did not return a browser URL and this project has no group/project path for a safe fallback.`,
+        );
+      }
       return;
+    }
+    if (discovery.kind === 'ambiguous') {
+      void vscode.window.showWarningMessage(
+        `${project.displayName || project.projectName} has ${discovery.candidateCount} possible open merge requests${discovery.sourceBranch ? ` while checking branch ${discovery.sourceBranch}` : ''}. Kronos will not guess or open a stale saved MR.`,
+      );
+      return;
+    }
+    if (discovery.kind === 'unconfigured') {
+      void vscode.window.showWarningMessage(
+        `${project.displayName || project.projectName} needs a GitLab project ID or group/project path before Kronos can find or create its merge request.`,
+      );
+      return;
+    }
+    if (discovery.kind === 'failed') {
+      this.log(`Could not verify the current GitLab MR for ${project.projectName}.`, discovery.detail);
+      void vscode.window.showWarningMessage(`${discovery.detail} Kronos will open the prefilled new-MR page instead of trusting a possibly stale saved MR.`);
     }
 
     const config = this.state.state?.projects[project.projectName]?.config || {};
@@ -3490,7 +3534,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
     project: RegisteredProjectCommandTarget,
     evidenceLabel = 'working diff',
   ): Promise<TerminalSelection | undefined> {
-    const sessions = listWorkSessions({ status: 'active' }).filter(session => session.projectName === project.projectName);
+    const sessions = listWorkSessions({ status: 'active' })
+      .filter(session => matchesLocalProject(session, { name: project.projectName, path: project.projectPath }));
     if (sessions.length === 0) {
       void vscode.window.showWarningMessage(
         `Start a Claude session in ${project.projectName}, or manage a focused terminal for it, before inserting ${evidenceLabel}. No Jira ticket is required.`,
@@ -3510,6 +3555,14 @@ class TerminalFirstRuntime implements vscode.Disposable {
       session = pick?.session;
     }
     if (!session) { return undefined; }
+    if (session.projectName !== project.projectName
+      || !session.projectPath
+      || localProjectPathKey(session.projectPath) !== localProjectPathKey(project.projectPath)) {
+      session = setWorkSessionProject(session.id, {
+        projectName: project.projectName,
+        projectPath: project.projectPath,
+      });
+    }
     if (session.kind === 'ticket') { return this.chooseInsertionTerminal(session.ticketKey); }
     const selected = await this.chooseLiveTerminal(session.id);
     if (!selected) {
@@ -3954,11 +4007,26 @@ class TerminalFirstRuntime implements vscode.Disposable {
     sonar: number;
     detail: string;
   } {
-    const sessions = [...new Map(listWorkSessions({ status: 'active', monitoringEnabled: true })
+    const registeredProjects = listLocalProjects(this.state.state)
+      .filter(project => project.available)
+      .map(project => ({ project, config: this.state.state?.projects[project.name]?.config || {} }))
+      .filter(({ config }) => configuredProjectPollingEnabled(config));
+    const legacySessions = [...new Map(listWorkSessions({ status: 'active', monitoringEnabled: true })
       .filter(session => session.ticketKeys.length > 0)
-      .map(session => [session.projectPath || session.projectName || session.id, session])).values()];
-    const counts = { sessions: sessions.length, gitlab: 0, jenkins: 0, sonar: 0 };
-    for (const session of sessions) {
+      .filter(session => !registeredProjects.some(({ project }) => matchesLocalProject(session, project)))
+      .map(session => [localProjectReferenceKey(session) || session.id, session])).values()];
+    const counts = {
+      sessions: registeredProjects.length + legacySessions.length,
+      gitlab: 0,
+      jenkins: 0,
+      sonar: 0,
+    };
+    for (const { config } of registeredProjects) {
+      if (config.gitlab_project_id || config.gitlab_project_path) { counts.gitlab += 1; }
+      if (config.jenkins_url || config.branch_profiles?.some(profile => profile.jenkins_url)) { counts.jenkins += 1; }
+      if (config.sonar_project_key || config.branch_profiles?.some(profile => profile.sonar_project_key)) { counts.sonar += 1; }
+    }
+    for (const session of legacySessions) {
       const ticketKey = session.kind === 'ticket' ? session.ticketKey : session.ticketKeys[0];
       if (!ticketKey) { continue; }
       const ticket = this.state.state?.tickets[ticketKey];
@@ -3972,8 +4040,8 @@ class TerminalFirstRuntime implements vscode.Disposable {
     return {
       ...counts,
       detail: counts.sessions === 0
-        ? 'No active monitored project sessions. Polling starts after a project session carries an explicit Jira context.'
-        : `${counts.sessions} monitored project session${counts.sessions === 1 ? '' : 's'}; GitLab ${counts.gitlab} active/discovering, Jenkins ${counts.jenkins} active, SonarQube ${counts.sonar} active.`,
+        ? 'No registered project has a provider target and no eligible legacy ticket Session remains. Configure a registered project to start polling; no Jira link or terminal Session is required.'
+        : `${registeredProjects.length} registered project polling owner${registeredProjects.length === 1 ? '' : 's'} and ${legacySessions.length} legacy ticket fallback${legacySessions.length === 1 ? '' : 's'}; GitLab ${counts.gitlab}, Jenkins ${counts.jenkins}, SonarQube ${counts.sonar}.`,
     };
   }
 
@@ -4096,30 +4164,31 @@ class TerminalFirstRuntime implements vscode.Disposable {
   private async resolveProjectGitLabInsertionTarget(
     project: RegisteredProjectCommandTarget,
   ): Promise<GitLabInsertionTarget | undefined> {
-    const storedProject = this.state.state?.projects[project.projectName];
-    const configuredProject = configuredGitLabProjectIdentity(storedProject?.config);
-    const monitor = ensureProjectMonitoringRecord({
-      name: project.projectName,
-      path: project.projectPath,
-      ...(storedProject?.display_name ? { displayName: storedProject.display_name } : {}),
-      seedBindings: listWorkSessions()
-        .filter(session => session.projectName === project.projectName)
-        .flatMap(session => session.providerBindings),
-    });
-    const knownTarget = reconcileKnownGitLabMergeRequestTarget(undefined, monitor, configuredProject);
-    if (knownTarget) {
-      return {
-        iid: knownTarget.iid,
-        projectIdOrPath: knownTarget.projectIdOrPath,
-        ...(knownTarget.url ? { url: knownTarget.url } : {}),
-      };
-    }
-    if (!configuredProject) {
+    const discovery = await this.discoverRegisteredProjectGitLabTarget(project);
+    if (discovery.kind === 'matched') { return discovery.target; }
+    if (discovery.kind === 'unconfigured') {
       void vscode.window.showWarningMessage(
         `${project.displayName || project.projectName} needs a GitLab project ID or group/project path before Kronos can find its merge request.`,
       );
       return undefined;
     }
+    if (discovery.kind === 'failed') {
+      this.log(`Could not discover a GitLab MR for ${project.projectName}.`, discovery.detail);
+      void vscode.window.showWarningMessage(discovery.detail);
+      return undefined;
+    }
+    void vscode.window.showWarningMessage(discovery.kind === 'ambiguous'
+      ? `${project.displayName || project.projectName} has ${discovery.candidateCount} open merge requests for ${discovery.sourceBranch || 'the current project'}. Kronos will not guess or insert a stale saved MR.`
+      : `No unique open merge request matches ${discovery.sourceBranch ? `branch ${discovery.sourceBranch}` : project.displayName || project.projectName} yet. Project polling will keep checking automatically.`);
+    return undefined;
+  }
+
+  private async discoverRegisteredProjectGitLabTarget(
+    project: RegisteredProjectCommandTarget,
+  ): Promise<RegisteredProjectGitLabDiscovery> {
+    const storedProject = this.state.state?.projects[project.projectName];
+    const configuredProject = configuredGitLabProjectIdentity(storedProject?.config);
+    if (!configuredProject) { return { kind: 'unconfigured' }; }
     const sourceBranch = mergeRequestDiscoverySourceBranch(
       undefined,
       readProjectGitBranch(project.projectPath)?.branch,
@@ -4131,31 +4200,45 @@ class TerminalFirstRuntime implements vscode.Disposable {
         ...(sourceBranch ? { sourceBranch } : {}),
       });
     } catch (error: unknown) {
-      const detail = boundedOperationFailure(error, 'GitLab merge-request discovery failed.').display;
-      this.log(`Could not discover a GitLab MR for ${project.projectName}.`, detail);
-      void vscode.window.showWarningMessage(detail);
-      return undefined;
+      return {
+        kind: 'failed',
+        detail: boundedOperationFailure(error, 'GitLab merge-request discovery failed.').display,
+        ...(sourceBranch ? { sourceBranch } : {}),
+      };
     }
     if (!discovery.match) {
-      void vscode.window.showWarningMessage(discovery.ambiguous
-        ? `${project.displayName || project.projectName} has ${discovery.candidateCount} open merge requests for ${sourceBranch || 'the current project'}. Kronos will not guess.`
-        : `No unique open merge request matches ${sourceBranch ? `branch ${sourceBranch}` : project.displayName || project.projectName} yet. Project polling will keep checking automatically.`);
-      return undefined;
+      return discovery.ambiguous
+        ? { kind: 'ambiguous', candidateCount: discovery.candidateCount, ...(sourceBranch ? { sourceBranch } : {}) }
+        : { kind: 'not-found', ...(sourceBranch ? { sourceBranch } : {}) };
     }
     const target: GitLabInsertionTarget = {
       iid: discovery.match.iid,
       projectIdOrPath: configuredProject,
       ...(discovery.match.webUrl ? { url: discovery.match.webUrl } : {}),
     };
-    addProjectMonitoringProviderBinding(monitor.id, {
-      provider: 'gitlab',
-      resource: 'merge-request',
-      subjectId: String(target.iid),
-      projectId: configuredProject,
-      ...(target.url ? { url: target.url } : {}),
+    const monitor = ensureProjectMonitoringRecord({
+      name: project.projectName,
+      path: project.projectPath,
+      ...(storedProject?.display_name ? { displayName: storedProject.display_name } : {}),
+      seedBindings: listWorkSessions()
+        .filter(session => matchesLocalProject(session, { name: project.projectName, path: project.projectPath }))
+        .flatMap(session => session.providerBindings),
     });
-    this.refreshTerminalFirstViews();
-    return target;
+    const knownTarget = reconcileKnownGitLabMergeRequestTarget(undefined, monitor, configuredProject);
+    if (!knownTarget
+      || knownTarget.iid !== target.iid
+      || knownTarget.projectIdOrPath !== target.projectIdOrPath
+      || (target.url && knownTarget.url !== target.url)) {
+      addProjectMonitoringProviderBinding(monitor.id, {
+        provider: 'gitlab',
+        resource: 'merge-request',
+        subjectId: String(target.iid),
+        projectId: configuredProject,
+        ...(target.url ? { url: target.url } : {}),
+      });
+      this.refreshTerminalFirstViews();
+    }
+    return { kind: 'matched', target, ...(sourceBranch ? { sourceBranch } : {}) };
   }
 
   private projectConfig(ticket: Ticket): ProjectConfig | undefined {
@@ -4335,10 +4418,6 @@ function uniqueProjectDiscoveryRoots(values: readonly string[], limit: number): 
     if (roots.length >= limit) { break; }
   }
   return roots;
-}
-
-function localProjectPathKey(value: string): string {
-  return process.platform === 'win32' ? value.toLocaleLowerCase() : value;
 }
 
 function boundedIntegerSetting(value: unknown, fallback: number, minimum: number, maximum: number): number {

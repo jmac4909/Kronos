@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { KronosState, ProjectConfig } from '../state/types';
 import { boundedOperationFailure } from '../services/errorUtils';
-import { listLocalProjects } from '../services/projectCatalog';
+import { listLocalProjects, matchesLocalProject } from '../services/projectCatalog';
 import { projectGitStatusPresentation } from '../services/projectGitPresentation';
 import { providerReadiness } from '../services/providerReadiness';
 import {
@@ -57,7 +57,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectTreeE
         openRepositoryIfNeeded: true,
       });
       const config = state?.projects[project.name]?.config || {};
-      const linkedSessions = sessions.filter(session => activeProjectMonitoringSession(session, project.name));
+      const linkedSessions = sessions.filter(session => activeProjectMonitoringSession(session, project.name, project.path));
       const projectMonitor = safeReadProjectMonitoringRecord(project.name);
       const monitoringOwners = projectMonitor ? [projectMonitor] : linkedSessions;
       return new RegisteredProjectTreeItem(
@@ -98,8 +98,8 @@ function safeReadProjectMonitoringRecord(projectName: string): WorkSessionRecord
   }
 }
 
-function activeProjectMonitoringSession(session: WorkSessionRecord, projectName: string): boolean {
-  return session.projectName === projectName
+function activeProjectMonitoringSession(session: WorkSessionRecord, projectName: string, projectPath: string): boolean {
+  return matchesLocalProject(session, { name: projectName, path: projectPath })
     && session.ticketKeys.length > 0
     && session.status === 'active'
     && session.monitoring.enabled;

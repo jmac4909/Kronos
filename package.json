@@ -557,7 +557,7 @@
         },
         {
           "command": "kronos.openTicketWorkspace",
-          "when": "viewItem =~ /^attention_(provider|repair)_ticket/",
+          "when": "viewItem =~ /^attention_(provider|repair)_(project_)?ticket/",
           "group": "ticket@1"
         },
         {
@@ -568,6 +568,16 @@
         {
           "command": "kronos.insertCiContext",
           "when": "viewItem =~ /^attention_(provider|repair)_ticket_ci$/",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.insertProjectGitLabContext",
+          "when": "viewItem =~ /^attention_(provider|repair)_project(_ticket)?_gitlab$/",
+          "group": "context@1"
+        },
+        {
+          "command": "kronos.insertProjectCiContext",
+          "when": "viewItem =~ /^attention_(provider|repair)_project(_ticket)?_ci$/",
           "group": "context@2"
         },
         {

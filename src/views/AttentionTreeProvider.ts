@@ -209,6 +209,8 @@ export class AttentionEventTreeItem extends vscode.TreeItem implements Attention
   readonly source: MonitorEventSource;
   readonly providerUrl: string | undefined;
   readonly providerChoices: AttentionProviderChoice[];
+  readonly projectName?: string;
+  readonly projectPath?: string;
 
   constructor(readonly entry: AttentionEntry) {
     const presentation = attentionEventPresentation(entry.event, entry.session);
@@ -220,6 +222,8 @@ export class AttentionEventTreeItem extends vscode.TreeItem implements Attention
     this.source = entry.event.source;
     this.providerUrl = entry.providerUrl;
     this.providerChoices = [...entry.providerChoices];
+    if (entry.session?.projectName) { this.projectName = entry.session.projectName; }
+    if (entry.session?.projectPath) { this.projectPath = entry.session.projectPath; }
     const target: AttentionCommandTarget = {
       eventId: this.eventId,
       sessionId: this.sessionId,
@@ -228,12 +232,17 @@ export class AttentionEventTreeItem extends vscode.TreeItem implements Attention
       source: this.source,
       providerUrl: this.providerUrl,
       ...(this.providerChoices.length > 1 ? { providerChoices: this.providerChoices } : {}),
-      ...(entry.session?.projectName ? { projectName: entry.session.projectName } : {}),
-      ...(entry.session?.projectPath ? { projectPath: entry.session.projectPath } : {}),
+      ...(this.projectName ? { projectName: this.projectName } : {}),
+      ...(this.projectPath ? { projectPath: this.projectPath } : {}),
     };
 
     this.id = `attention-event:${entry.event.id}`;
-    this.contextValue = attentionActionContext(this.source, this.ticketKey, this.providerUrl);
+    this.contextValue = attentionActionContext(
+      this.source,
+      this.ticketKey,
+      this.providerUrl,
+      this.projectName,
+    );
     this.description = presentation.description;
     this.tooltip = eventTooltip(entry);
     this.iconPath = eventIcon(entry.event);

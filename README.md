@@ -12,7 +12,7 @@
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178C6">
   <img alt="VS Code 1.85 or newer" src="https://img.shields.io/badge/VS%20Code-%5E1.85-23A8F2">
   <img alt="Zero third-party runtime dependencies" src="https://img.shields.io/badge/runtime%20dependencies-0-22C55E">
-  <img alt="247 automated local tests" src="https://img.shields.io/badge/test%20suite-247%20local-22C55E">
+  <img alt="248 automated local tests" src="https://img.shields.io/badge/test%20suite-248%20local-22C55E">
   <img alt="Preview status" src="https://img.shields.io/badge/status-preview-F59E0B">
 </p>
 
@@ -29,7 +29,7 @@ Kronos solves a narrow enterprise-development problem: the evidence needed for a
 | **Work** | Search and filter Jira work, see current/empty/loading/partial/stale/error refresh state without losing the last good result, explicitly link the right local project and branch, then open a focused ticket workspace. Shared Jira keys never infer a repository. |
 | **Sessions** | Organize operator-owned Claude terminals by local project, attach multiple Jira contexts when useful, and never read terminal contents. |
 | **Projects** | Track each registered repository's current branch and clean/dirty status, automatically poll its configured GitLab/Jenkins/SonarQube targets without a ticket or Session, then open bounded diff, MR, CI, and provider actions. |
-| **Attention** | Show one newest meaningful row per provider result by project, fold read health into its MR/build/quality result, distinguish GitLab MR, Jenkins, and SonarQube with separate icons, use shared green/yellow/red state colors, resurface still-open MRs after the next poll, and retain full history in the private audit. |
+| **Attention** | Show one newest meaningful row per provider result by project, fold read health into its MR/build/quality result, distinguish GitLab MR, Jenkins, and SonarQube with separate icons, use shared green/yellow/red state colors, offer fresh MR/CI context for ticket-linked or project-only rows, resurface still-open MRs after the next poll, and retain full history in the private audit. |
 | **Context composer** | Review fetched evidence, edit the focus, and place one shell-inert line in the chosen terminal with submission disabled. |
 | **Team Prompt Library** | Load versioned data-only prompts from configured local manifests or raw HTTPS Git URLs, search and edit the selected instruction, fill allowlisted session/project/Jira variables, then save one private reviewed snapshot and place its reference without submission. |
 | **Context Basket** | Select multiple Jira, MR, CI, and local Git artifacts, review provenance/freshness/completeness/conflicts together, then place one reference-only bundle without copying or submitting provider content. |
@@ -111,8 +111,8 @@ The installed extension uses the VS Code API and Node built-ins only. It has **z
 | Manifest-covered settings | 13 |
 | Reachable runtime modules checked for cycles/dead exports | 88 |
 | Third-party runtime dependencies | 0 |
-| Automated Node/DOM/board tests | 247 |
-| Built-in runtime coverage | 81.49% lines / 73.41% branches / 86.96% functions |
+| Automated Node/DOM/board tests | 248 |
+| Built-in runtime coverage | 81.59% lines / 73.53% branches / 86.89% functions |
 
 Automated gates also cover the runtime graph, security boundary, context governance, activation surface, provider transitions, private state, credential redaction, and packaged extension contents.
 
@@ -165,7 +165,7 @@ Kronos reads provider credentials from the extension process environment and, wh
 | Jenkins | `JENKINS_URL` | `JENKINS_USER` / `JENKINS_USERNAME`, `JENKINS_API_TOKEN` / `JENKINS_TOKEN`, narrowly scoped `JENKINS_TLS_REJECT_UNAUTHORIZED=false` for a locally trusted corporate endpoint |
 | SonarQube | `SONAR_HOST_URL` or `SONAR_URL`, `SONAR_TOKEN` | project and branch bindings configured per local project |
 
-Use **Kronos: Setup** for guided configuration and **Kronos: Doctor** for readiness checks. They share one readiness snapshot, expose one bounded action per row, and never display credential values. **Open Private Config** creates a private comment-only template when needed. After entering and saving values in a newly created or edited provider environment file, run **Developer: Reload Window** so the extension host loads them, then run Doctor again. Once a registered project has a GitLab ID/path, Jenkins URL, SonarQube key, or branch profile, it becomes the durable polling owner immediately—no Jira link and no terminal Session are required. GitLab polling follows the registered repository's observed branch to a newly opened MR, and can bind the project's sole unambiguous open MR when no branch or Jira context identifies one. **Poll Now** verifies that project-owned monitoring without mutating a provider. Project MR/CI insertion still requires an explicit operator-owned project terminal, but it does not require adding Jira context.
+Use **Kronos: Setup** for guided configuration and **Kronos: Doctor** for readiness checks. They share one readiness snapshot, expose one bounded action per row, and never display credential values. **Open Private Config** creates a private comment-only template when needed. After entering and saving values in a newly created or edited provider environment file, run **Developer: Reload Window** so the extension host loads them, then run Doctor again. Once a registered project has a GitLab ID/path, Jenkins URL, SonarQube key, or branch profile, it becomes the durable polling owner immediately—no Jira link and no terminal Session are required—and Setup/Doctor report that project owner directly. GitLab polling follows the registered repository's observed branch to a newly opened MR, and can bind the project's sole unambiguous open MR when no branch or Jira context identifies one. **Poll Now** verifies that project-owned monitoring without mutating a provider. Project MR browser/insertion actions repeat bounded live discovery instead of trusting an older binding; project-owned Attention rows can open the same editable MR/CI composers. Insertion still requires an explicit operator-owned project terminal, but it does not require adding Jira context.
 
 ### Team Prompt Library
 

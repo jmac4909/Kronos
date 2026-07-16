@@ -42,6 +42,14 @@ export interface AttentionProjectGroup<Entry> {
 export type AttentionActionContext =
   | 'attention_provider'
   | 'attention_repair'
+  | 'attention_provider_project_gitlab'
+  | 'attention_repair_project_gitlab'
+  | 'attention_provider_project_ci'
+  | 'attention_repair_project_ci'
+  | 'attention_provider_project_ticket_gitlab'
+  | 'attention_repair_project_ticket_gitlab'
+  | 'attention_provider_project_ticket_ci'
+  | 'attention_repair_project_ticket_ci'
   | 'attention_provider_ticket'
   | 'attention_repair_ticket'
   | 'attention_provider_ticket_gitlab'
@@ -104,12 +112,23 @@ export function attentionActionContext(
   source: MonitorEventSource,
   ticketKey: string | undefined,
   providerUrl: string | undefined,
+  projectName?: string,
 ): AttentionActionContext {
   const prefix = providerUrl ? 'attention_provider' : 'attention_repair';
-  if (!ticketKey) { return prefix; }
-  if (source === 'gitlab') { return `${prefix}_ticket_gitlab`; }
-  if (source === 'jenkins' || source === 'sonar') { return `${prefix}_ticket_ci`; }
-  return `${prefix}_ticket`;
+  if (projectName && ticketKey) {
+    if (source === 'gitlab') { return `${prefix}_project_ticket_gitlab`; }
+    if (source === 'jenkins' || source === 'sonar') { return `${prefix}_project_ticket_ci`; }
+  }
+  if (ticketKey) {
+    if (source === 'gitlab') { return `${prefix}_ticket_gitlab`; }
+    if (source === 'jenkins' || source === 'sonar') { return `${prefix}_ticket_ci`; }
+    return `${prefix}_ticket`;
+  }
+  if (projectName) {
+    if (source === 'gitlab') { return `${prefix}_project_gitlab`; }
+    if (source === 'jenkins' || source === 'sonar') { return `${prefix}_project_ci`; }
+  }
+  return prefix;
 }
 
 export function attentionEventPresentation(
