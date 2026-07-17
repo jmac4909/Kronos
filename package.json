@@ -302,6 +302,12 @@
         "icon": "$(debug-start)"
       },
       {
+        "command": "kronos.insertAttentionEventContext",
+        "title": "Kronos: Use Attention Event in Prompt",
+        "shortTitle": "Use Event in Prompt",
+        "icon": "$(symbol-keyword)"
+      },
+      {
         "command": "kronos.acknowledgeAttention",
         "title": "Kronos: Clear from Attention",
         "shortTitle": "Clear from Attention",
@@ -582,6 +588,11 @@
           "group": "inline@1"
         },
         {
+          "command": "kronos.insertAttentionEventContext",
+          "when": "viewItem =~ /^attention_(provider|repair).*_event$/",
+          "group": "context@1"
+        },
+        {
           "command": "kronos.acknowledgeAttention",
           "when": "viewItem =~ /^attention_(provider|repair)/",
           "group": "management@1"
@@ -593,22 +604,22 @@
         },
         {
           "command": "kronos.insertGitLabContext",
-          "when": "viewItem =~ /^attention_(provider|repair)_ticket_gitlab$/",
-          "group": "context@1"
+          "when": "viewItem =~ /^attention_(provider|repair)_ticket_gitlab(?:_event)?$/",
+          "group": "context@2"
         },
         {
           "command": "kronos.insertCiContext",
-          "when": "viewItem =~ /^attention_(provider|repair)_ticket_ci$/",
+          "when": "viewItem =~ /^attention_(provider|repair)_ticket_ci(?:_event)?$/",
           "group": "context@2"
         },
         {
           "command": "kronos.insertProjectGitLabContext",
-          "when": "viewItem =~ /^attention_(provider|repair)_project(_ticket)?_gitlab$/",
-          "group": "context@1"
+          "when": "viewItem =~ /^attention_(provider|repair)_project(_ticket)?_gitlab(?:_event)?$/",
+          "group": "context@2"
         },
         {
           "command": "kronos.insertProjectCiContext",
-          "when": "viewItem =~ /^attention_(provider|repair)_project(_ticket)?_ci$/",
+          "when": "viewItem =~ /^attention_(provider|repair)_project(_ticket)?_ci(?:_event)?$/",
           "group": "context@2"
         },
         {

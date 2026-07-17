@@ -65,6 +65,7 @@
         { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "terminal context placement is reentrancy-safe and rejects ambiguous attachment identities" },
         { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "all terminal context reference classes enforce their own private artifact location" },
         { "file": "scripts/run-unit-tests.js", "test": "terminal context insertion is shell-inert and never submits" },
+        { "file": "scripts/run-attention-conditional-tests.js", "test": "Attention event context freezes exactly one supported transition for non-submitting prompt use" },
         { "file": "scripts/run-unit-tests.js", "test": "Jira downloads arbitrary attachment types as private raw files for Claude to inspect" },
         { "file": "scripts/run-prompt-library-tests.js", "test": "prompt manifest parsing is bounded, data-only, redacted, and source-versioned" },
         { "file": "scripts/run-prompt-library-tests.js", "test": "prompt templates fill only allowlisted session variables and preserve unknown fields for review" },
@@ -117,6 +118,7 @@
         { "file": "scripts/run-conditional-unit-tests.js", "test": "GitLab pipeline snapshot persistence covers missing, complete, malformed, and unsafe identities" },
         { "file": "scripts/run-attention-conditional-tests.js", "test": "provider read health maps every bounded failure and operator label without leaking raw errors" },
         { "file": "scripts/run-attention-conditional-tests.js", "test": "provider read fingerprints and incomplete-component lists change only with normalized evidence" },
+        { "file": "scripts/run-attention-conditional-tests.js", "test": "Attention event context freezes exactly one supported transition for non-submitting prompt use" },
         { "file": "scripts/run-attention-conditional-tests.js", "test": "Attention tree groups newest project state, preserves nicknames, and redacts loader failures" },
         { "file": "scripts/run-attention-conditional-tests.js", "test": "Attention rows exhaust primary actions, provider choices, tooltips, and generic severity icons" }
       ],

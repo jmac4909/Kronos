@@ -4735,7 +4735,7 @@ test('extension activation registers the bounded surface and explicit launch com
     const projectMrAttentionItem = attentionProvider.getChildren(registeredProjectAttention)
       .find(item => item.source === 'gitlab' && item.entry.event.metadata?.mergeRequestIid === 77);
     assert.ok(projectMrAttentionItem);
-    assert.equal(projectMrAttentionItem.contextValue, 'attention_provider_project_ticket_gitlab');
+    assert.equal(projectMrAttentionItem.contextValue, 'attention_provider_project_ticket_gitlab_event');
     assert.equal(projectMrAttentionItem.projectName, 'fixture');
     assert.equal(projectMrAttentionItem.projectPath, tempRoot, 'context-menu commands receive the canonical project target');
     assert.deepEqual(
@@ -4818,7 +4818,7 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.equal(groupedProjectItems.length, 2, 'provider transitions from separate sessions share one project group');
     const attentionItem = groupedProjectItems.find(item => item.eventId === 'attention-branch-picker-event');
     assert.deepEqual(attentionItem.providerChoices.map(choice => choice.label), ['feature/two', 'feature/one']);
-    assert.equal(attentionItem.contextValue, 'attention_provider_project_ticket_ci');
+    assert.equal(attentionItem.contextValue, 'attention_provider_project_ticket_ci_event');
     assert.equal(attentionItem.iconPath.id, 'shield');
     assert.equal(attentionItem.iconPath.color.id, 'charts.red');
     assert.match(attentionItem.description, /SonarQube • Failed • /);
@@ -4835,7 +4835,7 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.equal(selectedSonarProject.config.default_branch, 'main', 'Sonar branch selection does not change the GitLab target branch');
     const missingUrlItem = groupedProjectItems.find(item => item.eventId === 'attention-same-project-event');
     assert.equal(missingUrlItem.providerUrl, undefined);
-    assert.equal(missingUrlItem.contextValue, 'attention_repair_project_ticket_gitlab');
+    assert.equal(missingUrlItem.contextValue, 'attention_repair_project_ticket_gitlab_event');
     assert.equal(missingUrlItem.iconPath.id, 'git-pull-request');
     assert.equal(missingUrlItem.iconPath.color.id, 'charts.green');
     assert.match(missingUrlItem.description, /GitLab.*Update/);
@@ -5659,6 +5659,60 @@ test('extension activation registers the bounded surface and explicit launch com
     assert.match(createdTerminals[0].actions.at(-1)[1], /^\[CI-PROJECT-[A-F0-9]{24}\]/);
     assert.deepEqual(workSessions.readWorkSession(standalone.id).ticketKeys, []);
     vscode.window.activeTerminal = reconnectedTerminal;
+
+    const attentionPanelStart = createdWebviewPanels.length;
+    await commandHandlers.get('kronos.insertAttentionEventContext')({
+      eventId: 'attention-branch-picker-event',
+      sessionId: 'stale-attention-session-id',
+      projectName: 'fixture',
+      projectPath: tempRoot,
+    });
+    assert.equal(createdWebviewPanels.length, attentionPanelStart, 'a stale Attention row cannot open a composer');
+    assert.match(warningMessages.at(-1), /event is no longer available/i);
+
+    monitorEventStore.appendMonitorEvent({
+      id: 'attention-gitlab-pipeline-event',
+      sessionId: ticketSession.id,
+      type: 'provider.transition',
+      source: 'gitlab',
+      summary: 'Pipeline evidence stays in the broader merge request context path.',
+      subject: { kind: 'pipeline', id: '987', ticketKey: 'JIRA-123' },
+      after: { state: 'failed', fingerprint: 'attention-gitlab-pipeline-context-refusal' },
+      metadata: { transitionKind: 'pipeline_failed', pipelineId: 987 },
+    });
+    await commandHandlers.get('kronos.insertAttentionEventContext')({
+      eventId: 'attention-gitlab-pipeline-event',
+      sessionId: ticketSession.id,
+      projectName: 'fixture',
+      projectPath: tempRoot,
+    });
+    assert.equal(createdWebviewPanels.length, attentionPanelStart, 'a GitLab pipeline row does not expose MR-only event context');
+    assert.match(warningMessages.at(-1), /GitLab merge requests, Jenkins, and SonarQube/i);
+
+    providerPanelStart = createdWebviewPanels.length;
+    await commandHandlers.get('kronos.insertAttentionEventContext')({
+      eventId: 'attention-branch-picker-event',
+      sessionId: attentionSession.id,
+      source: 'sonar',
+      projectName: 'fixture',
+      projectPath: tempRoot,
+      ticketKey: 'JIRA-321',
+    });
+    providerComposer = createdWebviewPanels.slice(providerPanelStart)
+      .find(panel => panel.viewType === 'kronosContextComposer');
+    assert.ok(providerComposer, 'right-click Attention context must open the editable composer');
+    assert.match(providerComposer.webview.html, /SonarQube quality gate failed for feature\/one/);
+    assert.match(providerComposer.webview.html, /only the selected retained Attention transition/i);
+    assert.doesNotMatch(providerComposer.webview.html, /Jenkins #32 SUCCESS|coverage: 91\.2/);
+    providerWrites = reconnectedActions.length;
+    await providerComposer.receive({ command: 'insertDraft', focus: 'Use only this SonarQube transition.' });
+    assert.equal(reconnectedActions.length, providerWrites + 1);
+    assert.equal(reconnectedActions.at(-1)[2], false, 'Attention event placement must not submit the terminal line');
+    assert.match(reconnectedActions.at(-1)[1], /^\[ATTENTION-SONAR-[A-F0-9]{24}\]/);
+    const attentionArtifact = workSessions.readWorkSession(ticketSession.id).artifacts
+      .find(artifact => artifact.kind === 'attention-event');
+    assert.ok(attentionArtifact, 'the exact Attention event artifact is retained on the chosen Session');
+    assert.match(attentionArtifact.promptPath, /attention-event-context[/\\]ATTENTION-SONAR-[A-F0-9]{24}/);
 
     const basketPanelStart = createdWebviewPanels.length;
     await commandHandlers.get('kronos.openContextBasket')();

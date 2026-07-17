@@ -20,6 +20,7 @@ import { normalizeProviderPublicUrl } from '../services/providerUrls';
 import { providerBindingsForEvent } from '../services/providerBindingReconciliation';
 import {
   attentionActionContext,
+  attentionEventCanUsePromptContext,
   attentionEventPresentation,
   attentionProjectGroupIdentity,
   attentionProviderIconId,
@@ -243,12 +244,15 @@ export class AttentionEventTreeItem extends vscode.TreeItem implements Attention
     };
 
     this.id = `attention-event:${entry.event.id}`;
-    this.contextValue = attentionActionContext(
+    const actionContext = attentionActionContext(
       this.source,
       this.ticketKey,
       this.providerUrl,
       this.projectName,
     );
+    this.contextValue = attentionEventCanUsePromptContext(entry.event)
+      ? `${actionContext}_event`
+      : actionContext;
     this.description = presentation.description;
     this.tooltip = eventTooltip(entry);
     this.iconPath = eventIcon(entry.event);
@@ -329,7 +333,9 @@ function eventTooltip(entry: AttentionEntry): string {
     `Observed: ${formatDateTimeLabel(presentation.observedAt, 'Unknown')}`,
     `Last changed: ${formatDateTimeLabel(presentation.changedAt, 'Unknown')}`,
     `Select to ${primaryAction}.`,
-    'Right-click for available context, history, and Clear from Attention.',
+    attentionEventCanUsePromptContext(event)
+      ? 'Right-click to use this exact event in a prompt, review broader context, open history, or Clear from Attention.'
+      : 'Right-click for available context, history, and Clear from Attention.',
     `After clearing: ${event.source === 'gitlab' && event.subject?.kind === 'merge-request' ? 'an open merge request returns after the next successful check; merged or closed requests stay cleared' : 'the item stays cleared until its state changes'}`,
   ];
   for (const [key, label] of METADATA_TOOLTIP_FIELDS) {

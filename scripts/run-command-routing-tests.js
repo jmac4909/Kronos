@@ -62,7 +62,7 @@ test('runtime dependency surface is Node and VS Code only', () => {
   const router = fs.readFileSync(path.join(root, 'src', 'services', 'terminalFirstCommandRouter.ts'), 'utf8');
   assert.doesNotMatch(runtime, /child_process|createTerminal|terminal\.dispose\s*\(/);
   assert.equal((runtime.match(/registerCommand\(/g) || []).length, 1, 'runtime delegates through one audited registrar');
-  assert.equal((router.match(/route\('kronos\./g) || []).length, 41, 'router owns the exact command inventory');
+  assert.equal((router.match(/route\('kronos\./g) || []).length, 42, 'router owns the exact command inventory');
   assert.equal(crypto.createHash('sha256').update(runtime).update(router).digest('hex').length, 64);
 });
 

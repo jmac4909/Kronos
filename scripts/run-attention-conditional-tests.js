@@ -12,6 +12,8 @@ test.after(() => fs.rmSync(tempRoot, { recursive: true, force: true }));
 
 const providerReadHealth = require('../out/services/providerReadHealth.js');
 const monitorEvents = require('../out/services/monitorEventStore.js');
+const attentionEventContexts = require('../out/services/attentionEventContextStore.js');
+const terminalContextInsertion = require('../out/services/terminalContextInsertion.js');
 
 const vscode = createVscodeMock();
 const originalLoad = Module._load;
@@ -84,6 +86,74 @@ test('provider read fingerprints and incomplete-component lists change only with
   assert.deepEqual(providerReadHealth.sonarIncompleteReadComponents({
     completeness: { qualityGateComplete: true, measuresComplete: true, issuesComplete: true },
   }), []);
+});
+
+test('Attention event context freezes exactly one supported transition for non-submitting prompt use', () => {
+  const event = transitionEvent(
+    'event-context-mr',
+    'session-context-mr',
+    '2026-07-16T12:00:00.000Z',
+    'gitlab',
+    'changes_requested',
+    {
+      summary: 'MR !77 has requested changes.',
+      subject: { kind: 'merge-request', id: '77', project: 'Application', ticketKey: 'ATTN-77' },
+      before: { state: 'approved' },
+      after: { state: 'changes-requested' },
+      metadata: { transitionKind: 'changes_requested', mergeRequestIid: 77, unresolvedDiscussionCount: 2 },
+    },
+  );
+  const context = attentionEventContexts.buildAttentionEventPromptContext({
+    ...event,
+    artifactPath: path.join(tempRoot, 'prior-context', 'prompt.md'),
+  }, {
+    projectName: 'Application',
+    ticketKey: 'ATTN-77',
+  });
+  assert.equal(context.source, 'gitlab');
+  assert.equal(context.provider, 'GitLab');
+  assert.equal(context.event.id, event.id);
+  assert.equal(context.event.artifactPath, undefined, 'an exact event snapshot cannot recursively retain another artifact');
+  assert.equal(context.headline, 'ATTN-77 MR !77 has requested changes.');
+  const artifactRoot = path.join(tempRoot, 'event-context-artifacts');
+  const artifact = attentionEventContexts.writeAttentionEventContextArtifacts(context, { kronosDir: artifactRoot });
+  const repeated = attentionEventContexts.writeAttentionEventContextArtifacts(context, { kronosDir: artifactRoot });
+  assert.equal(repeated.promptPath, artifact.promptPath, 'the same retained transition is content-addressed once');
+  assert.match(artifact.contextId, /^ATTENTION-GITLAB-[A-F0-9]{24}$/);
+  assert.equal(fs.statSync(artifact.promptPath).mode & 0o777, 0o600);
+  const prompt = fs.readFileSync(artifact.promptPath, 'utf8');
+  assert.match(prompt, /exactly one previously retained Attention transition/i);
+  assert.match(prompt, /event-context-mr/);
+  assert.match(prompt, /unresolvedDiscussionCount/);
+  assert.doesNotMatch(prompt, /event-context-other/);
+  const reference = terminalContextInsertion.buildAttentionEventContextReference(artifact.contextId, artifact.promptPath);
+  assert.equal(terminalContextInsertion.isSafeTerminalContextReference(reference), true);
+  assert.match(reference, /^\[ATTENTION-GITLAB-[A-F0-9]{24}\] Read exact Attention event context file /);
+
+  assert.doesNotThrow(() => attentionEventContexts.buildAttentionEventPromptContext({
+    ...event,
+    id: 'event-context-jenkins',
+    source: 'jenkins',
+    subject: { kind: 'build', id: '32' },
+  }));
+  assert.doesNotThrow(() => attentionEventContexts.buildAttentionEventPromptContext({
+    ...event,
+    id: 'event-context-sonar',
+    source: 'sonar',
+    subject: { kind: 'quality-gate', id: 'application:main' },
+  }));
+  assert.throws(
+    () => attentionEventContexts.buildAttentionEventPromptContext({
+      ...event,
+      id: 'event-context-pipeline',
+      subject: { kind: 'pipeline', id: '412' },
+    }),
+    /Only GitLab merge-request, Jenkins, and SonarQube/,
+  );
+  assert.throws(
+    () => attentionEventContexts.writeAttentionEventContextArtifacts({ ...context, source: 'sonar' }, { kronosDir: artifactRoot }),
+    /unsupported or mismatched provider source/,
+  );
 });
 
 test('monitor event ledger round-trips full records, filters independently, and acknowledges once', () => {
@@ -240,7 +310,7 @@ test('Attention tree groups newest project state, preserves nicknames, and redac
   assert.equal(rows.length, 1);
   assert.equal(rows[0].command.command, 'kronos.openProvider');
   assert.equal(rows[0].providerUrl, 'https://gitlab.example/group/application/-/merge_requests/77');
-  assert.match(rows[0].tooltip, /Right-click for available context, history, and Clear from Attention\./);
+  assert.match(rows[0].tooltip, /Right-click to use this exact event in a prompt/);
   assert.equal(provider.getTreeItem(rows[0]), rows[0]);
   assert.deepEqual(provider.getChildren(rows[0]), []);
   provider.refresh();
@@ -325,7 +395,7 @@ test('Attention rows exhaust primary actions, provider choices, tooltips, and ge
     providerUrl: target.providerUrl,
     providerChoices: choices,
   });
-  assert.equal(row.contextValue, 'attention_provider_project_ticket_gitlab');
+  assert.equal(row.contextValue, 'attention_provider_project_ticket_gitlab_event');
   assert.deepEqual(row.command.arguments[0].providerChoices, choices);
   assert.equal(row.command.arguments[0].projectName, 'Application');
   assert.equal(row.command.arguments[0].projectPath, '/workspace/application');

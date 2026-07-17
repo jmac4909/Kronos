@@ -460,6 +460,10 @@ test('all terminal context reference classes enforce their own private artifact 
       'GIT-Kronos.main',
       path.join(tempRoot, 'GIT-Kronos.main', `prompt-${hash}.md`),
     ),
+    terminalContextInsertion.buildAttentionEventContextReference(
+      `ATTENTION-SONAR-${'C'.repeat(24)}`,
+      path.join(tempRoot, `ATTENTION-SONAR-${'C'.repeat(24)}`, `prompt-${hash}.md`),
+    ),
     terminalContextInsertion.buildContextBasketTerminalReference(
       `BASKET-${'A'.repeat(24)}`,
       path.join(tempRoot, 'basket-context', `prompt-${hash}.md`),

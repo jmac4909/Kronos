@@ -76,6 +76,15 @@ export function buildProjectGitContextReference(contextIdValue: string, promptPa
   return reference;
 }
 
+export function buildAttentionEventContextReference(contextIdValue: string, promptPath: string): string {
+  const contextId = normalizeAttentionEventContextId(contextIdValue);
+  const absolutePromptPath = path.resolve(promptPath);
+  assertShellInertPromptPath(absolutePromptPath);
+  const reference = `[${contextId}] Read exact Attention event context file ${JSON.stringify(absolutePromptPath)}${REFERENCE_SUFFIX}`;
+  assertSafeTerminalContextReference(reference);
+  return reference;
+}
+
 export function buildContextBasketTerminalReference(basketIdValue: string, promptPath: string): string {
   const basketId = normalizeBasketContextId(basketIdValue);
   const absolutePromptPath = path.resolve(promptPath);
@@ -193,6 +202,7 @@ function parseTerminalContextReference(reference: string):
   | { kind: 'ci'; key: string; promptPath: string }
   | { kind: 'ci-project'; ownerDirectory: string; promptPath: string }
   | { kind: 'git'; contextId: string; promptPath: string }
+  | { kind: 'attention-event'; contextId: string; promptPath: string }
   | { kind: 'basket'; basketId: string; promptPath: string }
   | { kind: 'prompt-library'; promptId: string; promptPath: string } {
   if (!reference || reference.length > MAX_REFERENCE_LENGTH || reference !== reference.trim()) {
@@ -245,6 +255,18 @@ function parseTerminalContextReference(reference: string):
       throw new Error('Git terminal context reference does not point to the expected prompt artifact.');
     }
     return { kind: 'git', contextId, promptPath };
+  }
+
+  const attentionEventPrefix = /^\[(ATTENTION-(?:GITLAB|JENKINS|SONAR)-[A-F0-9]{24})\] Read exact Attention event context file /.exec(reference);
+  if (attentionEventPrefix && reference.endsWith(REFERENCE_SUFFIX)) {
+    const contextIdValue = attentionEventPrefix[1];
+    if (!contextIdValue) { throw new Error('Attention event terminal reference has no context id.'); }
+    const contextId = normalizeAttentionEventContextId(contextIdValue);
+    const promptPath = parsePromptPathLiteral(reference, attentionEventPrefix[0].length);
+    if (path.basename(path.dirname(promptPath)) !== contextId) {
+      throw new Error('Attention event terminal reference does not point to the expected prompt artifact.');
+    }
+    return { kind: 'attention-event', contextId, promptPath };
   }
 
   const basketPrefix = /^\[(BASKET-[A-F0-9]{24})\] Read private context basket file /.exec(reference);
@@ -315,6 +337,14 @@ function normalizeGitContextId(value: string): string {
   const normalized = value.trim();
   if (!/^GIT-[A-Za-z0-9_.-]{1,100}$/.test(normalized)) {
     throw new Error('Git context id is missing or invalid.');
+  }
+  return normalized;
+}
+
+function normalizeAttentionEventContextId(value: string): string {
+  const normalized = value.trim().toUpperCase();
+  if (!/^ATTENTION-(?:GITLAB|JENKINS|SONAR)-[A-F0-9]{24}$/.test(normalized)) {
+    throw new Error('Attention event context id is missing or invalid.');
   }
   return normalized;
 }

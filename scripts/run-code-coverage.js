@@ -6,6 +6,7 @@ const { testSuiteFiles } = require('./test-suite-files.js');
 const root = path.resolve(__dirname, '..');
 const COVERAGE_THRESHOLDS = Object.freeze({ lines: 87.3, branches: 78.4, functions: 90.2 });
 const CRITICAL_FILE_THRESHOLDS = Object.freeze({
+  'attentionEventContextStore.js': Object.freeze({ lines: 94, branches: 76, functions: 80 }),
   'ciMonitorStore.js': Object.freeze({ lines: 94, branches: 83.5, functions: 82 }),
   'contextBasketStore.js': Object.freeze({ lines: 90, branches: 78, functions: 93 }),
   'dateValues.js': Object.freeze({ lines: 100, branches: 100, functions: 100 }),

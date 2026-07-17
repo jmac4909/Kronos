@@ -865,11 +865,13 @@ test('Attention action language is read-only or local and explains clear versus 
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const commands = new Map(manifest.contributes.commands.map(command => [command.command, command.title]));
   assert.equal(commands.get('kronos.acknowledgeAttention'), 'Kronos: Clear from Attention');
+  assert.equal(commands.get('kronos.insertAttentionEventContext'), 'Kronos: Use Attention Event in Prompt');
   const menus = manifest.contributes.menus['view/item/context'].filter(menu => String(menu.when).includes('attention_'));
   assert.ok(menus.some(menu => menu.command === 'kronos.openWorkSessionAudit'));
   assert.ok(menus.some(menu => menu.command === 'kronos.openProvider' && menu.when === 'viewItem =~ /^attention_provider/'));
-  assert.ok(menus.some(menu => menu.command === 'kronos.insertGitLabContext' && menu.when.endsWith('_ticket_gitlab$/')));
-  assert.ok(menus.some(menu => menu.command === 'kronos.insertCiContext' && menu.when.endsWith('_ticket_ci$/')));
+  assert.ok(menus.some(menu => menu.command === 'kronos.insertAttentionEventContext' && menu.when.endsWith('_event$/')));
+  assert.ok(menus.some(menu => menu.command === 'kronos.insertGitLabContext' && menu.when.includes('_ticket_gitlab')));
+  assert.ok(menus.some(menu => menu.command === 'kronos.insertCiContext' && menu.when.includes('_ticket_ci')));
   assert.ok(menus.some(menu => menu.command === 'kronos.openTicketWorkspace' && menu.when.includes('(project_)?ticket')));
   assert.ok(menus.some(menu => menu.command === 'kronos.insertProjectGitLabContext' && menu.when.includes('project(_ticket)?_gitlab')));
   assert.ok(menus.some(menu => menu.command === 'kronos.insertProjectCiContext' && menu.when.includes('project(_ticket)?_ci')));

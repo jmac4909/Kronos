@@ -107,6 +107,15 @@ export function attentionTicketKey(
   return session.ticketKeys.length === 1 ? session.ticketKeys[0] : undefined;
 }
 
+/** Exact-event prompt context is intentionally narrower than full provider context. */
+export function attentionEventCanUsePromptContext(event: MonitorEvent): event is MonitorEvent & {
+  source: 'gitlab' | 'jenkins' | 'sonar';
+} {
+  if (event.type !== 'provider.transition') { return false; }
+  if (event.source === 'jenkins' || event.source === 'sonar') { return true; }
+  return event.source === 'gitlab' && event.subject?.kind === 'merge-request';
+}
+
 /** Encodes only the context-menu actions that are valid for this current row. */
 export function attentionActionContext(
   source: MonitorEventSource,

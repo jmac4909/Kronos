@@ -38,6 +38,7 @@ const EXPECTED_COMMANDS = [
   'kronos.configureProjectIntegrations',
   'kronos.pauseWorkSessionMonitoring',
   'kronos.resumeWorkSessionMonitoring',
+  'kronos.insertAttentionEventContext',
   'kronos.acknowledgeAttention',
   'kronos.openProvider',
   'kronos.setup',

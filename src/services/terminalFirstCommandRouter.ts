@@ -48,6 +48,7 @@ export interface TerminalFirstCommandHandlers {
     configureProjectIntegrations: TerminalFirstCommandHandler;
   };
   attention: {
+    insertAttentionEventContext: TerminalFirstCommandHandler;
     acknowledgeAttention: TerminalFirstCommandHandler;
     openProvider: TerminalFirstCommandHandler;
   };
@@ -110,6 +111,7 @@ const COMMAND_ROUTES = Object.freeze([
   route('kronos.configureProjectIntegrations', 'projects', 'configureProjectIntegrations'),
   route('kronos.pauseWorkSessionMonitoring', 'sessions', 'pauseWorkSessionMonitoring'),
   route('kronos.resumeWorkSessionMonitoring', 'sessions', 'resumeWorkSessionMonitoring'),
+  route('kronos.insertAttentionEventContext', 'attention', 'insertAttentionEventContext'),
   route('kronos.acknowledgeAttention', 'attention', 'acknowledgeAttention'),
   route('kronos.openProvider', 'attention', 'openProvider'),
   route('kronos.setup', 'operations', 'setup'),

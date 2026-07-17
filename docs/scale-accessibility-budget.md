@@ -13,6 +13,7 @@ This is the checked G17 budget for the terminal-first preview. Limits are safety
 | Project discovery | 50 roots, depth 5, 500 results, 2,000 entries per directory, 5,000 visited directories | Results stop at the configured bound and report truncation. |
 | Work sessions | 200 rows by default, 1,000 hard maximum; each record has 64 terminals, 64 provider bindings, 200 artifacts, and 32 warnings | Views load newest records first; terminal contents are never read. |
 | Attention ledger | 2,000 newest ledger rows, 50 MiB read ceiling, 16 KiB per event | Only the newest unacknowledged state per logical provider stream renders. |
+| Exact Attention event context | One retained transition; 32 KiB JSON and 48 KiB Markdown | Right-click review freezes only the selected GitLab MR, Jenkins, or SonarQube event and inserts one inert reference without a provider read. |
 | Session history | Caller reads 1,000 newest events; Markdown sorts normalized event times and renders the newest 500 | A truncation line states how many history items were omitted; caller-owned input order is unchanged. |
 | Local Git | 500 changed paths and 512 KiB diff text | Summary renders before the immutable full bounded artifact reference. |
 | Context composer | 20 evidence summaries, 20 warnings, 2,000 operator-focus characters | Full evidence stays in private artifacts; insertion is one inert non-submitting reference. |

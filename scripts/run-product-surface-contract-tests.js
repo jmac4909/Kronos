@@ -141,6 +141,7 @@ test('row context menus contain only actions scoped to the selected row', () => 
   assert.equal(commandsById.get('kronos.reattachWorkSessionTerminal').shortTitle, 'Connect Focused Terminal');
   assert.equal(commandsById.get('kronos.detachWorkSessionTerminal').shortTitle, 'Disconnect Terminal');
   assert.equal(commandsById.get('kronos.acknowledgeAttention').shortTitle, 'Clear from Attention');
+  assert.equal(commandsById.get('kronos.insertAttentionEventContext').shortTitle, 'Use Event in Prompt');
   assert.equal(commandsById.get('kronos.insertJiraContext').shortTitle, 'Review Jira Ticket');
   assert.equal(commandsById.get('kronos.insertGitLabContext').shortTitle, 'Review Merge Request');
   assert.equal(commandsById.get('kronos.insertCiContext').shortTitle, 'Review Build & Quality');
@@ -168,6 +169,9 @@ test('row context menus contain only actions scoped to the selected row', () => 
     .sort((left, right) => left.group.localeCompare(right.group));
   assert.deepEqual(attentionInline.map(item => item.command), ['kronos.openProvider']);
   assert.equal(attentionInline[0].group, 'inline@1');
+  const eventContextMenu = itemMenus.find(item => item.command === 'kronos.insertAttentionEventContext');
+  assert.equal(eventContextMenu.when, 'viewItem =~ /^attention_(provider|repair).*_event$/');
+  assert.equal(eventContextMenu.group, 'context@1');
   assert.equal(itemMenus.find(item => item.command === 'kronos.acknowledgeAttention').group, 'management@1');
 });
 

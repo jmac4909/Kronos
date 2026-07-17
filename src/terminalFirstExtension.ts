@@ -46,6 +46,7 @@ import {
   type KronosCiProviderContext,
 } from './services/ciContextStore';
 import {
+  buildAttentionEventContextReference,
   buildCiContextReference,
   buildGitLabMergeRequestContextReference,
   buildJiraContextReference,
@@ -58,6 +59,11 @@ import {
   type TerminalContextAttachment,
   type TerminalContextPlacement,
 } from './services/terminalContextInsertion';
+import {
+  buildAttentionEventPromptContext,
+  writeAttentionEventContextArtifacts,
+  type AttentionEventPromptContext,
+} from './services/attentionEventContextStore';
 import { readProjectGitEvidence, renderProjectGitEvidence } from './services/vscodeGitReadService';
 import {
   PROJECT_GIT_STATE_ACTIONS,
@@ -104,6 +110,7 @@ import {
   acknowledgeMonitorEvent,
   appendMonitorEvent,
   listMonitorEvents,
+  readMonitorEvent,
 } from './services/monitorEventStore';
 import { buildWorkSessionAuditMarkdown } from './services/workSessionAuditView';
 import {
@@ -194,7 +201,10 @@ import {
 } from './services/operationsReadiness';
 import { providerReadiness } from './services/providerReadiness';
 import { currentProviderReadDiagnostics } from './services/providerReadDiagnostics';
-import { attentionEventHeadline } from './services/attentionPresentation';
+import {
+  attentionEventCanUsePromptContext,
+  attentionEventHeadline,
+} from './services/attentionPresentation';
 import { WorkRefreshCoordinator } from './services/workRefreshCoordinator';
 import {
   CONTEXT_COMPOSER_SCRIPT,
@@ -549,6 +559,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
         configureProjectIntegrations: async argument => this.configureProjectIntegrations(argument),
       },
       attention: {
+        insertAttentionEventContext: async argument => this.insertAttentionEventContext(argument),
         acknowledgeAttention: async argument => this.acknowledgeAttention(argument),
         openProvider: async argument => this.openProvider(argument),
       },
@@ -3685,6 +3696,131 @@ class TerminalFirstRuntime implements vscode.Disposable {
     if (enabled) { void this.pollProviders(false); }
   }
 
+  private async insertAttentionEventContext(argument: unknown): Promise<void> {
+    const eventId = stringProperty(argument, 'eventId');
+    const expectedSessionId = stringProperty(argument, 'sessionId') || stringProperty(argument, 'workSessionId');
+    if (!eventId || !expectedSessionId) {
+      void vscode.window.showWarningMessage('Right-click a supported Attention item to use that exact event in a prompt.');
+      return;
+    }
+    let event: ReturnType<typeof readMonitorEvent>;
+    try { event = readMonitorEvent(eventId); }
+    catch { event = null; }
+    if (!event || event.sessionId !== expectedSessionId) {
+      void vscode.window.showWarningMessage('That Attention event is no longer available. Refresh Attention and choose the current row.');
+      return;
+    }
+    if (!attentionEventCanUsePromptContext(event)) {
+      void vscode.window.showWarningMessage('Exact event context is available for GitLab merge requests, Jenkins, and SonarQube Attention rows.');
+      return;
+    }
+
+    let selection: TerminalSelection | undefined;
+    let project: RegisteredProjectCommandTarget | undefined;
+    const requestedProject = projectTargetStringProperty(argument, 'projectName')
+      || projectTargetStringProperty(argument, 'projectPath');
+    if (requestedProject) {
+      project = this.resolveRegisteredProject(argument);
+      if (!project) { return; }
+      selection = await this.chooseProjectInsertionTerminal(project, `${event.source} Attention event context`);
+    } else {
+      const ticketKey = stringProperty(argument, 'ticketKey') || event.subject?.ticketKey;
+      if (ticketKey) {
+        let eventSession: WorkSessionRecord | null = null;
+        try { eventSession = readWorkSession(event.sessionId); } catch { eventSession = null; }
+        selection = await this.chooseInsertionTerminal(
+          ticketKey,
+          eventSession?.status === 'active' ? eventSession.id : undefined,
+        );
+      } else {
+        let eventSession: WorkSessionRecord | null = null;
+        try { eventSession = readWorkSession(event.sessionId); } catch { eventSession = null; }
+        if (eventSession?.status === 'active') {
+          const live = await this.chooseLiveTerminal(eventSession.id);
+          if (live) {
+            selection = { terminal: live.terminal, binding: live.binding, workSession: eventSession };
+          }
+        }
+      }
+    }
+    if (!selection) {
+      void vscode.window.showWarningMessage('Connect a terminal for this Attention event before inserting its context.');
+      return;
+    }
+
+    const contextProjectName = project?.projectName || selection.workSession?.projectName;
+    const contextTicketKey = stringProperty(argument, 'ticketKey') || event.subject?.ticketKey;
+    const context = buildAttentionEventPromptContext(event, {
+      ...(contextProjectName ? { projectName: contextProjectName } : {}),
+      ...(contextTicketKey ? { ticketKey: contextTicketKey } : {}),
+    });
+    let artifact: ReturnType<typeof writeAttentionEventContextArtifacts>;
+    try {
+      artifact = writeAttentionEventContextArtifacts(context);
+    } catch (error: unknown) {
+      const detail = boundedOperationFailure(error, 'Kronos could not save the private Attention event context.').display;
+      this.log('Attention event context artifact write failed.', detail);
+      void vscode.window.showErrorMessage(detail);
+      return;
+    }
+
+    this.openContextComposer({
+      key: `attention-event:${event.id}`,
+      panelTitle: `${context.provider} — Review exact event`,
+      title: context.headline,
+      subtitle: 'This contains only the selected retained Attention transition. No broader provider context was fetched. Review it, adjust the focus, then add it without pressing Enter.',
+      sourceLabel: `${context.provider} event • ${context.severity}`,
+      reference: buildAttentionEventContextReference(artifact.contextId, artifact.promptPath),
+      promptPath: artifact.promptPath,
+      suggestedFocus: 'Use this exact Attention transition as context. Do not assume broader provider state that is not present in the saved event.',
+      evidence: attentionEventComposerEvidence(context),
+      warnings: [],
+      selection,
+      onInserted: () => {
+        const managedSession = selection.workSession;
+        const outcome = finalizeInsertedContext({
+          operation: `${context.provider} Attention event placement`,
+          providerRead: {
+            state: 'skipped',
+            detail: 'The selected retained Attention transition was used without refreshing its provider.',
+          },
+          sessionUpdate: managedSession ? () => recordWorkSessionContextArtifact(managedSession.id, {
+            id: `attention-${artifact.contentSha256.slice(0, 24)}`,
+            kind: 'attention-event',
+            label: `[${artifact.contextId}] ${context.provider} Attention event`,
+            promptPath: artifact.promptPath,
+            fetchedAt: event.at,
+            complete: true,
+            warnings: [],
+            contentSha256: artifact.promptSha256,
+          }) : undefined,
+          auditAppend: managedSession ? updatedSession => {
+            const session = updatedSession || managedSession;
+            appendMonitorEvent({
+              sessionId: session.id,
+              type: 'context.inserted',
+              source: 'kronos',
+              summary: `${workSessionEventContext(session).label} exact ${context.provider} Attention event reference inserted without submission.`,
+              subject: { kind: 'attention-event', id: event.id, ...workSessionTicketMetadata(session) },
+              artifactPath: artifact.promptPath,
+              metadata: {
+                submitted: false,
+                transitionEventId: event.id,
+                artifactSha256: artifact.promptSha256,
+              },
+            });
+          } : undefined,
+        });
+        this.refreshTerminalFirstViews();
+        if (outcome.failed) { return outcome; }
+        void vscode.window.showInformationMessage(
+          `Inserted [${artifact.contextId}] into ${selection.terminal.name} without submitting it. Review the terminal line, then press Enter yourself.`,
+        );
+        return outcome;
+      },
+    });
+  }
+
   private async acknowledgeAttention(argument: unknown): Promise<void> {
     const eventId = stringProperty(argument, 'eventId');
     const sessionId = stringProperty(argument, 'sessionId') || stringProperty(argument, 'workSessionId');
@@ -4525,6 +4661,40 @@ function contextSnapshotStep(complete: boolean): OperationStageInput {
       ? 'The normalized bounded evidence snapshot is complete.'
       : 'The normalized snapshot retains the last valid or available evidence plus explicit warnings.',
   };
+}
+
+function attentionEventComposerEvidence(context: AttentionEventPromptContext): ContextComposerEvidenceItem[] {
+  const event = context.event;
+  const evidence: ContextComposerEvidenceItem[] = [{
+    label: 'Exact retained transition',
+    detail: [
+      `Provider: ${context.provider}`,
+      `Severity: ${context.severity}`,
+      `Observed: ${event.at}`,
+      context.projectName ? `Project: ${context.projectName}` : '',
+      context.ticketKey ? `Jira: ${context.ticketKey}` : '',
+    ].filter(Boolean).join(' • '),
+  }];
+  if (event.subject) {
+    evidence.push({
+      label: 'Subject',
+      detail: `${event.subject.kind}: ${event.subject.id}`,
+    });
+  }
+  if (event.before || event.after) {
+    evidence.push({
+      label: 'State change',
+      detail: `${event.before?.state || 'not recorded'} → ${event.after?.state || 'not recorded'}`,
+    });
+  }
+  const metadata = Object.entries(event.metadata || {}).slice(0, 16);
+  if (metadata.length > 0) {
+    evidence.push({
+      label: 'Event details',
+      detail: metadata.map(([key, value]) => `${key}: ${String(value)}`).join('\n'),
+    });
+  }
+  return evidence;
 }
 
 function jiraComposerEvidence(context: JiraTicketContext): ContextComposerEvidenceItem[] {
