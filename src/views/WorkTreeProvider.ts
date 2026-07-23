@@ -222,8 +222,8 @@ function buildWorkTicketTooltip(
     `Local project: ${safeSingleLine(localProject?.displayName || localProject?.name || ticket.linked_local_project, 200) || 'Not linked'}`,
   ];
   if (localProject) {
-    lines.push(`Launch directory: ${localProject.path}`);
-    lines.push(`Git branch: ${localProject.branch || 'unavailable'}`);
+    lines.push(`Launch directory: ${safeSingleLine(localProject.path, 500) || 'unavailable'}`);
+    lines.push(`Git branch: ${safeSingleLine(localProject.branch, 300) || 'unavailable'}`);
   }
   if (ticket.mr) {
     lines.push(`Merge request !${ticket.mr.iid}: ${safeSingleLine(ticket.mr.state, 80)} / ${safeSingleLine(ticket.mr.review_status, 120)}`);
@@ -250,7 +250,7 @@ function safeSingleLine(value: unknown, maxLength: number): string {
 }
 
 function comparableStatus(value: string): string {
-  return safeSingleLine(value, 200).toLocaleLowerCase();
+  return safeSingleLine(value, 200).toLowerCase();
 }
 
 class WorkTreeMessageItem extends vscode.TreeItem {

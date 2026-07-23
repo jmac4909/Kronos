@@ -340,13 +340,13 @@ function providerName(provider: WorkSessionRecord['providerBindings'][number]['p
 function providerResource(resource: string, subjectId: string): string {
   const name = singleLine(resource, 120).replace(/[-_]+/g, ' ').replace(/^./, value => value.toUpperCase()) || 'Source';
   const id = singleLine(subjectId, 300);
-  return `${name}${id ? name.toLocaleLowerCase() === 'merge request' && /^[1-9][0-9]*$/.test(id) ? ` !${id}` : ` ${id}` : ''}`;
+  return `${name}${id ? name.toLowerCase() === 'merge request' && /^[1-9][0-9]*$/.test(id) ? ` !${id}` : ` ${id}` : ''}`;
 }
 
 function displayState(value: unknown): string {
   const normalized = singleLine(value, 160).replace(/[_/.-]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (!normalized) { return 'Unknown'; }
-  if (normalized.toLocaleLowerCase() === 'opened') { return 'Open'; }
+  if (normalized.toLowerCase() === 'opened') { return 'Open'; }
   return `${normalized.charAt(0).toLocaleUpperCase()}${normalized.slice(1)}`;
 }
 

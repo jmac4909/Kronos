@@ -427,7 +427,7 @@ function normalizeTicketKey(value: unknown): string {
 }
 
 function filterToken(value: unknown): string {
-  return safeSingleLine(value, 2_000).toLocaleLowerCase();
+  return safeSingleLine(value, 2_000).toLowerCase();
 }
 
 function safeSingleLine(value: unknown, maxLength: number): string {

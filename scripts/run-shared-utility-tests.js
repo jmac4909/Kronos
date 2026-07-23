@@ -1667,3 +1667,27 @@ test('work ticket filter matrices cover normalization, matching, completion pref
   assert.deepEqual(options.labels, ['Backend', 'Bug']);
   assert.deepEqual(options.jiraStatuses, ['Done', 'Open']);
 });
+
+test('work filter matching is deterministic when the host locale has special casing rules', () => {
+  const ticket = {
+    summary: 'Invoice ingestion', description: 'Inspect identity matching', jira_status: 'In Progress',
+    jira_project_key: 'INVOICE', linked_local_project: 'INVOICE', labels: ['INVOICE'], source: 'jira',
+    mr: null, build: null,
+  };
+  const originalLocaleLowerCase = String.prototype.toLocaleLowerCase;
+  String.prototype.toLocaleLowerCase = function localeSensitiveLowerCaseFixture() {
+    return String(this).replaceAll('I', 'ı').toLowerCase();
+  };
+  try {
+    assert.equal(workTicketFilters.workTicketMatchesFilter('INVOICE-1', ticket, {
+      query: 'invoice',
+      jiraProject: 'invoice',
+      localProject: 'invoice',
+      label: 'invoice',
+      jiraStatus: 'in progress',
+      completion: 'all',
+    }), true);
+  } finally {
+    String.prototype.toLocaleLowerCase = originalLocaleLowerCase;
+  }
+});

@@ -188,7 +188,7 @@ export function planLocalProjectRegistrations(
     .filter((entry): entry is [string, Project & { path: string }] => Boolean(entry[1].path))
     .map(([name, project]) => [pathKey(project.path), { name, path: project.path }]));
   const names = new Map(Object.entries(state.projects)
-    .map(([name, project]) => [name.toLocaleLowerCase(), project.path ? pathKey(project.path) : '']));
+    .map(([name, project]) => [name.toLowerCase(), project.path ? pathKey(project.path) : '']));
   const planned: LocalProjectRegistrationCandidate[] = [];
   const plannedPaths = new Set<string>();
   for (const candidate of candidates.slice(0, MAX_LOCAL_PROJECTS)) {
@@ -211,12 +211,12 @@ export function planLocalProjectRegistrations(
     const base = safeSingleLine(candidate.name, 200) || 'Project';
     let name = base;
     let suffix = 2;
-    while (names.has(name.toLocaleLowerCase()) && names.get(name.toLocaleLowerCase()) !== canonicalKey) {
+    while (names.has(name.toLowerCase()) && names.get(name.toLowerCase()) !== canonicalKey) {
       const suffixText = ` (${suffix})`;
       name = `${base.slice(0, Math.max(1, 200 - suffixText.length))}${suffixText}`;
       suffix += 1;
     }
-    names.set(name.toLocaleLowerCase(), canonicalKey);
+    names.set(name.toLowerCase(), canonicalKey);
     planned.push({ name, path: canonicalPath });
   }
   return planned;
@@ -574,7 +574,7 @@ function pathKey(value: string): string {
   let normalized = path.normalize(value);
   try { normalized = fs.realpathSync.native(normalized); }
   catch { /* Missing registered paths retain their last canonical spelling. */ }
-  return process.platform === 'win32' ? normalized.toLocaleLowerCase() : normalized;
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 function normalizeTicketKey(value: string): string {

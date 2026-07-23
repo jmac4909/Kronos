@@ -128,6 +128,28 @@ test('duplicate discovered names receive stable unique identities and duplicate 
   assert.deepEqual(replanned.map(project => project.name), ['service', 'service (2)']);
 });
 
+test('project registration identity is deterministic when the host locale has special casing rules', () => {
+  const existingRoot = path.join(tempRoot, 'locale-existing');
+  const candidateRoot = path.join(tempRoot, 'locale-candidate');
+  fs.mkdirSync(existingRoot, { recursive: true });
+  fs.mkdirSync(candidateRoot, { recursive: true });
+  const state = stateStore.emptyWorkCatalog();
+  state.projects.Invoice = { path: existingRoot, config: {} };
+
+  const originalLocaleLowerCase = String.prototype.toLocaleLowerCase;
+  String.prototype.toLocaleLowerCase = function localeSensitiveLowerCaseFixture() {
+    return String(this).replaceAll('I', 'ı').toLowerCase();
+  };
+  try {
+    assert.deepEqual(projectCatalog.planLocalProjectRegistrations(state, [{
+      name: 'invoice',
+      path: candidateRoot,
+    }]).map(project => project.name), ['invoice (2)']);
+  } finally {
+    String.prototype.toLocaleLowerCase = originalLocaleLowerCase;
+  }
+});
+
 test('missing registered folders remain visible until an authoritative uncheck removes them', () => {
   const missingPath = path.join(tempRoot, 'temporarily-missing-project');
   const initial = stateStore.emptyWorkCatalog();

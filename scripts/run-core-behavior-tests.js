@@ -492,6 +492,14 @@ test('Work tree directly covers project-rich rows, sorting, filters, empty state
     detached: false,
     available: true,
   });
+  const unsafeProjectMetadata = new WorkTicketTreeItem('APP-6', ticket('Unsafe project metadata'), {
+    name: 'application',
+    displayName: 'Application',
+    path: '/workspace/\napplication',
+    branch: 'feature/\tdanger',
+    detached: false,
+    available: true,
+  });
   assert.equal(open.iconPath.id, 'issue-opened');
   assert.equal(open.description, 'In Progress • Medium');
   assert.equal(closed.iconPath.id, 'issue-closed');
@@ -501,6 +509,9 @@ test('Work tree directly covers project-rich rows, sorting, filters, empty state
   assert.match(sparse.tooltip, /Jira status: Unknown[^]*Jira project: Unknown[^]*Priority: Unknown[^]*Local project: Not linked/);
   assert.equal(namedProject.description, 'In Progress • application');
   assert.match(namedProject.tooltip, /Git branch: unavailable/);
+  assert.match(unsafeProjectMetadata.tooltip, /Launch directory: \/workspace\/ application/);
+  assert.match(unsafeProjectMetadata.tooltip, /Git branch: feature\/ danger/);
+  assert.doesNotMatch(unsafeProjectMetadata.tooltip, /Launch directory: \/workspace\/\napplication/);
 });
 
 test('Jira rich text and recursive values preserve visible evidence while redacting unsafe content', () => {

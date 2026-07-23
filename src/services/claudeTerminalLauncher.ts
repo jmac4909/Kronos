@@ -330,13 +330,13 @@ function executableCandidateNames(executable: string, environment: NodeJS.Proces
   const extensions = pathExtensions.split(';')
     .map(extension => extension.trim())
     .filter(extension => /^\.[A-Za-z0-9]+$/.test(extension));
-  return [executable, ...extensions.map(extension => `${executable}${extension.toLocaleLowerCase()}`),
-    ...extensions.map(extension => `${executable}${extension.toLocaleUpperCase()}`)];
+  return [executable, ...extensions.map(extension => `${executable}${extension.toLowerCase()}`),
+    ...extensions.map(extension => `${executable}${extension.toUpperCase()}`)];
 }
 
 function environmentValue(environment: NodeJS.ProcessEnv, name: string): string | undefined {
   for (const [key, value] of Object.entries(environment)) {
-    if (key.toLocaleUpperCase() === name && typeof value === 'string' && value) { return value; }
+    if (key.toUpperCase() === name && typeof value === 'string' && value) { return value; }
   }
   return undefined;
 }

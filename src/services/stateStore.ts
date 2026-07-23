@@ -169,7 +169,7 @@ function normalizePersistedProjectPath(value: unknown): string | undefined {
 
 function persistedProjectPathKey(value: string): string {
   const normalized = path.normalize(value);
-  return process.platform === 'win32' ? normalized.toLocaleLowerCase() : normalized;
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 function normalizeProjectConfig(value: unknown): ProjectConfig {

@@ -141,7 +141,7 @@ function retainDisplayValue(target: Map<string, string>, value: string): void {
 }
 
 function comparable(value: string): string {
-  return value.trim().toLocaleLowerCase();
+  return value.trim().toLowerCase();
 }
 
 function safeSingleLine(value: unknown, maxLength: number): string {

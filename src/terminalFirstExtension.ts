@@ -639,7 +639,7 @@ class TerminalFirstRuntime implements vscode.Disposable {
 
   private completedJiraStatuses(): string[] {
     return this.configurationStringArray('completedJiraStatuses', 100, 200)
-      .map(item => item.toLocaleLowerCase());
+      .map(item => item.toLowerCase());
   }
 
   private jiraWorkStaleAfterMs(): number {

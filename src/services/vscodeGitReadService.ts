@@ -251,7 +251,7 @@ function relativeChangePath(projectPath: string, filePath: string): string {
 
 function samePath(left: string, right: string): boolean {
   const normalize = (value: string) => process.platform === 'win32'
-    ? path.resolve(value).toLocaleLowerCase()
+    ? path.resolve(value).toLowerCase()
     : path.resolve(value);
   return normalize(left) === normalize(right);
 }

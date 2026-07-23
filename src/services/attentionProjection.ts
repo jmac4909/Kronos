@@ -145,7 +145,7 @@ function registeredProjectForSession(
 
 function projectPathKey(value: string): string {
   const resolved = path.resolve(value);
-  return process.platform === 'win32' ? resolved.toLocaleLowerCase() : resolved;
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
 function acknowledgedEventKeys(events: readonly MonitorEvent[]): Set<string> {

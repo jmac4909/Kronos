@@ -180,7 +180,7 @@ function safePathSetting(value: unknown, maxLength: number): string {
 }
 
 function pathKey(value: string): string {
-  return process.platform === 'win32' ? value.toLocaleLowerCase() : value;
+  return process.platform === 'win32' ? value.toLowerCase() : value;
 }
 
 function safeSingleLine(value: unknown, maxLength: number): string {
