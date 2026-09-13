@@ -1,0 +1,59 @@
+{
+  "jobUrl": "https://jenkins.example/job/service-api/",
+  "branch": "feature/ENTERPRISE-42",
+  "branchJobUrl": "https://jenkins.example/job/service-api/job/feature%252FENTERPRISE-42/",
+  "parent": {
+    "_class": "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+    "lastBuild": null,
+    "jobs": [
+      { "name": "main", "url": "https://jenkins.example/job/service-api/job/main/" },
+      { "name": "feature/ENTERPRISE-42", "url": "https://jenkins.example/job/service-api/job/feature%252FENTERPRISE-42/", "_class": "org.jenkinsci.plugins.workflow.job.WorkflowJob" }
+    ]
+  },
+  "branchBuild": {
+    "lastBuild": {
+      "number": 142,
+      "result": "FAILURE",
+      "building": false,
+      "url": "https://jenkins.example/job/service-api/job/feature%252FENTERPRISE-42/142/",
+      "fullDisplayName": "service-api » feature/ENTERPRISE-42 #142",
+      "actions": [{ "causes": [{ "shortDescription": "Started by fixture" }] }],
+      "artifacts": [{ "fileName": "report.xml", "relativePath": "reports/report.xml" }],
+      "changeSet": { "items": [{ "commitId": "0123456", "msg": "Fixture change", "author": { "fullName": "Fixture Author" }, "affectedPaths": ["src/service.ts"] }] },
+      "providerFutureField": true
+    }
+  },
+  "testReport": {
+    "passCount": 12,
+    "failCount": 1,
+    "skipCount": 2,
+    "totalCount": 15,
+    "suites": [{
+      "name": "service",
+      "cases": [
+        { "className": "ServiceTest", "name": "passes 01", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 02", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 03", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 04", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 05", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 06", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 07", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 08", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 09", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 10", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 11", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "passes 12", "status": "PASSED" },
+        { "className": "ServiceTest", "name": "handles failure", "status": "FAILED", "duration": 0.4, "errorDetails": "fixture failure" },
+        { "className": "ServiceTest", "name": "skipped 01", "status": "SKIPPED" },
+        { "className": "ServiceTest", "name": "skipped 02", "status": "SKIPPED" }
+      ]
+    }]
+  },
+  "configXml": "<flow-definition><properties><sonar.projectKey>platform:service-api</sonar.projectKey><sonar.branch.name>feature/ENTERPRISE-42</sonar.branch.name></properties></flow-definition>",
+  "expected": {
+    "buildNumber": 142,
+    "testTotal": 15,
+    "sonarProjectKey": "platform:service-api",
+    "stagesStatus": "unavailable"
+  }
+}

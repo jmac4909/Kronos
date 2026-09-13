@@ -1,0 +1,76 @@
+{
+  "ticketKey": "ENTERPRISE-42",
+  "iid": 77,
+  "projectRef": "platform/group/service-api",
+  "snapshot": {
+    "fetchedAt": "2026-07-14T18:10:00.000Z",
+    "mr": {
+      "iid": 77,
+      "title": "ENTERPRISE-42 provider fixture",
+      "description": "Review the bounded enterprise-shaped context.",
+      "state": "opened",
+      "source_branch": "feature/ENTERPRISE-42",
+      "target_branch": "main",
+      "draft": false,
+      "has_conflicts": false,
+      "detailed_merge_status": "discussions_not_resolved",
+      "blocking_discussions_resolved": false,
+      "author": { "id": 4, "name": "Fixture Author", "username": "fixture-author" },
+      "reviewers": [{ "id": 5, "name": "Fixture Reviewer", "username": "fixture-reviewer" }],
+      "provider_extra": { "ignored": true }
+    },
+    "notes": [
+      { "id": 501, "body": "Please verify the failure path.", "created_at": "2026-07-14T18:01:00.000Z", "author": { "name": "Fixture Reviewer" } }
+    ],
+    "discussions": [
+      {
+        "id": "discussion-1",
+        "notes": [
+          { "id": 502, "body": "Unresolved bounded discussion.", "resolvable": true, "resolved": false, "position": { "new_path": "src/service.ts", "new_line": 42 } }
+        ]
+      }
+    ],
+    "approvals": {
+      "approved": false,
+      "approvals_required": 2,
+      "approvals_left": 1,
+      "approved_by": [{ "user": { "id": 6, "name": "Fixture Approver" } }],
+      "rules": [{ "id": 9, "name": "Maintainers", "approvals_required": 2, "approved": false, "approved_by": [{ "id": 6, "name": "Fixture Approver" }] }]
+    },
+    "diffs": [
+      { "old_path": "src/service.ts", "new_path": "src/service.ts", "diff": "@@ -1 +1 @@\n-old\n+new\n", "generated_file": false }
+    ],
+    "pipelines": [
+      { "id": 9001, "status": "failed", "ref": "feature/ENTERPRISE-42", "sha": "0123456789abcdef", "web_url": "https://gitlab.example/platform/group/service-api/-/pipelines/9001" }
+    ],
+    "pipeline": { "id": 9001, "status": "failed", "ref": "feature/ENTERPRISE-42", "sha": "0123456789abcdef" },
+    "jobs": [
+      { "id": 9101, "name": "unit", "stage": "test", "status": "failed", "failure_reason": "script_failure", "pipeline": { "id": 9001 }, "tag_list": ["linux"] }
+    ],
+    "testReport": {
+      "total_count": 2,
+      "success_count": 1,
+      "failed_count": 1,
+      "test_suites": [
+        { "name": "service", "total_count": 2, "success_count": 1, "failed_count": 1, "test_cases": [{ "name": "handles failure", "status": "failed", "class_name": "ServiceTest", "stack_trace": "fixture stack" }] }
+      ]
+    },
+    "completeness": {
+      "complete": true,
+      "notesComplete": true,
+      "discussionsComplete": true,
+      "diffsComplete": true,
+      "pipelinesComplete": true,
+      "jobsComplete": true,
+      "testsComplete": true,
+      "responseBytes": 8192,
+      "warnings": []
+    }
+  },
+  "expected": {
+    "pipelineId": 9001,
+    "jobId": 9101,
+    "failedTests": 1,
+    "discussionResolved": false
+  }
+}

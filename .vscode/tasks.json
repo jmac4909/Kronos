@@ -1,0 +1,44 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "windows": {
+        "options": {
+          "env": {
+            "PATH": "${env:KRONOS_NODE_HOME};${env:PATH}"
+          }
+        }
+      },
+      "problemMatcher": [],
+      "label": "Kronos: Run Full Test Suite"
+    },
+    {
+      "type": "npm",
+      "script": "compile",
+      "group": "build",
+      "problemMatcher": "$tsc",
+      "label": "npm: compile"
+    },
+    {
+      "type": "npm",
+      "script": "feedback:state:force",
+      "problemMatcher": [],
+      "label": "npm: feedback:state:force"
+    },
+    {
+      "label": "Kronos: Prepare Feedback Dev Host",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "npm: feedback:state:force",
+        "npm: compile"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

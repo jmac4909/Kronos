@@ -1,0 +1,85 @@
+/** The small, provider-oriented catalog rendered by the terminal-first product. */
+export interface KronosState {
+  schemaVersion: 2;
+  refreshedAt: string | null;
+  projects: Record<string, Project>;
+  tickets: Record<string, Ticket>;
+}
+
+export interface Project {
+  path?: string;
+  /** Optional project nickname for presentation only; map keys and canonical paths remain stable identities. */
+  display_name?: string;
+  config: ProjectConfig;
+}
+
+export interface ProjectBranchProfile {
+  /** Exact local/MR branch name that selects this provider routing profile. */
+  branch: string;
+  jenkins_url?: string;
+  sonar_project_key?: string;
+  sonar_branch?: string;
+}
+
+export interface ProjectConfig {
+  repo_name?: string;
+  jira_ticket_filter?: string;
+  gitlab_project_id?: number;
+  gitlab_project_path?: string;
+  jenkins_url?: string;
+  sonar_project_key?: string;
+  /** Explicit SonarQube monitoring branch, independent of the GitLab target branch. */
+  sonar_branch?: string;
+  base_branch?: string;
+  default_branch?: string;
+  /** Explicit provider routing variants; these never switch the Git branch. */
+  branch_profiles?: ProjectBranchProfile[];
+  /** Optional profile selected when no exact MR branch profile matches. */
+  active_branch_profile?: string;
+  extra_dirs?: string[];
+}
+
+export interface Ticket {
+  summary: string;
+  type: string;
+  priority: string;
+  jira_status: string;
+  /** Jira's status-category key/name, normally new, indeterminate, or done. */
+  jira_status_category?: string;
+  /** Jira namespace metadata used only for display and filtering, never repository attachment. */
+  jira_project_key?: string;
+  source: 'jira';
+  updated?: string;
+  description?: string;
+  labels?: string[];
+  attachments?: Array<{ filename: string; size: number; mimeType: string }>;
+  jira_url?: string;
+  /** Sole explicit ticket-to-local-project link; controls launch directory and project provider config. */
+  linked_local_project?: string;
+  mr: MergeRequest | null;
+  build: BuildStatus | null;
+}
+
+export interface MergeRequest {
+  iid: number;
+  state: 'opened' | 'merged' | 'closed';
+  review_status: 'pending_review' | 'approved' | 'changes_requested';
+  url: string;
+  title?: string;
+  author?: string;
+  comment_count?: number;
+  last_comment_at?: string;
+  discussion_count?: number;
+  unresolved_discussion_count?: number;
+  resolved_discussion_count?: number;
+  last_discussion_at?: string;
+  discussions_resolved?: boolean;
+  source_branch?: string;
+  target_branch?: string;
+}
+
+export interface BuildStatus {
+  number: number;
+  status: string;
+  url: string;
+}

@@ -1,0 +1,859 @@
+{
+  "name": "kronos",
+  "displayName": "Kronos — Terminal Work Companion",
+  "description": "Keep Jira work, Claude terminals, project changes, merge requests, builds, and quality checks together in VS Code. Actions never submit terminal input automatically.",
+  "version": "0.1.0",
+  "publisher": "jmacke01",
+  "author": {
+    "name": "Jeremy Mackey",
+    "url": "https://github.com/jmac4909"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "preview": true,
+  "homepage": "https://github.com/jmac4909/Kronos#readme",
+  "bugs": {
+    "url": "https://github.com/jmac4909/Kronos/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jmac4909/kronos.git"
+  },
+  "keywords": [
+    "vscode-extension",
+    "typescript",
+    "terminal",
+    "jira",
+    "gitlab",
+    "jenkins",
+    "sonarqube",
+    "pipeline",
+    "audit",
+    "claude-code",
+    "ai-assisted-development",
+    "developer-tools",
+    "human-in-the-loop"
+  ],
+  "icon": "media/kronos-marketplace-icon.png",
+  "galleryBanner": {
+    "color": "#0b1220",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Kronos can read configured provider data and save local context. Adding context requires an explicit action and never presses Enter. Starting Claude also requires an explicit action. In untrusted workspaces, Claude launch is disabled. Kronos never runs project commands or changes Git."
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kronos",
+          "title": "Kronos",
+          "icon": "media/kronos-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "kronos": [
+        {
+          "id": "kronosWork",
+          "name": "Work"
+        },
+        {
+          "id": "kronosSessions",
+          "name": "Sessions"
+        },
+        {
+          "id": "kronosProjects",
+          "name": "Projects"
+        },
+        {
+          "id": "kronosAttention",
+          "name": "Attention"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "kronos.refreshTickets",
+        "title": "Kronos: Refresh Jira Tickets",
+        "shortTitle": "Refresh Jira",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "kronos.openJiraBoard",
+        "title": "Kronos: Open Jira Board",
+        "shortTitle": "Jira Board",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "kronos.filterWork",
+        "title": "Kronos: Filter Work",
+        "shortTitle": "Filter",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "kronos.clearWorkFilter",
+        "title": "Kronos: Clear Work Filter",
+        "shortTitle": "Clear Filters",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "kronos.openTicketWorkspace",
+        "title": "Kronos: Open Ticket",
+        "shortTitle": "Open Ticket",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "kronos.configureProjectDiscoveryFolders",
+        "title": "Kronos: Choose Project Folders",
+        "shortTitle": "Choose Project Folders",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "kronos.registerWorkspaceProject",
+        "title": "Kronos: Manage Projects",
+        "shortTitle": "Manage Projects",
+        "icon": "$(folder-library)"
+      },
+      {
+        "command": "kronos.chooseTicketProject",
+        "title": "Kronos: Choose Project for Ticket",
+        "shortTitle": "Choose Project",
+        "icon": "$(repo)"
+      },
+      {
+        "command": "kronos.newClaudeSession",
+        "title": "Kronos: New Claude Session",
+        "shortTitle": "New Claude",
+        "icon": "$(add)"
+      },
+      {
+        "command": "kronos.startClaudeForTicket",
+        "title": "Kronos: Start Claude for Ticket",
+        "shortTitle": "Start Claude",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "kronos.manageActiveTerminal",
+        "title": "Kronos: Connect Focused Terminal",
+        "shortTitle": "Connect Focused Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "kronos.insertJiraContext",
+        "title": "Kronos: Review Jira Ticket",
+        "shortTitle": "Review Jira Ticket",
+        "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "kronos.insertOtherTicket",
+        "title": "Kronos: Add Jira Ticket to Session",
+        "shortTitle": "Add Jira Ticket",
+        "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "kronos.insertGitLabContext",
+        "title": "Kronos: Review Merge Request Context",
+        "shortTitle": "Review Merge Request",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "kronos.insertCiContext",
+        "title": "Kronos: Review Build and Quality Context",
+        "shortTitle": "Review Build & Quality",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "kronos.openContextBasket",
+        "title": "Kronos: Open Context Basket",
+        "shortTitle": "Context Basket",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "kronos.openPromptLibrary",
+        "title": "Kronos: Open Team Prompt Library",
+        "shortTitle": "Prompt Library",
+        "icon": "$(library)"
+      },
+      {
+        "command": "kronos.searchLocalEvidence",
+        "title": "Kronos: Search",
+        "shortTitle": "Search",
+        "icon": "$(search)"
+      },
+      {
+        "command": "kronos.createLocalHandoff",
+        "title": "Kronos: Create Handoff",
+        "shortTitle": "Create Handoff",
+        "icon": "$(export)"
+      },
+      {
+        "command": "kronos.pollManagedWorkSessions",
+        "title": "Kronos: Check Provider Updates",
+        "shortTitle": "Check Updates",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "kronos.openWorkSessionAudit",
+        "title": "Kronos: View Session History",
+        "shortTitle": "View History",
+        "icon": "$(history)"
+      },
+      {
+        "command": "kronos.focusWorkSessionTerminal",
+        "title": "Kronos: Open Session Terminal",
+        "shortTitle": "Open Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "kronos.toggleWorkSessionTerminalSize",
+        "title": "Kronos: Toggle Full-Size Session Terminal",
+        "shortTitle": "Toggle Full Size",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "kronos.configureClaudeTerminalLayout",
+        "title": "Kronos: Claude Terminal Layout",
+        "shortTitle": "Terminal Layout",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "kronos.reattachWorkSessionTerminal",
+        "title": "Kronos: Connect Focused Terminal to Session",
+        "shortTitle": "Connect Focused Terminal",
+        "icon": "$(link)"
+      },
+      {
+        "command": "kronos.detachWorkSessionTerminal",
+        "title": "Kronos: Disconnect Terminal",
+        "shortTitle": "Disconnect Terminal",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "kronos.renameWorkSession",
+        "title": "Kronos: Rename Session",
+        "shortTitle": "Rename Session",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "kronos.closeWorkSession",
+        "title": "Kronos: Stop Tracking Session",
+        "shortTitle": "Stop Tracking",
+        "icon": "$(close)"
+      },
+      {
+        "command": "kronos.removeWorkSession",
+        "title": "Kronos: Remove Session from Kronos",
+        "shortTitle": "Remove from Kronos",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "kronos.refreshProjects",
+        "title": "Kronos: Refresh Projects",
+        "shortTitle": "Refresh Projects",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "kronos.renameLocalProject",
+        "title": "Kronos: Rename Project",
+        "shortTitle": "Rename Project",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "kronos.openProjectGitStatus",
+        "title": "Kronos: Git State and Branches",
+        "shortTitle": "Git State & Branches",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "kronos.insertProjectGitContext",
+        "title": "Kronos: Review Local Changes",
+        "shortTitle": "Review Local Changes",
+        "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "kronos.openProjectMergeRequest",
+        "title": "Kronos: Open Merge Request",
+        "shortTitle": "Open Merge Request",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "kronos.insertProjectGitLabContext",
+        "title": "Kronos: Review Project Merge Request Context",
+        "shortTitle": "Review Merge Request",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "kronos.insertProjectCiContext",
+        "title": "Kronos: Review Project Build and Quality Context",
+        "shortTitle": "Review Build & Quality",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "kronos.configureProjectIntegrations",
+        "title": "Kronos: Configure Project Integrations",
+        "shortTitle": "Project Integrations",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "kronos.pauseWorkSessionMonitoring",
+        "title": "Kronos: Pause Provider Updates",
+        "shortTitle": "Pause Updates",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "kronos.resumeWorkSessionMonitoring",
+        "title": "Kronos: Resume Provider Updates",
+        "shortTitle": "Resume Updates",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "kronos.insertAttentionEventContext",
+        "title": "Kronos: Use Attention Event in Prompt",
+        "shortTitle": "Use Event in Prompt",
+        "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "kronos.acknowledgeAttention",
+        "title": "Kronos: Clear from Attention",
+        "shortTitle": "Clear from Attention",
+        "icon": "$(close)"
+      },
+      {
+        "command": "kronos.openProvider",
+        "title": "Kronos: Open Provider Page",
+        "shortTitle": "Open Provider",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "kronos.setup",
+        "title": "Kronos: Setup",
+        "shortTitle": "Setup",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "kronos.doctor",
+        "title": "Kronos: Check Setup",
+        "shortTitle": "Check Setup",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "kronos.settings",
+        "title": "Kronos: Settings",
+        "shortTitle": "Settings",
+        "icon": "$(settings-gear)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "kronos.refreshTickets",
+          "when": "view == kronosWork",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kronos.openJiraBoard",
+          "when": "view == kronosWork",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kronos.filterWork",
+          "when": "view == kronosWork",
+          "group": "navigation@3"
+        },
+        {
+          "command": "kronos.clearWorkFilter",
+          "when": "view == kronosWork",
+          "group": "work@1"
+        },
+        {
+          "command": "kronos.newClaudeSession",
+          "when": "view == kronosSessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kronos.manageActiveTerminal",
+          "when": "view == kronosSessions",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kronos.configureClaudeTerminalLayout",
+          "when": "view == kronosSessions",
+          "group": "navigation@3"
+        },
+        {
+          "command": "kronos.refreshProjects",
+          "when": "view == kronosProjects",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kronos.registerWorkspaceProject",
+          "when": "view == kronosProjects",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kronos.pollManagedWorkSessions",
+          "when": "view == kronosAttention",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kronos.pollManagedWorkSessions",
+          "when": "view == kronosSessions",
+          "group": "sessions@1"
+        },
+        {
+          "command": "kronos.pollManagedWorkSessions",
+          "when": "view == kronosProjects",
+          "group": "projects@1"
+        },
+        {
+          "command": "kronos.openContextBasket",
+          "when": "view == kronosWork",
+          "group": "work@2"
+        },
+        {
+          "command": "kronos.openContextBasket",
+          "when": "view == kronosSessions",
+          "group": "sessions@2"
+        },
+        {
+          "command": "kronos.openContextBasket",
+          "when": "view == kronosProjects",
+          "group": "projects@2"
+        },
+        {
+          "command": "kronos.searchLocalEvidence",
+          "when": "view == kronosWork",
+          "group": "work@3"
+        },
+        {
+          "command": "kronos.searchLocalEvidence",
+          "when": "view == kronosSessions",
+          "group": "sessions@3"
+        },
+        {
+          "command": "kronos.searchLocalEvidence",
+          "when": "view == kronosProjects",
+          "group": "projects@3"
+        },
+        {
+          "command": "kronos.searchLocalEvidence",
+          "when": "view == kronosAttention",
+          "group": "attention@1"
+        },
+        {
+          "command": "kronos.openPromptLibrary",
+          "when": "view == kronosWork",
+          "group": "work@4"
+        },
+        {
+          "command": "kronos.openPromptLibrary",
+          "when": "view == kronosSessions",
+          "group": "sessions@4"
+        },
+        {
+          "command": "kronos.openPromptLibrary",
+          "when": "view == kronosProjects",
+          "group": "projects@4"
+        },
+        {
+          "command": "kronos.createLocalHandoff",
+          "when": "view == kronosSessions",
+          "group": "sessions@5"
+        },
+        {
+          "command": "kronos.createLocalHandoff",
+          "when": "view == kronosProjects",
+          "group": "projects@5"
+        },
+        {
+          "command": "kronos.setup",
+          "when": "view == kronosWork",
+          "group": "work@5"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "kronos.openTicketWorkspace",
+          "when": "viewItem == work_ticket",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kronos.startClaudeForTicket",
+          "when": "viewItem == work_ticket",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.chooseTicketProject",
+          "when": "viewItem == work_ticket",
+          "group": "project@1"
+        },
+        {
+          "command": "kronos.insertJiraContext",
+          "when": "viewItem == work_ticket",
+          "group": "context@1"
+        },
+        {
+          "command": "kronos.insertGitLabContext",
+          "when": "viewItem == work_ticket",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.insertCiContext",
+          "when": "viewItem == work_ticket",
+          "group": "context@3"
+        },
+        {
+          "command": "kronos.focusWorkSessionTerminal",
+          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused || viewItem == standalone_session_attached",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.toggleWorkSessionTerminalSize",
+          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused || viewItem == standalone_session_attached",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kronos.reattachWorkSessionTerminal",
+          "when": "viewItem == work_session_detached || viewItem == work_session_detached_paused || viewItem == work_session_closed || viewItem == standalone_session_detached || viewItem == standalone_session_closed",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.openWorkSessionAudit",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == work_session_closed || viewItem == standalone_session_attached || viewItem == standalone_session_detached || viewItem == standalone_session_closed",
+          "group": "audit@1"
+        },
+        {
+          "command": "kronos.insertOtherTicket",
+          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused || viewItem == standalone_session_attached",
+          "group": "context@1"
+        },
+        {
+          "command": "kronos.openPromptLibrary",
+          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused || viewItem == standalone_session_attached",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.pauseWorkSessionMonitoring",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached",
+          "group": "monitoring@1"
+        },
+        {
+          "command": "kronos.resumeWorkSessionMonitoring",
+          "when": "viewItem == work_session_attached_paused || viewItem == work_session_detached_paused",
+          "group": "monitoring@1"
+        },
+        {
+          "command": "kronos.renameWorkSession",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == work_session_closed || viewItem == standalone_session_attached || viewItem == standalone_session_detached || viewItem == standalone_session_closed",
+          "group": "management@0"
+        },
+        {
+          "command": "kronos.detachWorkSessionTerminal",
+          "when": "viewItem == work_session_attached || viewItem == work_session_attached_paused || viewItem == standalone_session_attached",
+          "group": "management@1"
+        },
+        {
+          "command": "kronos.closeWorkSession",
+          "when": "viewItem == work_session_attached || viewItem == work_session_detached || viewItem == work_session_attached_paused || viewItem == work_session_detached_paused || viewItem == standalone_session_attached || viewItem == standalone_session_detached",
+          "group": "management@2"
+        },
+        {
+          "command": "kronos.removeWorkSession",
+          "when": "viewItem == work_session_closed || viewItem == standalone_session_closed",
+          "group": "management@3"
+        },
+        {
+          "command": "kronos.newClaudeSession",
+          "when": "viewItem == registered_project",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.openProjectGitStatus",
+          "when": "viewItem == registered_project",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kronos.insertProjectGitContext",
+          "when": "viewItem == registered_project",
+          "group": "context@0"
+        },
+        {
+          "command": "kronos.openProjectMergeRequest",
+          "when": "viewItem == registered_project",
+          "group": "project@1"
+        },
+        {
+          "command": "kronos.insertProjectGitLabContext",
+          "when": "viewItem == registered_project",
+          "group": "context@1"
+        },
+        {
+          "command": "kronos.insertProjectCiContext",
+          "when": "viewItem == registered_project",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.configureProjectIntegrations",
+          "when": "viewItem == registered_project",
+          "group": "management@1"
+        },
+        {
+          "command": "kronos.renameLocalProject",
+          "when": "viewItem == registered_project",
+          "group": "management@2"
+        },
+        {
+          "command": "kronos.openProvider",
+          "when": "viewItem =~ /^attention_(provider|live_provider)/",
+          "group": "inline@1"
+        },
+        {
+          "command": "kronos.acknowledgeAttention",
+          "when": "viewItem =~ /^attention_live_(provider|repair).*_clearable(?:_event)?$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "kronos.insertAttentionEventContext",
+          "when": "viewItem =~ /^attention_(provider|repair|live_provider|live_repair).*_event$/",
+          "group": "context@1"
+        },
+        {
+          "command": "kronos.acknowledgeAttention",
+          "when": "viewItem =~ /^attention_(?:(?:provider|repair).*|live_(?:provider|repair).*_clearable(?:_event)?)$/",
+          "group": "management@1"
+        },
+        {
+          "command": "kronos.openTicketWorkspace",
+          "when": "viewItem =~ /^attention_(provider|repair)_(project_)?ticket/",
+          "group": "ticket@1"
+        },
+        {
+          "command": "kronos.insertGitLabContext",
+          "when": "viewItem =~ /^attention_(provider|repair)_ticket_gitlab(?:_event)?$/",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.insertCiContext",
+          "when": "viewItem =~ /^attention_(provider|repair)_ticket_ci(?:_event)?$/",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.insertProjectGitLabContext",
+          "when": "viewItem =~ /^attention_(provider|repair|live_provider|live_repair)_project(_ticket)?_gitlab(?:_event)?$/",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.insertProjectCiContext",
+          "when": "viewItem =~ /^attention_(provider|repair|live_provider|live_repair)_project(_ticket)?_ci(?:_clearable)?(?:_event)?$/",
+          "group": "context@2"
+        },
+        {
+          "command": "kronos.openWorkSessionAudit",
+          "when": "viewItem =~ /^attention_(provider|repair|live_provider|live_repair)/",
+          "group": "audit@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Kronos",
+      "properties": {
+        "kronos.refreshIntervalSec": {
+          "type": "number",
+          "default": 300,
+          "minimum": 15,
+          "description": "How often Work refreshes from Jira, in seconds."
+        },
+        "kronos.managedProviderPollIntervalSec": {
+          "type": "number",
+          "default": 300,
+          "minimum": 15,
+          "description": "How often Kronos checks GitLab, Jenkins, and SonarQube for project updates, in seconds."
+        },
+        "kronos.projectDiscoveryRoots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "machine",
+          "description": "Parent folders searched when you choose Manage Projects. Choose them from Setup or add them here. Open workspace folders are always included. Use ~ for your home folder."
+        },
+        "kronos.projectDiscoveryDepth": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 5,
+          "scope": "machine",
+          "description": "How many folder levels Manage Projects searches below each selected parent folder."
+        },
+        "kronos.projectDiscoveryLimit": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 500,
+          "scope": "machine",
+          "description": "Most projects shown when Manage Projects searches your selected folders."
+        },
+        "kronos.hideCompletedJiraWork": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide completed Jira tickets by default in Work and the Jira board. Filters can still show them."
+        },
+        "kronos.completedJiraStatuses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional Jira status names to treat as completed when your team does not use Jira's Done category."
+        },
+        "kronos.promptLibraryLocalPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "machine",
+          "description": "Local files or folders containing team prompt lists. In a folder, Kronos reads only top-level kronos-prompts.json and *.kronos-prompts.json files. Use ~ for your home folder."
+        },
+        "kronos.promptLibraryRemoteManifestUrls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Raw HTTPS URLs for team prompt lists. Kronos never changes Git and keeps the last valid copy for offline use. A private GitLab URL may use the configured token only from the same GitLab server in a trusted workspace."
+        },
+        "kronos.claudeCommand": {
+          "type": "string",
+          "default": "claude",
+          "scope": "machine",
+          "description": "Claude command used by New Claude, Start Claude, and explicit Session resume. It must be claude or a claude-* wrapper; supported model, effort, IDE, and display flags are allowed. Kronos adds managed session flags itself. Choose permissions separately below."
+        },
+        "kronos.claudePermissionMode": {
+          "type": "string",
+          "enum": [
+            "default",
+            "acceptEdits",
+            "plan",
+            "auto",
+            "dontAsk",
+            "bypassPermissions"
+          ],
+          "enumDescriptions": [
+            "Manual: Claude asks before edits and commands that need approval.",
+            "Accept Edits: Claude may edit files without prompting; other commands still ask.",
+            "Plan: Claude starts by analyzing and planning before edits.",
+            "Auto: supported Claude versions can reduce routine prompts. Availability depends on your installed CLI, model, and account.",
+            "Don't Ask: approved tools run; anything else is denied instead of prompting.",
+            "Experimental Bypass Permissions: Claude skips normal permission prompts. Kronos warns before every launch. Use only in an isolated environment you control."
+          ],
+          "default": "default",
+          "scope": "machine",
+          "description": "Permissions used for new and resumed managed Claude sessions. Permission flags are not accepted in Claude Command; choose one mode here."
+        },
+        "kronos.claudeTerminalName": {
+          "type": "string",
+          "default": "Claude",
+          "description": "Base name for terminals created by New Claude or Start Claude. Exact resume keeps the saved terminal name."
+        },
+        "kronos.claudeTerminalLayout": {
+          "type": "string",
+          "enum": [
+            "editorSplit",
+            "editorTabs",
+            "panel"
+          ],
+          "enumDescriptions": [
+            "Open the first Claude terminal in the main editor area and each later Kronos-launched Claude terminal in a separate editor column beside it.",
+            "Open each Claude terminal as a tab in the main editor area without automatically splitting it.",
+            "Open Claude terminals in the bottom terminal panel."
+          ],
+          "default": "editorSplit",
+          "description": "Layout used for newly launched Claude terminals. Use Terminal Layout in Sessions to change this setting or balance visible editor columns. Existing terminals are never moved automatically."
+        },
+        "kronos.claudeLaunchCwd": {
+          "type": "string",
+          "enum": [
+            "ticketProject",
+            "workspace",
+            "home"
+          ],
+          "enumDescriptions": [
+            "Use the ticket's configured project folder, then fall back to the workspace or home folder.",
+            "Use the first open workspace folder, then fall back to the home folder.",
+            "Use the current user's home folder."
+          ],
+          "default": "ticketProject",
+          "description": "Starting folder for terminals created by New Claude or Start Claude. Exact resume uses the Session's saved folder."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "node scripts/clean-output.js && node node_modules/typescript/bin/tsc -p ./",
+    "watch": "node scripts/clean-output.js && node node_modules/typescript/bin/tsc -watch -p ./",
+    "package": "npm run release:preflight && npx --yes @vscode/vsce@3.9.2 package --no-dependencies --allow-missing-repository --githubBranch main",
+    "release:preflight": "npm run public:check && node scripts/check-manifest.js && node scripts/check-runtime-graph.js && node scripts/check-security.js && node scripts/check-context-governance.js && node scripts/check-roadmap-evidence.js && node scripts/check-quality-evidence.js && npm run compile && npm run release:surface",
+    "release:surface": "node scripts/run-release-surface-tests.js",
+    "publish:verify": "node scripts/verify-published-branch.js",
+    "test": "npm run public:check && node scripts/check-manifest.js && node scripts/check-runtime-graph.js && node scripts/check-security.js && node scripts/check-context-governance.js && node scripts/check-roadmap-evidence.js && node scripts/check-quality-evidence.js && npm run compile && npm run command:routing && npm run product:surface && npm run feature:journeys && npm run terminal:lifecycle && npm run claude:tracking && npm run unit:conditionals && npm run shared:utilities && npm run private:files && npm run monitor:lease && npm run core:behaviors && npm run persistence:recovery && npm run schema:invariants && npm run failure:contract && npm run provider:readiness && npm run project:catalog && npm run provider:bindings && node scripts/run-unit-tests.js && npm run work:orchestration && npm run provider:reconciliation && npm run attention:matrix && npm run attention:conditionals && npm run provider:health && npm run provider:fixtures && npm run provider:jira-edge && npm run provider:transport && npm run context:basket && npm run prompt:library && npm run local:search && npm run handoff:profiles && npm run scale:a11y && npm run release:surface && npm run webview:dom && npm run webview:jira-board && npm run coverage:check",
+    "public:check": "node scripts/check-public-surface.js",
+    "webview:dom": "node scripts/run-webview-dom-tests.js",
+    "webview:jira-board": "node scripts/run-jira-work-board-tests.js",
+    "provider:fixtures": "node scripts/run-provider-contract-tests.js",
+    "provider:jira-edge": "node scripts/run-jira-rest-edge-tests.js",
+    "provider:transport": "node scripts/run-provider-transport-tests.js",
+    "scale:a11y": "node scripts/run-scale-accessibility-tests.js",
+    "provider:readiness": "node scripts/run-provider-readiness-tests.js",
+    "project:catalog": "node scripts/run-project-catalog-tests.js",
+    "provider:bindings": "node scripts/run-provider-binding-reconciliation-tests.js",
+    "terminal:lifecycle": "node scripts/run-terminal-lifecycle-tests.js",
+    "claude:tracking": "node scripts/run-claude-session-tracking-tests.js",
+    "unit:conditionals": "node scripts/run-conditional-unit-tests.js",
+    "shared:utilities": "node scripts/run-shared-utility-tests.js",
+    "private:files": "node scripts/run-private-file-tests.js",
+    "monitor:lease": "node scripts/run-monitor-lease-tests.js",
+    "core:behaviors": "node scripts/run-core-behavior-tests.js",
+    "coverage:check": "node scripts/run-code-coverage.js",
+    "test:coverage": "npm run compile && npm run coverage:check",
+    "command:routing": "node scripts/run-command-routing-tests.js",
+    "product:surface": "node scripts/run-product-surface-contract-tests.js",
+    "feature:journeys": "node scripts/run-feature-journey-tests.js",
+    "persistence:recovery": "node scripts/run-persistence-recovery-tests.js",
+    "schema:invariants": "node scripts/run-schema-invariant-tests.js",
+    "failure:contract": "node scripts/run-failure-contract-tests.js",
+    "work:orchestration": "node scripts/run-work-orchestration-tests.js",
+    "provider:reconciliation": "node scripts/run-provider-reconciliation-tests.js",
+    "attention:matrix": "node scripts/run-attention-transition-matrix-tests.js",
+    "attention:conditionals": "node scripts/run-attention-conditional-tests.js",
+    "provider:health": "node scripts/run-provider-health-visibility-tests.js",
+    "context:basket": "node scripts/run-context-basket-tests.js",
+    "prompt:library": "node scripts/run-prompt-library-tests.js",
+    "local:search": "node scripts/run-local-evidence-search-tests.js",
+    "handoff:profiles": "node scripts/run-handoff-branch-profile-tests.js",
+    "feedback:state": "node scripts/create-feedback-state.js",
+    "feedback:state:force": "node scripts/create-feedback-state.js --force",
+    "feedback:smoke": "node scripts/run-feedback-smoke.js",
+    "feedback:ready": "node scripts/prepare-human-feedback.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

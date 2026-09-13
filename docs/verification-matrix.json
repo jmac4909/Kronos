@@ -1,0 +1,2043 @@
+{
+  "schemaVersion": 2,
+  "featureGroups": [
+    {
+      "id": "identity-and-work",
+      "goals": ["G01", "G08"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "Jira project keys never auto-link a repository; only an explicit ticket link does" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work data status distinguishes empty, loading, partial, stale, error, and current results" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board runtime filters cards and reveals a specifically selected completed status" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board composes every search, status, Jira, local-project, and label filter subset" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board keyboard activation opens a focused card with Enter or Space exactly once" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board terminology and dense-card rendering keep Jira namespaces separate from local repositories" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board action and focus contract covers every declared action exactly once" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "rich Jira filtering searches every useful field and composes independent namespaces" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "Jira board keeps filtering and launch controls while ticket workspace owns detailed context controls" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "explicit project journey keeps one stable identity across Work, Projects, Sessions, and Attention" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "unregistering a project clears launch authority but preserves Jira namespace and provider-only metadata" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "Work and Jira board free-text search index the same rich ticket evidence" },
+        { "file": "scripts/run-core-behavior-tests.js", "test": "TerminalFirstState reports complete and partial Jira refreshes without losing prior provider evidence" },
+        { "file": "scripts/run-core-behavior-tests.js", "test": "TerminalFirstState keeps the newest explicit refresh and exposes a bounded error state" },
+        { "file": "scripts/run-core-behavior-tests.js", "test": "TerminalFirstState isolates malformed load issues and cancels pending watcher work on dispose" },
+        { "file": "scripts/run-core-behavior-tests.js", "test": "Work tree directly covers project-rich rows, sorting, filters, empty states, and refresh errors" }
+      ],
+      "humanGates": ["operator-terminal"]
+    },
+    {
+      "id": "terminal-and-sessions",
+      "goals": ["G02", "G10"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "duplicate terminal names remain exact object identities across sessions and ambiguous bindings" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "one lifecycle projection distinguishes none, attached, paused, detached, closed, and stopped" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "session removal deletes only colocated state and registry detachment never controls the terminal" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "explicit Claude launch creates and focuses exactly one terminal with or without a cwd" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "managed Claude identity supports exact resume, explicit legacy migration, and strict persistence" },
+        { "file": "scripts/run-claude-session-tracking-tests.js", "test": "confirmed setup preserves Claude settings, creates a backup, and remains repairable" },
+        { "file": "scripts/run-claude-session-tracking-tests.js", "test": "setup refuses invalid or unsafe Claude settings and explains missing prerequisites" },
+        { "file": "scripts/run-claude-session-tracking-tests.js", "test": "SessionStart helper ignores unrelated processes and writes one bounded correlated event" },
+        { "file": "scripts/run-claude-session-tracking-tests.js", "test": "lifecycle reconciliation changes only the correlated Claude resume identity and folder" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Claude layout validation and terminal placement stay presentation-only" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "terminal context placement is reentrancy-safe and rejects ambiguous attachment identities" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Claude launch validation covers labels, filesystem failures, and PATH probe failures before creation" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions present project, branch, Jira contexts, attachment, monitoring, and latest result at a glance" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions never present detached, closed, stopped, paused, or removed-project records as active" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions action language keeps Open Terminal, reconnect, detach, monitoring, audit, stop, and remove distinct" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "terminal titles capture ticket and observed branch once at launch within the VS Code name bound" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "Session display names are presentation-only and reset without identity drift" },
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search covers sessions, tickets, projects, branches, providers, artifacts, and events without terminal content" },
+        { "file": "scripts/run-unit-tests.js", "test": "Claude terminal launch is explicit, focused, validated, and operator-triggered" },
+        { "file": "scripts/run-unit-tests.js", "test": "work-session lifecycle never requires a terminal process owner" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "registered project actions start ticket-free Claude before read-only and provider actions" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "non-Jira ticket workspaces omit Jira insertion without weakening terminal ownership" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "project session stays ticket-free until context is explicit, then becomes monitoring eligible without changing kind" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "manifest Claude modes and validated launcher commands cannot drift apart" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "managed Sessions tree covers every lifecycle context and loader fallback" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "work-session audit renders complete local evidence and sorts supplied events newest first" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "id": "context-placement",
+      "goals": ["G03"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "immutable private artifacts verify content and own local Git context persistence" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab and CI context pairs share immutable publication and reject incomplete evidence" },
+        { "file": "scripts/run-unit-tests.js", "test": "CI artifacts distinguish complete, partial, mixed-success, unavailable, and truncated provider evidence" },
+        { "file": "scripts/run-unit-tests.js", "test": "context placement verifies one exact attachment and remains exactly once after audit work" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context composer posts edited focus only after Insert or Ctrl+Enter" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context composer initialization is idempotent and one Insert click posts once" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "terminal context placement is reentrancy-safe and rejects ambiguous attachment identities" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "all terminal context reference classes enforce their own private artifact location" },
+        { "file": "scripts/run-unit-tests.js", "test": "terminal context insertion is shell-inert and never submits" },
+        { "file": "scripts/run-attention-conditional-tests.js", "test": "Attention event context freezes exactly one supported transition for non-submitting prompt use" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jira downloads arbitrary attachment types as private raw files for Claude to inspect" },
+        { "file": "scripts/run-prompt-library-tests.js", "test": "prompt manifest parsing is bounded, data-only, redacted, and source-versioned" },
+        { "file": "scripts/run-prompt-library-tests.js", "test": "prompt templates fill only allowlisted session variables and preserve unknown fields for review" },
+        { "file": "scripts/run-prompt-library-tests.js", "test": "prompt templates stay useful without a ticket or linked project and redact variable values" },
+        { "file": "scripts/run-prompt-library-tests.js", "test": "one invalid shared prompt never hides valid neighboring prompts" },
+        { "file": "scripts/run-prompt-library-tests.js", "test": "local and remote Git manifests merge with origin-pinned GitLab auth and latest-good cache fallback" },
+        { "file": "scripts/run-prompt-library-tests.js", "test": "reviewed prompt snapshots are immutable, credential-redacted, and inserted without submission" },
+        { "file": "scripts/run-prompt-library-tests.js", "test": "prompt library composer escapes content and accepts only bounded editor messages" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "prompt library posts the complete edited prompt only after Place or Ctrl+Enter" },
+        { "file": "scripts/run-core-behavior-tests.js", "test": "Jira rich text and recursive values preserve visible evidence while redacting unsafe content" },
+        { "file": "scripts/run-core-behavior-tests.js", "test": "Jira context normalization reconciles comments, attachment outcomes, metadata, and completeness" },
+        { "file": "scripts/run-core-behavior-tests.js", "test": "Jira context publication validates attachments and completeness before writing any files" },
+        { "file": "scripts/run-core-behavior-tests.js", "test": "Jira fallback and global context budget stay useful, bounded, and explicit" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode", "windows-native"]
+    },
+    {
+      "id": "monitoring-and-attention",
+      "goals": ["G04", "G05", "G11"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Attention stream identity is stable by project, provider, resource, logical subject, and facet" },
+        { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" },
+        { "file": "scripts/run-unit-tests.js", "test": "registered project configuration polls GitLab Jenkins and Sonar without a ticket or terminal Session" },
+        { "file": "scripts/run-unit-tests.js", "test": "managed CI polling emits first healthy observations when providers join an existing baseline" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab MR review monitoring retains complete facets across partial reads and dedupes read health" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "poll notice reports complete and failed outcomes with accurate singular grammar" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "GitLab partial-read diagnostics enumerate only incomplete monitor facets" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab merge-request transition matrix covers every declared structural transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab pipeline transition matrix covers every declared pipeline, job, and test transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Jenkins and SonarQube transition matrices cover every declared CI transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "active Attention shows only current project delivery work and derives review readiness" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "active Attention keeps failures and incomplete reads visible until current truth recovers" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "active Attention reuses exact current events and removes finished standalone builds" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "active Attention state language, order, and pop-up boundary are exhaustive" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention read-health state replaces failure, recovery, partial, and later failure in one stream" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention collapses provider-read health into GitLab MR, Jenkins build, and SonarQube branch truth" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention collapses newer pipeline, build, test, gate, and issue occurrences without deleting audit history" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention presentation covers information, warning, failure, recovery, partial, and blocked severities" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention rows expose project, provider, subject, observed time, changed time, and why" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose validated ticket and registered-project evidence actions" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention Jenkins builds and SonarQube branches are validated and latest-first" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action language limits live clearing to completed CI results" },
+        { "file": "scripts/run-unit-tests.js", "test": "local monitoring blockers transition once, recover once, and retain audit history" },
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder remains deterministic across module reload and lease recovery" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "one provider binding reconciliation owner feeds Work, Sessions, Projects, Attention, polling, and context insertion" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "bound MR identity wins stale catalog and only a matching monitor digest enriches it after reload" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "catalog MR binding candidates enrich only the same identity and never overwrite a newer binding" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "Jenkins job, build history, and SonarQube branch identities remain distinct under one resolver" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "reconciled provider URLs are credential-free and rejected outside the configured origin" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "multi-project reconciliation stays inside the explicitly linked project session set" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "Attention group identity is local-project-only and collision-safe for unassigned work" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "provider glyphs stay distinct while all Attention severities share green yellow red state colors" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "GitLab pipeline snapshot persistence covers missing, complete, malformed, and unsafe identities" },
+        { "file": "scripts/run-attention-conditional-tests.js", "test": "provider read health maps every bounded failure and operator label without leaking raw errors" },
+        { "file": "scripts/run-attention-conditional-tests.js", "test": "provider read fingerprints and incomplete-component lists change only with normalized evidence" },
+        { "file": "scripts/run-attention-conditional-tests.js", "test": "Attention event context freezes exactly one supported transition for non-submitting prompt use" },
+        { "file": "scripts/run-attention-conditional-tests.js", "test": "Attention tree groups newest project state, preserves nicknames, and redacts loader failures" },
+        { "file": "scripts/run-attention-conditional-tests.js", "test": "Attention rows exhaust primary actions, provider choices, tooltips, and generic severity icons" }
+      ],
+      "humanGates": ["live-providers"]
+    },
+    {
+      "id": "persistence-and-migration",
+      "goals": ["G06", "G15"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "managed monitoring lease acquires, blocks duplicate owners, renews, and releases" },
+        { "file": "scripts/run-unit-tests.js", "test": "legacy ~/.claude/kronos state migrates once without helper scripts" },
+        { "file": "scripts/run-unit-tests.js", "test": "legacy state uses a private staging path and never publishes an unsafe target" },
+        { "file": "scripts/run-unit-tests.js", "test": "legacy state uses a complete private copy when rename reports a cross-device boundary" },
+        { "file": "scripts/run-unit-tests.js", "test": "legacy migration refuses publish races and rename failures without overwriting either location" },
+        { "file": "scripts/run-unit-tests.js", "test": "cross-device legacy migration removes its partial copy when nested state is unsafe" },
+        { "file": "scripts/run-unit-tests.js", "test": "legacy migration refuses stale staging state and restores after final publication fails" },
+        { "file": "scripts/run-unit-tests.js", "test": "legacy rollback preserves a newly claimed legacy path and keeps staging out of the live target" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project configuration is canonical at setup and Work catalog ingress" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "one private open-flag layer omits unsupported Windows flags and fails closed on POSIX" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "expired monitor lease is reclaimed while a current owner remains exclusive" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "distinct processes sharing one Kronos directory enforce one polling owner and clean handoff" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "lease renewal and release refuse an identity replacement without deleting its owner" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "malformed, partial, oversized, future, and symbolic lease state fails closed" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "catalog, session, and monitor readers reject incomplete or unsupported private JSON" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "CI monitor snapshots round-trip one normalized provider state and fail closed on unsafe storage" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "work-session mutations preserve one identity across replacement, close, and reopen decisions" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "work-session storage rejects mismatched identities and unsafe removal entries" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "work-session provider, artifact, and monitoring projections cover every operator-visible state" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "ticket-session context limits retain the primary identity and newest explicit Jira work" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "registered-project monitoring owners refresh identity, reject stale bindings, and isolate returned state" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "project monitoring state fails closed for missing owners, invalid identity, and invalid timestamps" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "disposing the monitor releases its lease and prevents late provider state writes" },
+        { "file": "scripts/run-core-behavior-tests.js", "test": "TerminalFirstState isolates malformed load issues and cancels pending watcher work on dispose" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "state ownership matrix covers every canonical record family and ingress boundary" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "Work catalog migrates legacy aliases once and current schema exposes only canonical fields" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "session and event normalizers strip unknown fields while preserving explicit partial state" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "dates branches URLs paths and hashes fail closed at record ingress" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "future schemas fail closed without compatibility probing" },
+        { "file": "scripts/run-attention-conditional-tests.js", "test": "monitor event ledger round-trips full records, filters independently, and acknowledges once" },
+        { "file": "scripts/run-attention-conditional-tests.js", "test": "monitor event normalization fails closed on unsafe identities, payloads, metadata, and paths" }
+      ],
+      "humanGates": ["windows-native", "multi-window"]
+    },
+    {
+      "id": "projects-and-git",
+      "goals": ["G09"],
+      "automated": [
+        { "file": "scripts/run-core-behavior-tests.js", "test": "TerminalFirstState project mutations preserve explicit identities and watcher refreshes" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project discovery honors configured roots, depth, limits, and workspace folders" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project discovery finds and independently registers a Git repository nested inside another repository" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project discovery canonicalizes linked roots, accepts linked repositories, and does not traverse linked trees" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project discovery recognizes real Git worktrees and rejects malformed Git marker files" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project nickname sets and clears while registration identity stays canonical by path" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "duplicate discovered names receive stable unique identities and duplicate real paths collapse" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "missing registered folders remain visible until an authoritative uncheck removes them" },
+        { "file": "scripts/run-unit-tests.js", "test": "project Git evidence reads only the bounded VS Code Git model" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project Git presentation distinguishes unavailable, clean, staged, untracked, conflicted, and bounded states" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project Git state panel makes branches and dirty state scannable without exposing a checkout action" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project integration presentation exposes readiness without provider identifiers or credentials" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board keeps registered project paths and current branches in a compact disclosure" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "registered project actions start ticket-free Claude before read-only and provider actions" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "discovery, setup, and project management each retain one canonical UI home" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "explicit project journey keeps one stable identity across Work, Projects, Sessions, and Attention" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "unregistering a project clears launch authority but preserves Jira namespace and provider-only metadata" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "Projects tree covers empty, clean, changed, unavailable, action, and failed-loader branches" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "id": "setup-and-failures",
+      "goals": ["G07", "G12"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "bounded operation failures use one redacted actionable vocabulary" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "context completion reports every provider, artifact, snapshot, insertion, session, and audit stage" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "session failure still attempts audit and reports retained insertion without exposing credentials" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "audit failure does not hide a successful local session update or inserted reference" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "failure vocabulary distinguishes configuration, credentials, permission, transport, and bounded payload faults" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "Jira retains successful ticket and recent comment evidence when later comments and attachments are partial" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "Jenkins keeps the valid build while unavailable JUnit and stage APIs stay explicit" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "mixed CI provider failure retains the other provider result with an explicit warning" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "poll notice distinguishes another-window lease ownership from missing provider configuration" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "failed monitoring remains visible while last-known-good timestamps stay retained" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "operator surfaces use staged outcomes and the shared bounded failure vocabulary" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "one readiness snapshot feeds Setup and Doctor and gives every non-ready row an action" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "guided readiness distinguishes first-run, partial, fully ready, and live permission states" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project integration values round-trip, clear, and default to the observed Git branch" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "Setup and Doctor actions post only their allowlisted operation command field" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "Setup and Doctor preserve guided navigation and hide repair controls from healthy checks" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "discovery, setup, and project management each retain one canonical UI home" }
+      ],
+      "humanGates": ["live-providers"]
+    },
+    {
+      "id": "provider-variants",
+      "goals": ["G13"],
+      "automated": [
+        { "file": "scripts/run-provider-contract-tests.js", "test": "provider contract matrix covers requests, bounds, normalization, completeness, and errors for every provider" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized provider fixture set is bounded, credential-free, and reserved-origin only" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "GitLab enterprise paths retain paginated evidence and explain permission and rate-limit gaps" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jira Work search uses GET token pagination and bounded fields" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jenkins resolves multibranch parents and scopes the TLS exception to Jenkins requests" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab discovery falls back to ticket key and refuses ambiguous matches" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jira fixture retains rich fields and prior rows after a partial page read" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized GitLab fixture normalizes enterprise MR review, pipeline, job, and test evidence" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "GitLab context normalization retains rich optional evidence and reports malformed provider fields" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "GitLab normalized context enforces the global byte budget without dropping its safety warning" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jenkins fixture resolves a multibranch build and treats missing stages as optional" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized SonarQube fixture retains branch-qualified gate, measures, and issues" }
+      ],
+      "humanGates": ["live-providers"]
+    },
+    {
+      "id": "maintainability-and-orchestration",
+      "goals": ["G14"],
+      "automated": [
+        { "file": "scripts/run-command-routing-tests.js", "test": "command router exactly matches the manifest and dispatches each responsibility once" },
+        { "file": "scripts/run-command-routing-tests.js", "test": "command router fails closed when a responsibility handler is missing" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "scheduled Work refreshes coalesce behind one in-flight read" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "a newer explicit Work refresh supersedes a late stale result" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "a failed Work refresh releases ownership for the next request" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "disposing Work refresh orchestration aborts its active read" },
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder gives one deterministic event to one transition" },
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder suppresses unchanged read health but records a real change" },
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider read failures normalize to stable operator-safe categories" },
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider read components and fingerprints are canonical and bounded" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "primary button hierarchy keeps Work, Sessions, Projects, and Attention focused" },
+        { "file": "scripts/run-product-surface-contract-tests.js", "test": "verification matrix keeps every shipped feature group under named automated evidence" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "date normalization covers valid, invalid, primitive, and unsupported values" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "coverage policy discovers the npm test graph and fails closed on missing or regressed metrics" }
+      ],
+      "humanGates": []
+    },
+    {
+      "id": "scale-and-accessibility",
+      "goals": ["G17"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket board stays inside the checked render and output budget" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket filtering and facet collection stay inside the checked CPU budget" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "2000 supplied audit events render only the newest 500 inside the checked budget" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "maximum project and session collections render bounded summaries within local budgets" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "large artifact previews render summaries without copying provider payloads into the DOM" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "scale budget documents every bounded collection and supersession rule" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "shared webview accessibility CSS and form labels cover focus, forced colors, and narrow panels" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "an aborted Jira read rejects before transport and is not reported as a provider failure" }
+      ],
+      "humanGates": ["real-vscode", "operator-terminal"]
+    },
+    {
+      "id": "provider-health-visibility",
+      "goals": ["G20"],
+      "automated": [
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "session provider health derives the next poll and legacy successful-poll fallback" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "project provider health aggregates latest evidence and earliest scheduled poll" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "monitoring results persist success, meaningful change, and quiet suppression separately" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "health-only updates stay out of Attention history and use observation-only language" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "current normalized provider error clears only after a non-failing result" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "provider diagnostics retain current live failures and partial reads until their own recovery" }
+      ],
+      "humanGates": ["real-vscode", "live-providers"]
+    },
+    {
+      "id": "context-basket",
+      "goals": ["G19"],
+      "automated": [
+        { "file": "scripts/run-context-basket-tests.js", "test": "context basket stores bounded provenance beside private artifact references" },
+        { "file": "scripts/run-context-basket-tests.js", "test": "exact artifacts deduplicate while changed content for one source is marked conflicting" },
+        { "file": "scripts/run-context-basket-tests.js", "test": "removing a basket selection never deletes its private source artifact" },
+        { "file": "scripts/run-context-basket-tests.js", "test": "basket bundles retain references and hashes without copying source payloads" },
+        { "file": "scripts/run-context-basket-tests.js", "test": "basket bundle creation revalidates selected source content and metadata" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context basket preserves focus across explicit refresh and non-submitting insert actions" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "id": "local-evidence-search",
+      "goals": ["G21"],
+      "automated": [
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search covers sessions, tickets, projects, branches, providers, artifacts, and events without terminal content" },
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search enforces independent source budgets and a 2000-entry total ceiling" },
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search strips controls and bounds every visible field" },
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search actions retain only the bounded local target needed to open a result" },
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search explains sparse and unavailable extra-feature metadata without inventing targets" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "id": "handoff-and-branch-profiles",
+      "goals": ["G22"],
+      "automated": [
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "handoff candidates cap context and audit metadata without accepting terminal content" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff writes a private immutable Markdown and JSON reference pair without copying source payloads" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff has no provider, Git, or terminal side effects" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff refuses external artifact paths and oversized selections" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff rejects incomplete references before publishing an extra-feature bundle" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff verifies every referenced artifact even when a persisted hash is present" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "project integration parses, formats, and stores explicit Jenkins and SonarQube branch profiles" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "branch profile validation refuses duplicates, unsafe branches, credentials, and unknown active profiles" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "CI target selection uses an exact MR profile then explicit fallback without creating a ticket project link" }
+      ],
+      "humanGates": ["real-vscode", "live-providers"]
+    },
+    {
+      "id": "security-and-release",
+      "goals": ["G16", "G18"],
+      "automated": [
+        { "file": "scripts/run-command-routing-tests.js", "test": "runtime dependency surface is Node and VS Code only" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board runtime posts only normalized command and Jira ticket key" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "ticket workspace action panel posts one normalized, ticket-scoped message" },
+        { "file": "scripts/run-unit-tests.js", "test": "ticket and Jira-board webviews reject invalid requests and serialize exact ticket actions" },
+        { "file": "scripts/run-release-surface-tests.js", "test": "actual VSIX release surface is exact and runtime-dependency-free" },
+        { "file": "scripts/run-release-surface-tests.js", "test": "release surface validator fails closed on sensitive and development-only package files" },
+        { "file": "scripts/run-release-surface-tests.js", "test": "release documents and package metadata remain linked to current evidence" },
+        { "file": "scripts/run-release-surface-tests.js", "test": "public surface scan precedes both tests and release packaging" },
+        { "file": "scripts/run-release-surface-tests.js", "test": "publish verifier requires a clean named branch and exact remote head" },
+        { "file": "scripts/run-feature-journey-tests.js", "test": "manifest Claude modes and validated launcher commands cannot drift apart" },
+        { "file": "scripts/run-conditional-unit-tests.js", "test": "webview security injects one real CSP and preserves safe script bootstrap metadata" }
+      ],
+      "humanGates": ["operator-terminal", "windows-native", "multi-window", "live-providers"]
+    }
+  ],
+  "repositoryChecks": [
+    { "id": "roadmap-requirement-inventory", "file": "scripts/check-roadmap-evidence.js", "marker": "parseRoadmapRequirements" },
+    { "id": "state-identity-ownership", "file": "docs/state-ownership.md", "marker": "| Ticket-to-project link |" },
+    { "id": "state-record-ownership", "file": "docs/state-ownership.md", "marker": "## Record ownership" },
+    { "id": "state-terminal-ownership", "file": "docs/state-ownership.md", "marker": "| Live terminal object attachment |" },
+    { "id": "feature-human-summary", "file": "scripts/check-quality-evidence.js", "marker": "Kronos quality evidence OK" },
+    { "id": "derived-doc-metrics", "file": "scripts/check-quality-evidence.js", "marker": "checkReadmeMetrics" },
+    { "id": "required-release-gates", "file": "scripts/check-roadmap-evidence.js", "marker": "checkRequiredReleaseGates" },
+    { "id": "human-gates-required", "file": "scripts/check-roadmap-evidence.js", "marker": "gate.status !== 'required'" },
+    { "id": "audited-context-placement-boundary", "file": "scripts/check-context-governance.js", "marker": "Exactly one audited non-submitting context insertion call is allowed." },
+    { "id": "canonical-attention-transition-key", "file": "docs/state-ownership.md", "marker": "scope + provider + resource + logical subject + facet" },
+    { "id": "provider-binding-reconciliation-owner", "file": "docs/state-ownership.md", "marker": "| Provider binding reconciliation |" },
+    { "id": "private-persistence-lifecycle", "file": "docs/state-ownership.md", "marker": "## Private persistence lifecycle matrix" },
+    { "id": "runtime-responsibility-graph", "file": "scripts/check-runtime-graph.js", "marker": "no cycles or dead runtime exports" },
+    { "id": "terminal-first-manifest-contract", "file": "scripts/check-manifest.js", "marker": "EXPECTED_COMMANDS" },
+    { "id": "terminal-first-security-contract", "file": "scripts/check-security.js", "marker": "Kronos terminal-first runtime boundary failed" },
+    { "id": "exact-vsix-release-surface", "file": "scripts/release-surface.js", "marker": "releaseSurfaceFailures" },
+    { "id": "release-preflight-order", "file": "scripts/run-release-surface-tests.js", "marker": "manifest.scripts['release:preflight']" },
+    { "id": "product-claim-coherence", "file": "scripts/release-surface.js", "marker": "releaseDocumentationFailures" },
+    { "id": "published-branch-verifier", "file": "scripts/verify-published-branch.js", "marker": "local and remote branch heads do not match" },
+    { "id": "runtime-coverage-policy", "file": "scripts/run-code-coverage.js", "marker": "COVERAGE_THRESHOLDS" }
+  ],
+  "requirementEvidence": [
+    {
+      "requirements": ["G01-goal:57868cdf"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "Jira project keys never auto-link a repository; only an explicit ticket link does" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "unlinked tickets stay unlinked across refresh, registration, reload, polling selection, and standalone sessions" },
+        { "file": "scripts/run-unit-tests.js", "test": "provider bindings update one semantic subject without overwriting unrelated resources" }
+      ],
+      "checks": ["state-identity-ownership"]
+    },
+    {
+      "requirements": ["G01-case-01:c4326a51", "G01-case-02:5af42267"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "Jira project keys never auto-link a repository; only an explicit ticket link does" }
+      ]
+    },
+    {
+      "requirements": ["G01-case-03:0fafb358"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "unlinked tickets stay unlinked across refresh, registration, reload, polling selection, and standalone sessions" }
+      ]
+    },
+    {
+      "requirements": ["G01-case-04:a58cd4a2"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "Jira project keys never auto-link a repository; only an explicit ticket link does" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "checked projects replace local registrations and safely unlink removed explicit project links" }
+      ]
+    },
+    {
+      "requirements": ["G01-case-05:1eef0bdc"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "standalone work sessions persist without fake Jira identities and preserve legacy ticket records" }
+      ]
+    },
+    {
+      "requirements": ["G01-case-06:3d5a836c"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "provider bindings update one semantic subject without overwriting unrelated resources" }
+      ]
+    },
+    {
+      "requirements": ["G01-case-07:2d7fe7c3"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog strips legacy automation fields and persists privately" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog schema v2 ignores retired identities and clears unavailable local links" }
+      ]
+    },
+    {
+      "requirements": ["G01-evidence-01:843401a9"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog strips legacy automation fields and persists privately" }
+      ],
+      "checks": ["state-identity-ownership"]
+    },
+    {
+      "requirements": ["G01-evidence-02:14f40f44"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog strips legacy automation fields and persists privately" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog rejects unsupported future schemas without interpreting their identities" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog schema v2 ignores retired identities and clears unavailable local links" }
+      ],
+      "checks": ["state-identity-ownership"]
+    },
+    {
+      "requirements": ["G01-evidence-03:9a3a4ea5"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "Jira project keys never auto-link a repository; only an explicit ticket link does" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "unlinked tickets stay unlinked across refresh, registration, reload, polling selection, and standalone sessions" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "checked projects replace local registrations and safely unlink removed explicit project links" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog rejects unsupported future schemas without interpreting their identities" },
+        { "file": "scripts/run-unit-tests.js", "test": "Work catalog schema v2 ignores retired identities and clears unavailable local links" }
+      ]
+    },
+    {
+      "requirements": ["G01-evidence-04:0bad954d"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "unlinked tickets stay unlinked across refresh, registration, reload, polling selection, and standalone sessions" }
+      ]
+    },
+    {
+      "requirements": ["G02-goal:cf78a993"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "duplicate terminal names remain exact object identities across sessions and ambiguous bindings" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "one lifecycle projection distinguishes none, attached, paused, detached, closed, and stopped" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "session removal deletes only colocated state and registry detachment never controls the terminal" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "checks": ["state-terminal-ownership"],
+      "humanGates": ["operator-terminal", "real-vscode", "windows-native"]
+    },
+    {
+      "requirements": ["G02-case-01:b50a0d6f"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "explicit Claude launch creates and focuses exactly one terminal with or without a cwd" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-02:a4399be2", "G02-case-03:84e01dca"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-04:308e09e6"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "duplicate terminal names remain exact object identities across sessions and ambiguous bindings" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-05:9956e0af"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "duplicate terminal names remain exact object identities across sessions and ambiguous bindings" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-06:a9a45d1f"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-07:4435d8cd"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-08:fa5171ba"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "one lifecycle projection distinguishes none, attached, paused, detached, closed, and stopped" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-case-09:bab6b6e3"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "session removal deletes only colocated state and registry detachment never controls the terminal" },
+        { "file": "scripts/run-unit-tests.js", "test": "removing a work session deletes its record and colocated snapshots without touching external artifacts" }
+      ]
+    },
+    {
+      "requirements": ["G02-evidence-01:01798bf1"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "one lifecycle projection distinguishes none, attached, paused, detached, closed, and stopped" }
+      ],
+      "checks": ["state-terminal-ownership"]
+    },
+    {
+      "requirements": ["G02-evidence-02:bcfb5a13"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G02-evidence-03:502aebe6"],
+      "humanGates": ["operator-terminal", "real-vscode", "windows-native"]
+    },
+    {
+      "requirements": ["G03-goal:f194e41a"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "immutable private artifacts verify content and own local Git context persistence" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab and CI context pairs share immutable publication and reject incomplete evidence" },
+        { "file": "scripts/run-unit-tests.js", "test": "context placement verifies one exact attachment and remains exactly once after audit work" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "checks": ["audited-context-placement-boundary"],
+      "humanGates": ["operator-terminal", "real-vscode", "windows-native"]
+    },
+    {
+      "requirements": ["G03-case-01:e295fec7"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Jira ticket context asks for newest comments first but renders retained comments chronologically" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jira downloads arbitrary attachment types as private raw files for Claude to inspect" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jira artifacts retain custom fields behind an untrusted-data boundary" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jira artifacts recursively omit empty fields while retaining false, zero, and non-empty provider values" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jira fixture retains rich fields and prior rows after a partial page read" }
+      ]
+    },
+    {
+      "requirements": ["G03-case-02:de32d539"],
+      "automated": [
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized GitLab fixture normalizes enterprise MR review, pipeline, job, and test evidence" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab MR review monitoring retains complete facets across partial reads and dedupes read health" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab and CI context pairs share immutable publication and reject incomplete evidence" }
+      ]
+    },
+    {
+      "requirements": ["G03-case-03:1752a7f5"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "CI artifacts distinguish complete, partial, mixed-success, unavailable, and truncated provider evidence" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jenkins fixture resolves a multibranch build and treats missing stages as optional" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized SonarQube fixture retains branch-qualified gate, measures, and issues" }
+      ]
+    },
+    {
+      "requirements": ["G03-case-04:0cdf768e"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "terminal context insertion is shell-inert and never submits" },
+        { "file": "scripts/run-unit-tests.js", "test": "project Git evidence reads only the bounded VS Code Git model" }
+      ]
+    },
+    {
+      "requirements": ["G03-case-05:82e25979"],
+      "automated": [
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context composer posts edited focus only after Insert or Ctrl+Enter" },
+        { "file": "scripts/run-unit-tests.js", "test": "context placement verifies one exact attachment and remains exactly once after audit work" }
+      ]
+    },
+    {
+      "requirements": ["G03-case-06:995ee3f2"],
+      "automated": [
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context composer initialization is idempotent and one Insert click posts once" },
+        { "file": "scripts/run-unit-tests.js", "test": "context placement verifies one exact attachment and remains exactly once after audit work" }
+      ]
+    },
+    {
+      "requirements": ["G03-case-07:63e5e057"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G03-case-08:e85f50b7"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "terminal context insertion is shell-inert and never submits" }
+      ],
+      "humanGates": ["operator-terminal", "windows-native"]
+    },
+    {
+      "requirements": ["G03-evidence-01:47641a99"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "context placement verifies one exact attachment and remains exactly once after audit work" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "checks": ["audited-context-placement-boundary"]
+    },
+    {
+      "requirements": ["G03-evidence-02:410ae65f"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "CI artifacts distinguish complete, partial, mixed-success, unavailable, and truncated provider evidence" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jira raw attachment downloads retain explicit count and byte safety limits" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jira fixture retains rich fields and prior rows after a partial page read" },
+        { "file": "scripts/run-unit-tests.js", "test": "project Git evidence reads only the bounded VS Code Git model" }
+      ]
+    },
+    {
+      "requirements": ["G03-evidence-03:09a54c32"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Jira downloads arbitrary attachment types as private raw files for Claude to inspect" }
+      ]
+    },
+    {
+      "requirements": ["G03-evidence-04:88fb9dfe"],
+      "automated": [
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context composer posts edited focus only after Insert or Ctrl+Enter" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context composer initialization is idempotent and one Insert click posts once" },
+        { "file": "scripts/run-unit-tests.js", "test": "all provider evidence paths share the complete credential redaction vocabulary" },
+        { "file": "scripts/run-unit-tests.js", "test": "terminal context insertion is shell-inert and never submits" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode", "windows-native"]
+    },
+    {
+      "requirements": ["G04-goal:1280d099"],
+      "automated": [
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder suppresses unchanged read health but records a real change" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention read-health state replaces failure, recovery, partial, and later failure in one stream" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" }
+      ],
+      "checks": ["canonical-attention-transition-key"],
+      "humanGates": ["live-providers", "multi-window"]
+    },
+    {
+      "requirements": ["G04-case-01:d0d85e00"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "active Attention shows only current project delivery work and derives review readiness" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-02:deda03be"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "managed provider polling suppresses unchanged legacy provider-read failures" },
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder suppresses unchanged read health but records a real change" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-03:9c9213e3"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention read-health state replaces failure, recovery, partial, and later failure in one stream" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-04:3efd1e69"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab MR review monitoring retains complete facets across partial reads and dedupes read health" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "provider diagnostics retain current live failures and partial reads until their own recovery" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-05:2636f038", "G04-case-06:b6eb4481"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "active Attention reuses exact current events and removes finished standalone builds" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action language limits live clearing to completed CI results" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-07:a8bad7bf"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab pipeline transition matrix covers every declared pipeline, job, and test transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Jenkins and SonarQube transition matrices cover every declared CI transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention collapses newer pipeline, build, test, gate, and issue occurrences without deleting audit history" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-08:bb23475d"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention read-health state replaces failure, recovery, partial, and later failure in one stream" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-09:1371a133"],
+      "automated": [
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder remains deterministic across module reload and lease recovery" },
+        { "file": "scripts/run-unit-tests.js", "test": "one monitor coalesces overlapping polls instead of reporting a false cross-window lease owner" }
+      ],
+      "humanGates": ["multi-window"]
+    },
+    {
+      "requirements": ["G04-case-10:a3dd759b"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "registered project configuration polls GitLab Jenkins and Sonar without a ticket or terminal Session" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-11:cf96b211"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "registered project configuration polls GitLab Jenkins and Sonar without a ticket or terminal Session" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-12:8e5225dd"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "registered project configuration polls GitLab Jenkins and Sonar without a ticket or terminal Session" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-13:55efc3d0"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Jenkins and SonarQube transition matrices cover every declared CI transition" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-14:110cf2b2"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention collapses provider-read health into GitLab MR, Jenkins build, and SonarQube branch truth" }
+      ]
+    },
+    {
+      "requirements": ["G04-case-15:c70f3ac7"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "managed CI polling emits first healthy observations when providers join an existing baseline" }
+      ]
+    },
+    {
+      "requirements": ["G04-evidence-01:459964c3"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Attention stream identity is stable by project, provider, resource, logical subject, and facet" }
+      ],
+      "checks": ["canonical-attention-transition-key"]
+    },
+    {
+      "requirements": ["G04-evidence-02:1272abb5"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" }
+      ],
+      "checks": ["canonical-attention-transition-key"]
+    },
+    {
+      "requirements": ["G04-evidence-03:8a2973ce"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab merge-request transition matrix covers every declared structural transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab pipeline transition matrix covers every declared pipeline, job, and test transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Jenkins and SonarQube transition matrices cover every declared CI transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" }
+      ]
+    },
+    {
+      "requirements": ["G04-evidence-04:be578d24"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention read-health state replaces failure, recovery, partial, and later failure in one stream" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention collapses newer pipeline, build, test, gate, and issue occurrences without deleting audit history" }
+      ]
+    },
+    {
+      "requirements": ["G05-goal:b54ca459"],
+      "automated": [
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "one provider binding reconciliation owner feeds Work, Sessions, Projects, Attention, polling, and context insertion" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "bound MR identity wins stale catalog and only a matching monitor digest enriches it after reload" }
+      ],
+      "checks": ["provider-binding-reconciliation-owner"],
+      "humanGates": ["live-providers"]
+    },
+    {
+      "requirements": ["G05-case-01:d373b817", "G05-case-02:cb747cc0"],
+      "automated": [
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "bound MR identity wins stale catalog and only a matching monitor digest enriches it after reload" }
+      ]
+    },
+    {
+      "requirements": ["G05-case-03:0a83b72a"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab discovery selects a unique current-branch MR before ticket search" }
+      ]
+    },
+    {
+      "requirements": ["G05-case-04:1c8db132"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab discovery selects a unique current-branch MR before ticket search" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab discovery falls back to ticket key and refuses ambiguous matches" }
+      ]
+    },
+    {
+      "requirements": ["G05-case-05:ef6657ed"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab merge-request transition matrix covers every declared structural transition" }
+      ]
+    },
+    {
+      "requirements": ["G05-case-06:8e863540"],
+      "automated": [
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "multi-project reconciliation stays inside the explicitly linked project session set" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G05-case-07:022228c4"],
+      "automated": [
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "reconciled provider URLs are credential-free and rejected outside the configured origin" },
+        { "file": "scripts/run-unit-tests.js", "test": "provider URLs retain only the SonarQube dashboard routing query" }
+      ]
+    },
+    {
+      "requirements": ["G05-case-08:2c719903"],
+      "automated": [
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "Jenkins job, build history, and SonarQube branch identities remain distinct under one resolver" }
+      ]
+    },
+    {
+      "requirements": ["G05-case-09:6a099e7f"],
+      "automated": [
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "Jenkins job, build history, and SonarQube branch identities remain distinct under one resolver" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "CI target selection uses an exact MR profile then explicit fallback without creating a ticket project link" }
+      ]
+    },
+    {
+      "requirements": ["G05-case-10:1aa47234"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab and CI context pairs share immutable publication and reject incomplete evidence" }
+      ]
+    },
+    {
+      "requirements": ["G05-evidence-01:4b7db4b1", "G05-evidence-02:3f85f1c0"],
+      "automated": [
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "one provider binding reconciliation owner feeds Work, Sessions, Projects, Attention, polling, and context insertion" }
+      ],
+      "checks": ["provider-binding-reconciliation-owner"]
+    },
+    {
+      "requirements": ["G05-evidence-03:20cb6d15"],
+      "automated": [
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "bound MR identity wins stale catalog and only a matching monitor digest enriches it after reload" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "catalog MR binding candidates enrich only the same identity and never overwrite a newer binding" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "multi-project reconciliation stays inside the explicitly linked project session set" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab discovery falls back to ticket key and refuses ambiguous matches" },
+        { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" }
+      ]
+    },
+    {
+      "requirements": ["G06-goal:0c4e41b1"],
+      "automated": [
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "one private open-flag layer omits unsupported Windows flags and fails closed on POSIX" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "catalog, session, and monitor readers reject incomplete or unsupported private JSON" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "disposing the monitor releases its lease and prevents late provider state writes" }
+      ],
+      "checks": ["private-persistence-lifecycle"],
+      "humanGates": ["windows-native", "multi-window"]
+    },
+    {
+      "requirements": ["G06-case-01:1072ee91"],
+      "automated": [
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "one private open-flag layer omits unsupported Windows flags and fails closed on POSIX" }
+      ],
+      "humanGates": ["windows-native"]
+    },
+    {
+      "requirements": ["G06-case-02:9c97d297"],
+      "automated": [
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "lease renewal and release refuse an identity replacement without deleting its owner" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "malformed, partial, oversized, future, and symbolic lease state fails closed" },
+        { "file": "scripts/run-unit-tests.js", "test": "private file primitives atomically replace bounded state and reject symbolic paths" },
+        { "file": "scripts/run-unit-tests.js", "test": "private directory creation rejects symbolic ancestors without writing through them" }
+      ]
+    },
+    {
+      "requirements": ["G06-case-03:0a4194d5"],
+      "automated": [
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "expired monitor lease is reclaimed while a current owner remains exclusive" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "lease renewal and release refuse an identity replacement without deleting its owner" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "disposing the monitor releases its lease and prevents late provider state writes" }
+      ]
+    },
+    {
+      "requirements": ["G06-case-04:fac1e574"],
+      "automated": [
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "malformed, partial, oversized, future, and symbolic lease state fails closed" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "catalog, session, and monitor readers reject incomplete or unsupported private JSON" }
+      ]
+    },
+    {
+      "requirements": ["G06-case-05:8b1bb19e"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "managed monitoring lease acquires, blocks duplicate owners, renews, and releases" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "distinct processes sharing one Kronos directory enforce one polling owner and clean handoff" }
+      ],
+      "humanGates": ["multi-window"]
+    },
+    {
+      "requirements": ["G06-case-06:267642cc"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "legacy ~/.claude/kronos state migrates once without helper scripts" }
+      ]
+    },
+    {
+      "requirements": ["G06-case-07:73dcf66b"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "session removal deletes only colocated state and registry detachment never controls the terminal" },
+        { "file": "scripts/run-unit-tests.js", "test": "removing a work session deletes its record and colocated snapshots without touching external artifacts" }
+      ]
+    },
+    {
+      "requirements": ["G06-evidence-01:de737bed"],
+      "automated": [
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "one private open-flag layer omits unsupported Windows flags and fails closed on POSIX" }
+      ],
+      "checks": ["private-persistence-lifecycle"]
+    },
+    {
+      "requirements": ["G06-evidence-02:864e300f"],
+      "automated": [
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "catalog, session, and monitor readers reject incomplete or unsupported private JSON" }
+      ],
+      "checks": ["private-persistence-lifecycle"]
+    },
+    {
+      "requirements": ["G06-evidence-03:0f8109d0"],
+      "humanGates": ["windows-native", "multi-window"]
+    },
+    {
+      "requirements": ["G07-goal:117ce800"],
+      "automated": [
+        { "file": "scripts/run-failure-contract-tests.js", "test": "context completion reports every provider, artifact, snapshot, insertion, session, and audit stage" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "operator surfaces use staged outcomes and the shared bounded failure vocabulary" }
+      ],
+      "humanGates": ["live-providers"]
+    },
+    {
+      "requirements": ["G07-case-01:05785670"],
+      "automated": [
+        { "file": "scripts/run-failure-contract-tests.js", "test": "failure vocabulary distinguishes configuration, credentials, permission, transport, and bounded payload faults" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "provider readiness is shared, secret-free, and distinguishes missing from invalid configuration" }
+      ]
+    },
+    {
+      "requirements": ["G07-case-02:e93af109"],
+      "automated": [
+        { "file": "scripts/run-failure-contract-tests.js", "test": "failure vocabulary distinguishes configuration, credentials, permission, transport, and bounded payload faults" }
+      ]
+    },
+    {
+      "requirements": ["G07-case-03:0402223e"],
+      "automated": [
+        { "file": "scripts/run-failure-contract-tests.js", "test": "Jira retains successful ticket and recent comment evidence when later comments and attachments are partial" }
+      ]
+    },
+    {
+      "requirements": ["G07-case-04:349cb3af"],
+      "automated": [
+        { "file": "scripts/run-failure-contract-tests.js", "test": "Jenkins keeps the valid build while unavailable JUnit and stage APIs stay explicit" }
+      ]
+    },
+    {
+      "requirements": ["G07-case-05:e24784da"],
+      "automated": [
+        { "file": "scripts/run-failure-contract-tests.js", "test": "mixed CI provider failure retains the other provider result with an explicit warning" }
+      ]
+    },
+    {
+      "requirements": ["G07-case-06:177cef4a"],
+      "automated": [
+        { "file": "scripts/run-failure-contract-tests.js", "test": "session failure still attempts audit and reports retained insertion without exposing credentials" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "audit failure does not hide a successful local session update or inserted reference" }
+      ]
+    },
+    {
+      "requirements": ["G07-case-07:4a4ab8d6"],
+      "automated": [
+        { "file": "scripts/run-failure-contract-tests.js", "test": "poll notice distinguishes another-window lease ownership from missing provider configuration" }
+      ]
+    },
+    {
+      "requirements": ["G07-evidence-01:c8b0a1e8"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "bounded operation failures use one redacted actionable vocabulary" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "operator surfaces use staged outcomes and the shared bounded failure vocabulary" }
+      ]
+    },
+    {
+      "requirements": ["G07-evidence-02:60a9b93b"],
+      "automated": [
+        { "file": "scripts/run-failure-contract-tests.js", "test": "failure vocabulary distinguishes configuration, credentials, permission, transport, and bounded payload faults" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "session failure still attempts audit and reports retained insertion without exposing credentials" }
+      ]
+    },
+    {
+      "requirements": ["G07-evidence-03:6f55d40f"],
+      "automated": [
+        { "file": "scripts/run-failure-contract-tests.js", "test": "failed monitoring remains visible while last-known-good timestamps stay retained" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "Jira retains successful ticket and recent comment evidence when later comments and attachments are partial" }
+      ]
+    },
+    {
+      "requirements": ["G08-goal:668506b3"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board terminology and dense-card rendering keep Jira namespaces separate from local repositories" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board action and focus contract covers every declared action exactly once" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "requirements": ["G08-case-01:0f43590e"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board terminology and dense-card rendering keep Jira namespaces separate from local repositories" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board filters Jira namespaces independently from explicit local projects" }
+      ]
+    },
+    {
+      "requirements": ["G08-case-02:d941470c"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board settings map custom completed statuses and the initial visibility default" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board reset returns to the configured completed-work default" }
+      ]
+    },
+    {
+      "requirements": ["G08-case-03:d9eab6a0"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board composes every search, status, Jira, local-project, and label filter subset" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board runtime filters cards and reveals a specifically selected completed status" }
+      ]
+    },
+    {
+      "requirements": ["G08-case-04:9e10e26d"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board filters survive a webview HTML rerender through VS Code webview state" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board reset returns to the configured completed-work default" }
+      ]
+    },
+    {
+      "requirements": ["G08-case-05:4d349f09"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board renders distinct current, empty, loading, partial, stale, and error data states" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board composes every search, status, Jira, local-project, and label filter subset" }
+      ]
+    },
+    {
+      "requirements": ["G08-case-06:f5e6f718"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board builder exposes useful Jira filters and only bounded terminal-first actions" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board keeps registered project paths and current branches in a compact disclosure" }
+      ]
+    },
+    {
+      "requirements": ["G08-case-07:d1123622"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board terminology and dense-card rendering keep Jira namespaces separate from local repositories" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket board stays inside the checked render and output budget" }
+      ]
+    },
+    {
+      "requirements": ["G08-case-08:becdc77f"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board action and focus contract covers every declared action exactly once" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board keyboard activation opens a focused card with Enter or Space exactly once" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G08-evidence-01:71190d3a"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board terminology and dense-card rendering keep Jira namespaces separate from local repositories" }
+      ]
+    },
+    {
+      "requirements": ["G08-evidence-02:9326a1b7"],
+      "automated": [
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board action and focus contract covers every declared action exactly once" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board composes every search, status, Jira, local-project, and label filter subset" }
+      ]
+    },
+    {
+      "requirements": ["G08-evidence-03:de86a8de"],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "requirements": ["G09-goal:6b68e337"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project integration presentation exposes readiness without provider identifiers or credentials" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G09-case-01:d6869804"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G09-case-02:e19f09a2"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project discovery honors configured roots, depth, limits, and workspace folders" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project discovery finds and independently registers a Git repository nested inside another repository" }
+      ]
+    },
+    {
+      "requirements": ["G09-case-03:076a1aa9"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G09-case-04:60dea96e"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "checked projects replace local registrations and safely unlink removed explicit project links" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G09-case-05:026410c6"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "duplicate discovered names receive stable unique identities and duplicate real paths collapse" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project discovery honors configured roots, depth, limits, and workspace folders" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project discovery finds and independently registers a Git repository nested inside another repository" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project discovery canonicalizes linked roots, accepts linked repositories, and does not traverse linked trees" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project discovery recognizes real Git worktrees and rejects malformed Git marker files" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "missing registered folders remain visible until an authoritative uncheck removes them" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "Git worktree pointers are bounded and symbolic Git metadata is ignored" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "explicit local project links preserve unrelated provider records and report branch without running Git" }
+      ]
+    },
+    {
+      "requirements": ["G09-case-06:dfe7076c"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project Git presentation distinguishes unavailable, clean, staged, untracked, conflicted, and bounded states" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project Git state panel makes branches and dirty state scannable without exposing a checkout action" },
+        { "file": "scripts/run-unit-tests.js", "test": "project Git evidence reads only the bounded VS Code Git model" }
+      ]
+    },
+    {
+      "requirements": ["G09-case-07:f35790d0"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G09-case-08:664a405a"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "a closed or rebound terminal invalidates captured context placement without guessing" }
+      ],
+      "humanGates": ["operator-terminal"]
+    },
+    {
+      "requirements": ["G09-evidence-01:d509bcdf"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project nickname sets and clears while registration identity stays canonical by path" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "duplicate discovered names receive stable unique identities and duplicate real paths collapse" }
+      ]
+    },
+    {
+      "requirements": ["G09-evidence-02:ad12172f"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "project Git evidence reads only the bounded VS Code Git model" },
+        { "file": "scripts/run-command-routing-tests.js", "test": "runtime dependency surface is Node and VS Code only" }
+      ]
+    },
+    {
+      "requirements": ["G09-evidence-03:2b7bcd99"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project integration presentation exposes readiness without provider identifiers or credentials" }
+      ]
+    },
+    {
+      "requirements": ["G10-goal:25373a8c"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions present project, branch, Jira contexts, attachment, monitoring, and latest result at a glance" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "requirements": ["G10-case-01:904538e8"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "standalone work sessions persist without fake Jira identities and preserve legacy ticket records" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-02:c36b043f"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions present project, branch, Jira contexts, attachment, monitoring, and latest result at a glance" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-03:a4644ca9"],
+      "automated": [
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "Session display names are presentation-only and reset without identity drift" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-04:c5823dad"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "standalone work sessions persist without fake Jira identities and preserve legacy ticket records" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-05:5552e342"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions action language keeps Open Terminal, reconnect, detach, monitoring, audit, stop, and remove distinct" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-06:ee994e54"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions never present detached, closed, stopped, paused, or removed-project records as active" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-case-07:fe239727"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "terminal titles capture ticket and observed branch once at launch within the VS Code name bound" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G10-evidence-01:b32294b9"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions action language keeps Open Terminal, reconnect, detach, monitoring, audit, stop, and remove distinct" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "requirements": ["G10-evidence-02:9101d1e5"],
+      "automated": [
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "session removal deletes only colocated state and registry detachment never controls the terminal" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions action language keeps Open Terminal, reconnect, detach, monitoring, audit, stop, and remove distinct" }
+      ]
+    },
+    {
+      "requirements": ["G10-evidence-03:c671b0fb"],
+      "automated": [
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search covers sessions, tickets, projects, branches, providers, artifacts, and events without terminal content" }
+      ]
+    },
+    {
+      "requirements": ["G11-goal:b87d82e8"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention rows expose project, provider, subject, observed time, changed time, and why" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose validated ticket and registered-project evidence actions" },
+        { "file": "scripts/run-unit-tests.js", "test": "local monitoring blockers transition once, recover once, and retain audit history" }
+      ],
+      "humanGates": ["real-vscode", "live-providers"]
+    },
+    {
+      "requirements": ["G11-case-01:d4c1c6c6"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention collapses newer pipeline, build, test, gate, and issue occurrences without deleting audit history" },
+        { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" },
+        { "file": "scripts/run-unit-tests.js", "test": "local monitoring blockers transition once, recover once, and retain audit history" }
+      ]
+    },
+    {
+      "requirements": ["G11-case-02:9403c154"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "active Attention state language, order, and pop-up boundary are exhaustive" }
+      ]
+    },
+    {
+      "requirements": ["G11-case-03:30392c59"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose validated ticket and registered-project evidence actions" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "reconciled provider URLs are credential-free and rejected outside the configured origin" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G11-case-04:95128242"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention Jenkins builds and SonarQube branches are validated and latest-first" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G11-case-05:0afcdc63"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action contexts expose validated ticket and registered-project evidence actions" }
+      ]
+    },
+    {
+      "requirements": ["G11-case-06:843dcb8b"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action language limits live clearing to completed CI results" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context composer posts edited focus only after Insert or Ctrl+Enter" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G11-case-07:1c86ebd2"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action language limits live clearing to completed CI results" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" },
+        { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" }
+      ]
+    },
+    {
+      "requirements": ["G11-case-08:2cbf2641"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "active Attention state language, order, and pop-up boundary are exhaustive" }
+      ],
+      "humanGates": ["live-providers"]
+    },
+    {
+      "requirements": ["G11-evidence-01:8c1a2d1e"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention rows expose project, provider, subject, observed time, changed time, and why" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G11-evidence-02:98990bfd"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention action language limits live clearing to completed CI results" }
+      ]
+    },
+    {
+      "requirements": ["G11-evidence-03:3555f8ef"],
+      "automated": [
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab merge-request transition matrix covers every declared structural transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention read-health state replaces failure, recovery, partial, and later failure in one stream" },
+        { "file": "scripts/run-unit-tests.js", "test": "managed provider polling automatically discovers and locally binds a project MR" }
+      ],
+      "humanGates": ["live-providers"]
+    },
+    {
+      "requirements": ["G12-goal:a9bc048c"],
+      "automated": [
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "guided readiness distinguishes first-run, partial, fully ready, and live permission states" },
+        { "file": "scripts/run-unit-tests.js", "test": "Setup and Check Setup render bounded operation dashboards with allowlisted actions" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G12-case-01:7712c10b"],
+      "automated": [
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "provider readiness is shared, secret-free, and distinguishes missing from invalid configuration" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "guided readiness distinguishes first-run, partial, fully ready, and live permission states" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-02:f6c9a502"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-03:6fec6be6"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project integration values round-trip, clear, and default to the observed Git branch" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-04:75e2839f"],
+      "automated": [
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project integration values round-trip, clear, and default to the observed Git branch" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-05:dfb4b2a1"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Setup and Check Setup render bounded operation dashboards with allowlisted actions" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "guided readiness distinguishes first-run, partial, fully ready, and live permission states" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "provider diagnostics retain current live failures and partial reads until their own recovery" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-06:afdc858a"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G12-case-07:ed542607"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Setup and Check Setup render bounded operation dashboards with allowlisted actions" }
+      ],
+      "humanGates": ["windows-native"]
+    },
+    {
+      "requirements": ["G12-evidence-01:bbf8399c"],
+      "automated": [
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "one readiness snapshot feeds Setup and Doctor and gives every non-ready row an action" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G12-evidence-02:f7cf3634"],
+      "automated": [
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "provider readiness is shared, secret-free, and distinguishes missing from invalid configuration" },
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "opening provider configuration creates one private comment-only template without replacing existing content" }
+      ]
+    },
+    {
+      "requirements": ["G12-evidence-03:9efe4443"],
+      "automated": [
+        { "file": "scripts/run-provider-readiness-tests.js", "test": "one readiness snapshot feeds Setup and Doctor and gives every non-ready row an action" },
+        { "file": "scripts/run-unit-tests.js", "test": "Setup and Check Setup render bounded operation dashboards with allowlisted actions" }
+      ]
+    },
+    {
+      "requirements": ["G13-goal:e06a716f"],
+      "automated": [
+        { "file": "scripts/run-provider-contract-tests.js", "test": "provider contract matrix covers requests, bounds, normalization, completeness, and errors for every provider" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "GitLab enterprise paths retain paginated evidence and explain permission and rate-limit gaps" },
+        { "file": "scripts/run-unit-tests.js", "test": "all provider evidence paths share the complete credential redaction vocabulary" },
+        { "file": "scripts/run-command-routing-tests.js", "test": "runtime dependency surface is Node and VS Code only" }
+      ],
+      "humanGates": ["live-providers"]
+    },
+    {
+      "requirements": ["G13-case-01:b42ac691"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "Jira Work search uses GET token pagination and bounded fields" },
+        { "file": "scripts/run-unit-tests.js", "test": "default Jira Work search fetches active and recent completed tickets for local filtering" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jira ticket context asks for newest comments first but renders retained comments chronologically" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jira downloads arbitrary attachment types as private raw files for Claude to inspect" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jira artifacts retain custom fields behind an untrusted-data boundary" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "completed status detection supports common names and explicit team statuses" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jira fixture retains rich fields and prior rows after a partial page read" }
+      ]
+    },
+    {
+      "requirements": ["G13-case-02:59922c61"],
+      "automated": [
+        { "file": "scripts/run-provider-contract-tests.js", "test": "GitLab enterprise paths retain paginated evidence and explain permission and rate-limit gaps" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized GitLab fixture normalizes enterprise MR review, pipeline, job, and test evidence" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab discovery selects a unique current-branch MR before ticket search" },
+        { "file": "scripts/run-unit-tests.js", "test": "GitLab discovery falls back to ticket key and refuses ambiguous matches" }
+      ]
+    },
+    {
+      "requirements": ["G13-case-03:93220be9"],
+      "automated": [
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jenkins fixture resolves a multibranch build and treats missing stages as optional" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jenkins resolves multibranch parents and scopes the TLS exception to Jenkins requests" },
+        { "file": "scripts/run-unit-tests.js", "test": "Jenkins context extracts only literal SonarQube configuration from bounded config.xml" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "Jenkins keeps the valid build while unavailable JUnit and stage APIs stay explicit" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Jenkins and SonarQube transition matrices cover every declared CI transition" }
+      ]
+    },
+    {
+      "requirements": ["G13-case-04:a82a8712"],
+      "automated": [
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized SonarQube fixture retains branch-qualified gate, measures, and issues" },
+        { "file": "scripts/run-unit-tests.js", "test": "provider URLs retain only the SonarQube dashboard routing query" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention Jenkins builds and SonarQube branches are validated and latest-first" }
+      ]
+    },
+    {
+      "requirements": ["G13-case-05:10289db2"],
+      "automated": [
+        { "file": "scripts/run-provider-contract-tests.js", "test": "GitLab enterprise paths retain paginated evidence and explain permission and rate-limit gaps" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "failure vocabulary distinguishes configuration, credentials, permission, transport, and bounded payload faults" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "Jira retains successful ticket and recent comment evidence when later comments and attachments are partial" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "Jenkins keeps the valid build while unavailable JUnit and stage APIs stay explicit" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized provider fixture set is bounded, credential-free, and reserved-origin only" }
+      ]
+    },
+    {
+      "requirements": ["G13-evidence-01:018ecd61"],
+      "automated": [
+        { "file": "scripts/run-provider-contract-tests.js", "test": "provider contract matrix covers requests, bounds, normalization, completeness, and errors for every provider" }
+      ]
+    },
+    {
+      "requirements": ["G13-evidence-02:9aefc129"],
+      "automated": [
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized provider fixture set is bounded, credential-free, and reserved-origin only" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jira fixture retains rich fields and prior rows after a partial page read" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized GitLab fixture normalizes enterprise MR review, pipeline, job, and test evidence" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jenkins fixture resolves a multibranch build and treats missing stages as optional" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized SonarQube fixture retains branch-qualified gate, measures, and issues" },
+        { "file": "scripts/run-command-routing-tests.js", "test": "runtime dependency surface is Node and VS Code only" }
+      ]
+    },
+    {
+      "requirements": ["G13-evidence-03:47f18393"],
+      "humanGates": ["live-providers"]
+    },
+    {
+      "requirements": ["G14-goal:d7f307d3"],
+      "automated": [
+        { "file": "scripts/run-command-routing-tests.js", "test": "command router exactly matches the manifest and dispatches each responsibility once" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "scheduled Work refreshes coalesce behind one in-flight read" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "one provider binding reconciliation owner feeds Work, Sessions, Projects, Attention, polling, and context insertion" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" },
+        { "file": "scripts/run-unit-tests.js", "test": "Setup and Check Setup render bounded operation dashboards with allowlisted actions" }
+      ],
+      "checks": ["runtime-responsibility-graph", "runtime-coverage-policy"]
+    },
+    {
+      "requirements": ["G14-evidence-01:ff81fe1b"],
+      "automated": [
+        { "file": "scripts/run-command-routing-tests.js", "test": "command router exactly matches the manifest and dispatches each responsibility once" },
+        { "file": "scripts/run-terminal-lifecycle-tests.js", "test": "Sessions present project, branch, Jira contexts, attachment, monitoring, and latest result at a glance" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project Git presentation distinguishes unavailable, clean, staged, untracked, conflicted, and bounded states" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "Attention projection rebuilds after restart without stale-row resurrection" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "one provider binding reconciliation owner feeds Work, Sessions, Projects, Attention, polling, and context insertion" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "operator surfaces use staged outcomes and the shared bounded failure vocabulary" }
+      ]
+    },
+    {
+      "requirements": ["G14-evidence-02:0692cdeb"],
+      "automated": [
+        { "file": "scripts/run-command-routing-tests.js", "test": "command router fails closed when a responsibility handler is missing" }
+      ],
+      "checks": ["runtime-responsibility-graph"]
+    },
+    {
+      "requirements": ["G14-evidence-03:100ba5ee"],
+      "automated": [
+        { "file": "scripts/run-command-routing-tests.js", "test": "command router exactly matches the manifest and dispatches each responsibility once" },
+        { "file": "scripts/run-command-routing-tests.js", "test": "runtime dependency surface is Node and VS Code only" }
+      ]
+    },
+    {
+      "requirements": ["G14-evidence-04:0d071921"],
+      "automated": [
+        { "file": "scripts/run-command-routing-tests.js", "test": "command router exactly matches the manifest and dispatches each responsibility once" },
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ],
+      "checks": ["runtime-responsibility-graph"]
+    },
+    {
+      "requirements": ["G15-goal:39594c16"],
+      "automated": [
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "state ownership matrix covers every canonical record family and ingress boundary" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "Work catalog migrates legacy aliases once and current schema exposes only canonical fields" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "session and event normalizers strip unknown fields while preserving explicit partial state" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "dates branches URLs paths and hashes fail closed at record ingress" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "future schemas fail closed without compatibility probing" }
+      ],
+      "checks": ["state-record-ownership", "private-persistence-lifecycle"]
+    },
+    {
+      "requirements": ["G15-case-01:85626406"],
+      "automated": [
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "state ownership matrix covers every canonical record family and ingress boundary" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "session and event normalizers strip unknown fields while preserving explicit partial state" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project configuration is canonical at setup and Work catalog ingress" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "catalog, session, and monitor readers reject incomplete or unsupported private JSON" }
+      ],
+      "checks": ["state-record-ownership"]
+    },
+    {
+      "requirements": ["G15-case-02:accb0dd5"],
+      "automated": [
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "session and event normalizers strip unknown fields while preserving explicit partial state" },
+        { "file": "scripts/run-failure-contract-tests.js", "test": "context completion reports every provider, artifact, snapshot, insertion, session, and audit stage" }
+      ]
+    },
+    {
+      "requirements": ["G15-case-03:3e575fa3"],
+      "automated": [
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "dates branches URLs paths and hashes fail closed at record ingress" },
+        { "file": "scripts/run-project-catalog-tests.js", "test": "project configuration is canonical at setup and Work catalog ingress" }
+      ]
+    },
+    {
+      "requirements": ["G15-case-04:051a8e8c"],
+      "automated": [
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "future schemas fail closed without compatibility probing" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "catalog, session, and monitor readers reject incomplete or unsupported private JSON" }
+      ]
+    },
+    {
+      "requirements": ["G15-evidence-01:0a237c1d"],
+      "automated": [
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "state ownership matrix covers every canonical record family and ingress boundary" }
+      ],
+      "checks": ["state-record-ownership"]
+    },
+    {
+      "requirements": ["G15-evidence-02:10796fc3"],
+      "automated": [
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "Work catalog migrates legacy aliases once and current schema exposes only canonical fields" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "session and event normalizers strip unknown fields while preserving explicit partial state" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "dates branches URLs paths and hashes fail closed at record ingress" }
+      ]
+    },
+    {
+      "requirements": ["G15-evidence-03:c8382be4"],
+      "automated": [
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "Work catalog migrates legacy aliases once and current schema exposes only canonical fields" },
+        { "file": "scripts/run-schema-invariant-tests.js", "test": "future schemas fail closed without compatibility probing" }
+      ]
+    },
+    {
+      "requirements": ["G16-goal:b55b5b6c"],
+      "checks": ["roadmap-requirement-inventory", "feature-human-summary", "human-gates-required"]
+    },
+    {
+      "requirements": ["G16-case-01:9a3fff3b"],
+      "automated": [
+        { "file": "scripts/run-provider-reconciliation-tests.js", "test": "provider transition recorder gives one deterministic event to one transition" },
+        { "file": "scripts/run-attention-transition-matrix-tests.js", "test": "GitLab merge-request transition matrix covers every declared structural transition" }
+      ]
+    },
+    {
+      "requirements": ["G16-case-02:8012b4ef"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "private file primitives atomically replace bounded state and reject symbolic paths" },
+        { "file": "scripts/run-unit-tests.js", "test": "legacy ~/.claude/kronos state migrates once without helper scripts" }
+      ]
+    },
+    {
+      "requirements": ["G16-case-03:3f9bdda3"],
+      "automated": [
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jira fixture retains rich fields and prior rows after a partial page read" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized GitLab fixture normalizes enterprise MR review, pipeline, job, and test evidence" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized Jenkins fixture resolves a multibranch build and treats missing stages as optional" },
+        { "file": "scripts/run-provider-contract-tests.js", "test": "sanitized SonarQube fixture retains branch-qualified gate, measures, and issues" }
+      ]
+    },
+    {
+      "requirements": ["G16-case-04:58b7a2c6"],
+      "automated": [
+        { "file": "scripts/run-webview-dom-tests.js", "test": "Setup and Doctor actions post only their allowlisted operation command field" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board runtime posts only normalized command and Jira ticket key" }
+      ]
+    },
+    {
+      "requirements": ["G16-case-05:109a7c60"],
+      "automated": [
+        { "file": "scripts/run-unit-tests.js", "test": "extension activation registers the bounded surface and explicit launch commands create the right session kinds" }
+      ]
+    },
+    {
+      "requirements": ["G16-case-06:12e7e7ff"],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "requirements": ["G16-case-07:4aae12f1"],
+      "automated": [
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "one private open-flag layer omits unsupported Windows flags and fails closed on POSIX" },
+        { "file": "scripts/run-unit-tests.js", "test": "managed monitoring lease acquires, blocks duplicate owners, renews, and releases" },
+        { "file": "scripts/run-persistence-recovery-tests.js", "test": "distinct processes sharing one Kronos directory enforce one polling owner and clean handoff" }
+      ],
+      "humanGates": ["windows-native", "multi-window"]
+    },
+    {
+      "requirements": ["G16-case-08:2b61f818"],
+      "humanGates": ["live-providers"]
+    },
+    {
+      "requirements": ["G16-evidence-01:77fff6c7"],
+      "checks": ["roadmap-requirement-inventory"]
+    },
+    {
+      "requirements": ["G16-evidence-02:bea1d492"],
+      "checks": ["feature-human-summary"]
+    },
+    {
+      "requirements": ["G16-evidence-03:04cd668e"],
+      "checks": ["derived-doc-metrics"]
+    },
+    {
+      "requirements": ["G16-evidence-04:442ed52a"],
+      "checks": ["required-release-gates"]
+    },
+    {
+      "requirements": ["G16-evidence-05:1d8066fe"],
+      "checks": ["human-gates-required"]
+    },
+    {
+      "requirements": ["G17-goal:7a1a1111"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket board stays inside the checked render and output budget" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "maximum project and session collections render bounded summaries within local budgets" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "large artifact previews render summaries without copying provider payloads into the DOM" }
+      ],
+      "humanGates": ["real-vscode", "operator-terminal"]
+    },
+    {
+      "requirements": ["G17-case-01:fb2fc118"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket board stays inside the checked render and output budget" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "maximum project and session collections render bounded summaries within local budgets" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "2000 supplied audit events render only the newest 500 inside the checked budget" }
+      ]
+    },
+    {
+      "requirements": ["G17-case-02:a9ec1eb5"],
+      "automated": [
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "scheduled Work refreshes coalesce behind one in-flight read" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "a newer explicit Work refresh supersedes a late stale result" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "an aborted Jira read rejects before transport and is not reported as a provider failure" },
+        { "file": "scripts/run-unit-tests.js", "test": "one monitor coalesces overlapping polls instead of reporting a false cross-window lease owner" }
+      ]
+    },
+    {
+      "requirements": ["G17-case-03:a301e7df"],
+      "humanGates": ["real-vscode", "operator-terminal"]
+    },
+    {
+      "requirements": ["G17-case-04:9eba4482"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "large artifact previews render summaries without copying provider payloads into the DOM" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "maximum project and session collections render bounded summaries within local budgets" }
+      ]
+    },
+    {
+      "requirements": ["G17-evidence-01:5bac77e7"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "scale budget documents every bounded collection and supersession rule" }
+      ]
+    },
+    {
+      "requirements": ["G17-evidence-02:20023984"],
+      "automated": [
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "a newer explicit Work refresh supersedes a late stale result" },
+        { "file": "scripts/run-work-orchestration-tests.js", "test": "disposing Work refresh orchestration aborts its active read" }
+      ]
+    },
+    {
+      "requirements": ["G17-evidence-03:613cd49b"],
+      "automated": [
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "500-ticket board stays inside the checked render and output budget" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "maximum project and session collections render bounded summaries within local budgets" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "large artifact previews render summaries without copying provider payloads into the DOM" },
+        { "file": "scripts/run-scale-accessibility-tests.js", "test": "shared webview accessibility CSS and form labels cover focus, forced colors, and narrow panels" }
+      ],
+      "humanGates": ["real-vscode", "operator-terminal"]
+    },
+    {
+      "requirements": ["G18-goal:257d3f43"],
+      "automated": [
+        { "file": "scripts/run-release-surface-tests.js", "test": "actual VSIX release surface is exact and runtime-dependency-free" },
+        { "file": "scripts/run-release-surface-tests.js", "test": "release surface validator fails closed on sensitive and development-only package files" },
+        { "file": "scripts/run-release-surface-tests.js", "test": "release documents and package metadata remain linked to current evidence" }
+      ],
+      "checks": ["exact-vsix-release-surface", "terminal-first-security-contract", "product-claim-coherence"]
+    },
+    {
+      "requirements": ["G18-case-01:24af5b20"],
+      "automated": [
+        { "file": "scripts/run-release-surface-tests.js", "test": "actual VSIX release surface is exact and runtime-dependency-free" },
+        { "file": "scripts/run-release-surface-tests.js", "test": "release surface validator fails closed on sensitive and development-only package files" }
+      ],
+      "checks": ["exact-vsix-release-surface"]
+    },
+    {
+      "requirements": ["G18-case-02:b4995dec"],
+      "automated": [
+        { "file": "scripts/run-command-routing-tests.js", "test": "runtime dependency surface is Node and VS Code only" },
+        { "file": "scripts/run-release-surface-tests.js", "test": "runtime source imports are limited to local modules, Node built-ins, and VS Code" },
+        { "file": "scripts/run-jira-work-board-tests.js", "test": "board runtime posts only normalized command and Jira ticket key" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "Setup and Doctor actions post only their allowlisted operation command field" },
+        { "file": "scripts/run-provider-binding-reconciliation-tests.js", "test": "reconciled provider URLs are credential-free and rejected outside the configured origin" }
+      ],
+      "checks": ["runtime-responsibility-graph", "terminal-first-manifest-contract", "terminal-first-security-contract", "audited-context-placement-boundary"]
+    },
+    {
+      "requirements": ["G18-case-03:cd011c42"],
+      "automated": [
+        { "file": "scripts/run-release-surface-tests.js", "test": "release documents and package metadata remain linked to current evidence" }
+      ],
+      "checks": ["product-claim-coherence", "derived-doc-metrics"]
+    },
+    {
+      "requirements": ["G18-evidence-01:fd6c064e"],
+      "automated": [
+        { "file": "scripts/run-release-surface-tests.js", "test": "actual VSIX release surface is exact and runtime-dependency-free" },
+        { "file": "scripts/run-release-surface-tests.js", "test": "release surface validator fails closed on sensitive and development-only package files" }
+      ],
+      "checks": ["exact-vsix-release-surface"]
+    },
+    {
+      "requirements": ["G18-evidence-02:49038b69"],
+      "automated": [
+        { "file": "scripts/run-release-surface-tests.js", "test": "public surface scan precedes both tests and release packaging" }
+      ],
+      "checks": ["release-preflight-order"]
+    },
+    {
+      "requirements": ["G18-evidence-03:43ec461f"],
+      "automated": [
+        { "file": "scripts/run-release-surface-tests.js", "test": "release documents and package metadata remain linked to current evidence" }
+      ],
+      "checks": ["product-claim-coherence", "feature-human-summary", "human-gates-required"]
+    },
+    {
+      "requirements": ["G18-evidence-04:275e2249"],
+      "automated": [
+        { "file": "scripts/run-release-surface-tests.js", "test": "publish verifier requires a clean named branch and exact remote head" }
+      ],
+      "checks": ["published-branch-verifier"]
+    },
+    {
+      "requirements": ["G19-goal:eb6d907a"],
+      "automated": [
+        { "file": "scripts/run-context-basket-tests.js", "test": "context basket stores bounded provenance beside private artifact references" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context basket preserves focus across explicit refresh and non-submitting insert actions" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "requirements": ["G19-case-01:beef3c9b", "G19-case-02:4a133a6a"],
+      "automated": [
+        { "file": "scripts/run-context-basket-tests.js", "test": "context basket stores bounded provenance beside private artifact references" },
+        { "file": "scripts/run-context-basket-tests.js", "test": "basket bundles retain references and hashes without copying source payloads" }
+      ]
+    },
+    {
+      "requirements": ["G19-case-03:5292772d"],
+      "automated": [
+        { "file": "scripts/run-context-basket-tests.js", "test": "exact artifacts deduplicate while changed content for one source is marked conflicting" }
+      ]
+    },
+    {
+      "requirements": ["G19-case-04:277a12b1"],
+      "automated": [
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context basket preserves focus across explicit refresh and non-submitting insert actions" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G19-case-05:a26cea3a"],
+      "automated": [
+        { "file": "scripts/run-context-basket-tests.js", "test": "removing a basket selection never deletes its private source artifact" }
+      ]
+    },
+    {
+      "requirements": ["G19-case-06:10d7a4f9"],
+      "automated": [
+        { "file": "scripts/run-context-basket-tests.js", "test": "basket messages and HTML expose only bounded explicit actions" },
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context basket preserves focus across explicit refresh and non-submitting insert actions" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "requirements": ["G19-evidence-01:00c5c253"],
+      "automated": [
+        { "file": "scripts/run-context-basket-tests.js", "test": "context basket stores bounded provenance beside private artifact references" },
+        { "file": "scripts/run-context-basket-tests.js", "test": "exact artifacts deduplicate while changed content for one source is marked conflicting" },
+        { "file": "scripts/run-context-basket-tests.js", "test": "removing a basket selection never deletes its private source artifact" },
+        { "file": "scripts/run-context-basket-tests.js", "test": "basket bundles retain references and hashes without copying source payloads" }
+      ]
+    },
+    {
+      "requirements": ["G19-evidence-02:c2d612e3"],
+      "automated": [
+        { "file": "scripts/run-webview-dom-tests.js", "test": "context basket preserves focus across explicit refresh and non-submitting insert actions" }
+      ],
+      "humanGates": ["operator-terminal", "real-vscode"]
+    },
+    {
+      "requirements": ["G20-goal:f281c380", "G20-case-01:56751ed2"],
+      "automated": [
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "session provider health derives the next poll and legacy successful-poll fallback" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "project provider health aggregates latest evidence and earliest scheduled poll" }
+      ],
+      "humanGates": ["real-vscode", "live-providers"]
+    },
+    {
+      "requirements": ["G20-case-02:855b2b7e"],
+      "automated": [
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "monitoring results persist success, meaningful change, and quiet suppression separately" }
+      ]
+    },
+    {
+      "requirements": ["G20-case-03:81e22988"],
+      "automated": [
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "current normalized provider error clears only after a non-failing result" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "provider diagnostics retain current live failures and partial reads until their own recovery" }
+      ]
+    },
+    {
+      "requirements": ["G20-case-04:7f43a4b6"],
+      "automated": [
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "health-only updates stay out of Attention history and use observation-only language" }
+      ]
+    },
+    {
+      "requirements": ["G20-evidence-01:afbec531"],
+      "automated": [
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "session provider health derives the next poll and legacy successful-poll fallback" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "project provider health aggregates latest evidence and earliest scheduled poll" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "monitoring results persist success, meaningful change, and quiet suppression separately" },
+        { "file": "scripts/run-provider-health-visibility-tests.js", "test": "provider diagnostics retain current live failures and partial reads until their own recovery" }
+      ]
+    },
+    {
+      "requirements": ["G20-evidence-02:ece917e9"],
+      "humanGates": ["real-vscode", "live-providers"]
+    },
+    {
+      "requirements": ["G21-goal:b821b05a", "G21-case-01:ca59ee31", "G21-case-02:bbe64695"],
+      "automated": [
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search covers sessions, tickets, projects, branches, providers, artifacts, and events without terminal content" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G21-case-03:295b5f42"],
+      "automated": [
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search enforces independent source budgets and a 2000-entry total ceiling" }
+      ]
+    },
+    {
+      "requirements": ["G21-case-04:3bef2c66"],
+      "automated": [
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search strips controls and bounds every visible field" }
+      ]
+    },
+    {
+      "requirements": ["G21-case-05:0dfa44f4"],
+      "automated": [
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search covers sessions, tickets, projects, branches, providers, artifacts, and events without terminal content" }
+      ],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G21-case-06:f60c04b9"],
+      "automated": [
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search actions retain only the bounded local target needed to open a result" }
+      ]
+    },
+    {
+      "requirements": ["G21-evidence-01:9c677b31"],
+      "automated": [
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search covers sessions, tickets, projects, branches, providers, artifacts, and events without terminal content" },
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search enforces independent source budgets and a 2000-entry total ceiling" },
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search strips controls and bounds every visible field" },
+        { "file": "scripts/run-local-evidence-search-tests.js", "test": "local evidence search actions retain only the bounded local target needed to open a result" }
+      ]
+    },
+    {
+      "requirements": ["G21-evidence-02:9b2fd3e9"],
+      "humanGates": ["real-vscode"]
+    },
+    {
+      "requirements": ["G22-goal:e70ab553"],
+      "automated": [
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff writes a private immutable Markdown and JSON reference pair without copying source payloads" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "project integration parses, formats, and stores explicit Jenkins and SonarQube branch profiles" }
+      ],
+      "humanGates": ["real-vscode", "live-providers"]
+    },
+    {
+      "requirements": ["G22-case-01:aefe01b1"],
+      "automated": [
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "handoff candidates cap context and audit metadata without accepting terminal content" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff writes a private immutable Markdown and JSON reference pair without copying source payloads" }
+      ]
+    },
+    {
+      "requirements": ["G22-case-02:6814f220"],
+      "automated": [
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff writes a private immutable Markdown and JSON reference pair without copying source payloads" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff refuses external artifact paths and oversized selections" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff rejects incomplete references before publishing an extra-feature bundle" }
+      ]
+    },
+    {
+      "requirements": ["G22-case-03:62f61057"],
+      "automated": [
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff has no provider, Git, or terminal side effects" }
+      ]
+    },
+    {
+      "requirements": ["G22-case-04:79ea1dfb"],
+      "automated": [
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "project integration parses, formats, and stores explicit Jenkins and SonarQube branch profiles" }
+      ]
+    },
+    {
+      "requirements": ["G22-case-05:8306c4e8"],
+      "automated": [
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "branch profile validation refuses duplicates, unsafe branches, credentials, and unknown active profiles" }
+      ]
+    },
+    {
+      "requirements": ["G22-case-06:e83b17fb"],
+      "automated": [
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "CI target selection uses an exact MR profile then explicit fallback without creating a ticket project link" }
+      ],
+      "humanGates": ["real-vscode", "live-providers"]
+    },
+    {
+      "requirements": ["G22-evidence-01:47919aeb"],
+      "automated": [
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "handoff candidates cap context and audit metadata without accepting terminal content" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff writes a private immutable Markdown and JSON reference pair without copying source payloads" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff refuses external artifact paths and oversized selections" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "local handoff rejects incomplete references before publishing an extra-feature bundle" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "branch profile validation refuses duplicates, unsafe branches, credentials, and unknown active profiles" },
+        { "file": "scripts/run-handoff-branch-profile-tests.js", "test": "CI target selection uses an exact MR profile then explicit fallback without creating a ticket project link" }
+      ]
+    },
+    {
+      "requirements": ["G22-evidence-02:2916c6c7"],
+      "humanGates": ["real-vscode", "live-providers"]
+    }
+  ],
+  "humanGates": [
+    { "id": "operator-terminal", "status": "required", "checklistMarker": "## Start Claude for a Ticket" },
+    { "id": "real-vscode", "status": "required", "checklistMarker": "## Sessions View" },
+    { "id": "windows-native", "status": "required", "checklistMarker": "### Windows and multi-window ownership" },
+    { "id": "multi-window", "status": "required", "checklistMarker": "### Windows and multi-window ownership" },
+    { "id": "live-providers", "status": "required", "checklistMarker": "### Live-provider compatibility record" }
+  ]
+}

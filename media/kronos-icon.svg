@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Terminal-first Kronos: one operator-owned terminal, one explicit prompt line. -->
+  <rect x="2.75" y="4" width="18.5" height="16" rx="2.5"/>
+  <path d="M6.5 9l3 3-3 3"/>
+  <path d="M12 15h5.25"/>
+  <circle cx="18.25" cy="7.25" r="1.15" fill="currentColor" stroke="none"/>
+</svg>

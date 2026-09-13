@@ -1,0 +1,50 @@
+{
+  "snapshot": {
+    "issues": [
+      {
+        "key": "ENTERPRISE-42",
+        "fields": {
+          "summary": "Retain rich Jira work safely",
+          "issuetype": { "name": "Story", "providerExtra": "ignored" },
+          "priority": { "name": "High" },
+          "status": {
+            "name": "Ready for Verification",
+            "statusCategory": { "key": "indeterminate", "name": "In Progress" }
+          },
+          "project": { "key": "ENTERPRISE" },
+          "updated": "2026-07-14T18:00:00.000Z",
+          "labels": ["terminal-first", "enterprise-variant"],
+          "description": {
+            "type": "doc",
+            "version": 1,
+            "content": [
+              { "type": "paragraph", "content": [{ "type": "text", "text": "Rich Jira description." }] },
+              { "type": "bulletList", "content": [{ "type": "listItem", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Bounded item" }] }] }] }
+            ]
+          },
+          "attachment": [
+            { "id": "10001", "filename": "design.msg", "size": 2048, "mimeType": "application/vnd.ms-outlook", "content": "https://jira.example/attachment/10001" }
+          ],
+          "customfield_20001": { "value": "Organization-specific value" },
+          "unexpectedFutureField": { "nested": true }
+        }
+      }
+    ],
+    "fetchedAt": "2026-07-14T18:00:01.000Z",
+    "jql": "assignee = currentUser() ORDER BY updated DESC",
+    "jqlSource": "default",
+    "complete": false,
+    "pageCount": 2,
+    "responseBytes": 4096,
+    "warnings": ["Jira page 3 could not be fetched; completed pages were retained."]
+  },
+  "cachedTicketKey": "ENTERPRISE-7",
+  "expected": {
+    "ticketKey": "ENTERPRISE-42",
+    "status": "Ready for Verification",
+    "statusCategory": "indeterminate",
+    "jiraProject": "ENTERPRISE",
+    "retainedFromPrevious": 1,
+    "attachmentFilename": "design.msg"
+  }
+}

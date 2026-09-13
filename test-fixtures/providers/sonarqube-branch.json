@@ -1,0 +1,36 @@
+{
+  "projectKey": "platform:service-api",
+  "branch": "feature/ENTERPRISE-42",
+  "qualityGate": {
+    "projectStatus": {
+      "status": "ERROR",
+      "conditions": [{ "status": "ERROR", "metricKey": "new_coverage", "comparator": "LT", "errorThreshold": "80", "actualValue": "73.2" }],
+      "ignoredConditions": false,
+      "caycStatus": "compliant",
+      "providerExtra": "ignored"
+    }
+  },
+  "measures": {
+    "component": {
+      "key": "platform:service-api",
+      "measures": [
+        { "metric": "coverage", "value": "81.4", "bestValue": false },
+        { "metric": "new_coverage", "period": { "value": "73.2", "bestValue": false } }
+      ]
+    }
+  },
+  "issues": {
+    "paging": { "pageIndex": 1, "pageSize": 2, "total": 2 },
+    "issues": [
+      { "key": "fixture-issue-1", "rule": "typescript:S123", "severity": "MAJOR", "component": "platform:service-api:src/service.ts", "project": "platform:service-api", "line": 42, "message": "Fixture issue", "status": "OPEN", "type": "CODE_SMELL", "tags": ["readability"], "impacts": [{ "softwareQuality": "MAINTAINABILITY", "severity": "MEDIUM" }] },
+      { "key": "fixture-issue-2", "rule": "typescript:S456", "severity": "CRITICAL", "component": "platform:service-api:src/security.ts", "project": "platform:service-api", "message": "Fixture security issue", "issueStatus": "OPEN", "cleanCodeAttribute": "TRUSTWORTHY", "tags": [] }
+    ],
+    "facets": [{ "property": "severities", "values": [{ "val": "MAJOR", "count": 1 }] }]
+  },
+  "expected": {
+    "gateStatus": "ERROR",
+    "measureCount": 2,
+    "issueCount": 2,
+    "complete": true
+  }
+}
